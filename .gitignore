@@ -1,0 +1,34 @@
+# 第三方仓库 (各自独立维护)
+wechat_chatter/
+
+# Frida 二进制和 devkit
+frida-devkit/
+frida-gadget-*.dylib
+frida-core-devkit-*.tar.xz
+
+# 运行时产物
+data/
+*.db
+*.db-journal
+*.log
+
+# macOS
+.DS_Store
+
+# Xcode
+mac/build/
+mac/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Go
+backend/panel
+backend/*.test
+backend/coverage.out
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code 本地配置 (per-machine)
+.claude/
