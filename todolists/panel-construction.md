@@ -286,18 +286,35 @@
 
 ---
 
-## Phase 3 — Micro Todolist + 复发 todo 模态框 (~半天)
+## Phase 3 — 3-column 骨架重构 + Micro Todolist (~1 天)
 
-目的: 当日临时事务管理 + 复发 todo 配置 (注入逻辑放 Phase 5,这里只准备 schema 和 UI)。
+目的: 把 Phase 2 的"二列 (todolist 列表 + 详情)"升级成最终态的"3-column + 全局通知栏"骨架,然后在新骨架下做 micro todolist + 复发 todo。Phase 4-7 各功能模块在新骨架的相应 tab 内填充。
+
+### 3.A 三列骨架 + 通知栏占位 (~半天)
+
+- [ ] 顶层 `MainLayout` = `VStack { NotificationBar() + NavigationSplitView(3-column) }`
+- [ ] **一级 nav (PrimarySidebar)**: 6 个 tab — Todolist / Micro / 财务 / 保健品 / 记录 / Bash
+  - 此 phase 只 Todolist + Micro 可点,其他先 disabled / 灰
+  - 底部预留 4 状态色条区域(Phase 5 接普通/专注/睡眠/外出)
+- [ ] **二级 (ContentColumn)**: 当前 tab 的列表
+  - Todolist tab → 复用现有 SidebarView (todolist 列表)
+  - Micro tab → 当日 micro 入口 + 复发 todo 按钮
+- [ ] **主 pane (DetailColumn)**: 当前 tab 选中项的详情(复用现有 DetailView)
+- [ ] **NotificationBar 占位**: 横跨右侧两列(content + detail),空内容,高度保留(Phase 5 接通知数据)
+- [ ] Todolist tab 回归测试: 锚定 / focus 卡片 / markdown 渲染 / text 编辑 全部正常
+  - 🔍 macOS 14+ 的 3-column NavigationSplitView 是邮件/备忘录/Xcode 的标准模式
+  - 💡 一级 nav 用 List + selection (Tab) 形态,SF Symbols 图标 + 文字,左侧 fix 宽度
+
+### 3.B Micro Todolist + 复发 todo (~半天)
 
 - [ ] 后端 API:
   - `GET /api/micro/today` — 当日 micro 文件,不存在则**自动新建空文件**
   - `PUT /api/micro/today` body `{raw_md}` — 写入
   - `GET/POST/PUT/DELETE /api/recurring` — 复发 todo 的 CRUD
 - [ ] DB schema: `recurring_todos (id, content, created_at)`
-- [ ] 前端 micro tab:
+- [ ] Micro tab UI:
   - 当日文件渲染 + 编辑 (复用 Phase 2 的 markdown 编辑组件)
-  - 一个按钮(图标即可) → 打开复发 todo **模态框**
+  - 顶部一个按钮(图标) → 打开复发 todo **模态框**
 - [ ] 模态框 UI: 列出所有复发 todo + 添加/删除按钮
   - 💡 当天 micro 文件中的复发项**不能直接删**,只能勾选 / 加 [[[skip]]]。永久删除走模态框
 - [ ] 验证: 模态框加 2 条复发 todo;触发"普通模式"注入逻辑(占位,Phase 5 才接上);手动新建一个 micro 文件(空)能正常打开
