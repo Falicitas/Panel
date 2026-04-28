@@ -2,14 +2,14 @@
   "name": "panel-editor",
   "version": "0.1.0",
   "private": true,
-  "description": "Panel WYSIWYG editor — vanilla MilkDown (kit + theme-nord) bundled into mac/Panel/Resources/editor/",
+  "description": "Panel WYSIWYG editor — MilkDown Crepe (frame-dark theme) bundled into mac/Panel/Resources/editor/",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch"
   },
   "dependencies": {
-    "@milkdown/kit": "^7.5.0",
-    "@milkdown/theme-nord": "^7.20.0"
+    "@milkdown/crepe": "^7.20.0",
+    "@milkdown/kit": "^7.5.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

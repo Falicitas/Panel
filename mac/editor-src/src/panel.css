@@ -1,4 +1,4 @@
-/* Panel WYSIWYG override — 让 nord 主题融入 SwiftUI dark window 背景 */
+/* Panel WYSIWYG override — 让 Crepe frame-dark 主题融入 SwiftUI window */
 
 html, body {
   background: transparent !important;
@@ -6,53 +6,11 @@ html, body {
   padding: 0;
 }
 
-/* nord theme 容器背景置透明 */
 .milkdown,
-.milkdown .editor,
-.milkdown .ProseMirror {
-  background: transparent !important;
-  color: rgba(236, 239, 244, 0.92);  /* nord snow,稍暗 */
-}
-
-/* 文档左右居中限宽,Typora-like */
 .milkdown .editor {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 24px 28px 80px;
-  line-height: 1.65;
+  background: transparent !important;
 }
 
-/* 任务列表 checkbox — gfm preset 输出 li[data-item-type="task"][data-checked="true|false"]
-   用 ::before 加 ☐ / ☑ 字符,inline 风格(跟 Typora 一致) */
-.milkdown li[data-item-type="task"] {
-  list-style: none;
-  position: relative;
-}
-.milkdown li[data-item-type="task"]::marker {
-  content: none;
-}
-.milkdown li[data-item-type="task"] > p:first-child::before {
-  content: '☐';
-  display: inline-block;
-  width: 1.1em;
-  margin-right: 0.35em;
-  color: rgba(243, 166, 89, 0.95);  /* anchorAccent 暖橙 */
-  font-weight: 600;
-}
-.milkdown li[data-item-type="task"][data-checked="true"] > p:first-child::before {
-  content: '☑';
-}
-.milkdown li[data-item-type="task"][data-checked="true"] > p:first-child {
-  opacity: 0.55;
-  text-decoration: line-through;
-}
-
-/* 选中 / 焦点提亮 */
-.milkdown .ProseMirror-focused {
-  outline: none;
-}
-
-/* 滚动条:macOS 系统风,深色环境下可见 */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
