@@ -2,21 +2,21 @@ import SwiftUI
 
 struct TodolistContentView: View {
     @Environment(AppState.self) private var state
-    @State private var selectedName: String?
 
     var body: some View {
-        List(selection: $selectedName) {
+        @Bindable var bindable = state
+        return List(selection: $bindable.selectedName) {
             if !state.active.isEmpty {
                 Section("进行中") {
                     ForEach(state.active) { entry in
-                        TodolistRow(entry: entry).tag(entry.name as String?)
+                        rowView(for: entry)
                     }
                 }
             }
             if !state.done.isEmpty {
                 Section("已完成") {
                     ForEach(state.done) { entry in
-                        TodolistRow(entry: entry).tag(entry.name as String?)
+                        rowView(for: entry)
                     }
                 }
             }
@@ -24,12 +24,8 @@ struct TodolistContentView: View {
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         .navigationTitle("Todolist")
-        .onChange(of: state.anchor, initial: true) { _, newValue in
-            selectedName = newValue
-        }
-        .onChange(of: selectedName) { _, newValue in
-            guard newValue != state.anchor else { return }
-            Task { await state.setAnchor(name: newValue) }
+        .onChange(of: state.selectedName) { _, newValue in
+            Task { await state.selectList(newValue) }
         }
         .toolbar {
             ToolbarItem {
@@ -41,31 +37,37 @@ struct TodolistContentView: View {
                 .help("刷新列表")
                 .disabled(state.isLoading)
             }
-            if state.anchor != nil {
-                ToolbarItem {
-                    Button {
-                        selectedName = nil
-                    } label: {
-                        Image(systemName: "xmark.circle")
-                    }
-                    .help("取消锚定")
-                }
-            }
         }
+    }
+
+    @ViewBuilder
+    private func rowView(for entry: ListEntry) -> some View {
+        let isAnchored = entry.name == state.anchor
+        TodolistRow(entry: entry, isAnchored: isAnchored)
+            .tag(entry.name as String?)
+            .listRowBackground(isAnchored ? Color.accentColor : Color.clear)
     }
 }
 
 private struct TodolistRow: View {
     let entry: ListEntry
+    let isAnchored: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(entry.name).lineLimit(2)
-            Text(progressString)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            if isAnchored {
+                Image(systemName: "pin.fill")
+                    .font(.caption.weight(.bold))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name).lineLimit(2)
+                Text(progressString)
+                    .font(.caption)
+                    .foregroundStyle(isAnchored ? Color.white.opacity(0.85) : Color.secondary)
+            }
         }
         .padding(.vertical, 2)
+        .foregroundStyle(isAnchored ? Color.white : Color.primary)
     }
 
     private var progressString: String {

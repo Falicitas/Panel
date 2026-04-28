@@ -9,8 +9,10 @@ final class AppState {
     var active: [ListEntry] = []
     var done: [ListEntry] = []
     var anchor: String?
+    var selectedName: String?
     var focus: FocusResult?
     var detail: Todolist?
+    var pendingScrollLine: Int?
     var microToday: Todolist?
     var recurring: [RecurringTodo] = []
     var financeSummary: FinanceSummary?
@@ -127,6 +129,7 @@ final class AppState {
             self.notifications = ns
             self.grip = gp
             self.supplementMonthly = sm
+            self.selectedName = a.name
             if let name = a.name {
                 self.detail = try await api.getTodolist(name: name)
             } else {
@@ -371,20 +374,36 @@ final class AppState {
         do {
             _ = try await api.setAnchor(name: name)
             self.anchor = name
-            if let n = name {
-                async let detail = api.getTodolist(name: n)
-                async let focus = api.getFocus()
-                let (d, f) = try await (detail, focus)
-                self.detail = d
-                self.focus = f
-            } else {
-                self.detail = nil
-                self.focus = try? await api.getFocus()
-            }
+            self.focus = try? await api.getFocus()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
         }
+    }
+
+    /// 切换右栏显示的 todolist。不影响 anchor / focus。
+    func selectList(_ name: String?) async {
+        selectedName = name
+        guard let name else {
+            detail = nil
+            return
+        }
+        do {
+            detail = try await api.getTodolist(name: name)
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    /// 聚焦卡 L{n} 链接:先把 selection 切回锚定列表,再发 scroll trigger。
+    /// 0.8s 延迟与具体滚动动画由 DetailView 监听 pendingScrollLine 实现。
+    func jumpToAnchorLine(_ line: Int) async {
+        guard let target = anchor else { return }
+        if selectedName != target {
+            await selectList(target)
+        }
+        pendingScrollLine = line
     }
 
     func saveDetail(rawMD: String) async {
@@ -444,11 +463,12 @@ final class AppState {
     private func tick() async {
         self.timeTick = Date()
         do {
-            if let name = anchor {
-                async let detail = api.getTodolist(name: name)
-                async let focus = api.getFocus()
-                let (d, f) = try await (detail, focus)
+            if let name = selectedName {
+                let d = try await api.getTodolist(name: name)
                 if d != self.detail { self.detail = d }
+            }
+            if anchor != nil {
+                let f = try await api.getFocus()
                 if f != self.focus { self.focus = f }
             }
             async let micro = api.getMicroToday()
