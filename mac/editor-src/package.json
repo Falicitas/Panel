@@ -1,0 +1,18 @@
+{
+  "name": "panel-editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Panel WYSIWYG editor — MilkDown Crepe bundled into mac/Panel/Resources/editor/",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.5.0",
+    "@milkdown/kit": "^7.5.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}

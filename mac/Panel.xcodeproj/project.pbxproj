@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0497B18187F208C491E6E28E /* editor in Resources */ = {isa = PBXBuildFile; fileRef = 96E9A106BE15A10D3A195580 /* editor */; };
 		0F041F4C1A303E3928A73D91 /* Todolist.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C3DA32EC86A724BA60EAD7 /* Todolist.swift */; };
 		0F40E81B6A61DBEF535F967B /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 949D45B8D7790DE2C2ED50ED /* Tab.swift */; };
 		11F42E2B885FCC47CD5CC0FF /* Bash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61935B607A9598142B233FF5 /* Bash.swift */; };
@@ -30,6 +31,7 @@
 		757A6755547538FCEF18DAA5 /* SupplementsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3239812DDF9E5DF884297B71 /* SupplementsDetailView.swift */; };
 		76F3E83F38771F4F5E973B24 /* ComingSoonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49404CC26A8DE27225ACC33B /* ComingSoonView.swift */; };
 		7773F05E45A234AB7EB1928E /* FinanceContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F40BA67C98CFD3089A55AAA /* FinanceContentView.swift */; };
+		77BFD618E3EDC18279256BAB /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62A9C2F35D43C52C2B90561B /* Theme.swift */; };
 		824BA5C38C0946AEAC5941E4 /* TodolistContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567AEBCACF44FC805AE86F3D /* TodolistContentView.swift */; };
 		936A5F2329805779552D70F2 /* BashContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5822016198F3258F21DC1E9B /* BashContentView.swift */; };
 		A9814FB8171ACCCE1D80818F /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB11120E89CD026E9203458 /* EditorView.swift */; };
@@ -39,6 +41,7 @@
 		CAB6C8228DF367334DC965FF /* SupplementsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0809016A83D11BDAF4B7EAE /* SupplementsContentView.swift */; };
 		CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */; };
 		D21E7C1BA712B11A9905E04D /* MicroDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F113A383D93E9CC6D17449E9 /* MicroDetailView.swift */; };
+		D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */; };
 		D829A06EC28905CFCEF0F794 /* SupplementForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22D6102ADB89301B5F475EE /* SupplementForms.swift */; };
 		DE38B0A10BB135A83BD355A4 /* MicroContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA054FCF75A9C754AE1A818 /* MicroContentView.swift */; };
 		E37EF58CD36B02371C339F46 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC72BE1E58C5BDB3F8A456C /* AppState.swift */; };
@@ -56,6 +59,7 @@
 		49404CC26A8DE27225ACC33B /* ComingSoonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComingSoonView.swift; sourceTree = "<group>"; };
 		49D696A31A0D0A222F286504 /* StatusFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusFooter.swift; sourceTree = "<group>"; };
 		4EEE48D918C7332B0CCAD88F /* BashDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashDetailView.swift; sourceTree = "<group>"; };
+		50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MilkDownEditor.swift; sourceTree = "<group>"; };
 		567AEBCACF44FC805AE86F3D /* TodolistContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodolistContentView.swift; sourceTree = "<group>"; };
 		5822016198F3258F21DC1E9B /* BashContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashContentView.swift; sourceTree = "<group>"; };
 		5AEB088C6C7D53B17EBEDD6A /* FinanceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceDetailView.swift; sourceTree = "<group>"; };
@@ -63,12 +67,14 @@
 		5F40BA67C98CFD3089A55AAA /* FinanceContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceContentView.swift; sourceTree = "<group>"; };
 		5FC72BE1E58C5BDB3F8A456C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		61935B607A9598142B233FF5 /* Bash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bash.swift; sourceTree = "<group>"; };
+		62A9C2F35D43C52C2B90561B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		65BDF0617EDF92971A4168A2 /* ListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListEntry.swift; sourceTree = "<group>"; };
 		6EB340428613B213332CFB3E /* Finance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finance.swift; sourceTree = "<group>"; };
 		87F59C4D70D2A509B0F65C2F /* Supplements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supplements.swift; sourceTree = "<group>"; };
 		8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCard.swift; sourceTree = "<group>"; };
 		8D2848561D75BC5D180BEF25 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		949D45B8D7790DE2C2ED50ED /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
+		96E9A106BE15A10D3A195580 /* editor */ = {isa = PBXFileReference; lastKnownFileType = folder; name = editor; path = Panel/Resources/editor; sourceTree = SOURCE_ROOT; };
 		A22D6102ADB89301B5F475EE /* SupplementForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementForms.swift; sourceTree = "<group>"; };
 		A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceForms.swift; sourceTree = "<group>"; };
 		A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsContentView.swift; sourceTree = "<group>"; };
@@ -115,6 +121,7 @@
 				BF74459F6ADCA6D9056A7911 /* MainLayout.swift */,
 				3DA054FCF75A9C754AE1A818 /* MicroContentView.swift */,
 				F113A383D93E9CC6D17449E9 /* MicroDetailView.swift */,
+				50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */,
 				B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */,
 				DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */,
 				A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */,
@@ -135,12 +142,22 @@
 			children = (
 				8D2848561D75BC5D180BEF25 /* ContentView.swift */,
 				B68E700AFBBE2CD789E98338 /* PanelApp.swift */,
+				62A9C2F35D43C52C2B90561B /* Theme.swift */,
 				F1C6D93B423B2AB943462A16 /* Models */,
 				5652739D88329AC52C7913BE /* Net */,
+				4B3EEE853948255C1A29C987 /* Resources */,
 				FFD7F8F0FDB6CE99EE128455 /* State */,
 				00FF58E8ECF1AB624A7E7E27 /* Views */,
 			);
 			path = Panel;
+			sourceTree = "<group>";
+		};
+		4B3EEE853948255C1A29C987 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				96E9A106BE15A10D3A195580 /* editor */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		5652739D88329AC52C7913BE /* Net */ = {
@@ -200,6 +217,7 @@
 			buildConfigurationList = CCA0A71BC5D9B86880A38C83 /* Build configuration list for PBXNativeTarget "Panel" */;
 			buildPhases = (
 				E83475189DF73942558EF988 /* Sources */,
+				2532AEB6D4EE6A728D53D4C6 /* Resources */,
 				A1274B055A1BED39C19BB864 /* Frameworks */,
 			);
 			buildRules = (
@@ -251,6 +269,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		2532AEB6D4EE6A728D53D4C6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0497B18187F208C491E6E28E /* editor in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		E83475189DF73942558EF988 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -276,6 +305,7 @@
 				6C0A912AC9E07E69812F6B6B /* MainLayout.swift in Sources */,
 				DE38B0A10BB135A83BD355A4 /* MicroContentView.swift in Sources */,
 				D21E7C1BA712B11A9905E04D /* MicroDetailView.swift in Sources */,
+				D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */,
 				213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */,
 				40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */,
 				BD0AC0B4D2ECBB42811F4516 /* PrimarySidebarView.swift in Sources */,
@@ -290,6 +320,7 @@
 				CAB6C8228DF367334DC965FF /* SupplementsContentView.swift in Sources */,
 				757A6755547538FCEF18DAA5 /* SupplementsDetailView.swift in Sources */,
 				0F40E81B6A61DBEF535F967B /* Tab.swift in Sources */,
+				77BFD618E3EDC18279256BAB /* Theme.swift in Sources */,
 				0F041F4C1A303E3928A73D91 /* Todolist.swift in Sources */,
 				824BA5C38C0946AEAC5941E4 /* TodolistContentView.swift in Sources */,
 				C07107129F13625FCC585BD6 /* WakeMaskView.swift in Sources */,

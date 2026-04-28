@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Panel Editor</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: transparent; }
+    body { font-family: -apple-system, "PingFang SC", BlinkMacSystemFont, sans-serif; }
+    #editor {
+      height: 100%;
+      min-height: 420px;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    /* Crepe 默认 frame 主题已包 ProseMirror 编辑器样式;这里保留页面级容器样式即可 */
+    .milkdown { background: transparent !important; }
+  </style>
+</head>
+<body>
+  <div id="editor"></div>
+  <script src="bundle.js"></script>
+</body>
+</html>

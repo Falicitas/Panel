@@ -20,6 +20,11 @@ targets:
     platform: macOS
     sources:
       - path: Panel
+        excludes:
+          - "Resources/editor/**"
+      - path: Panel/Resources/editor
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kinesis.panel

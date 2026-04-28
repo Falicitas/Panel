@@ -8,7 +8,7 @@ struct EditorView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("编辑模式 · text only")
+                Text("编辑模式 · WYSIWYG (MilkDown)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -19,9 +19,8 @@ struct EditorView: View {
                     .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal)
-            TextEditor(text: $text)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 420)
+            MilkDownEditor(text: $text)
+                .frame(minHeight: 480)
                 .padding(.horizontal)
         }
     }
