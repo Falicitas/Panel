@@ -118,6 +118,16 @@ func (s *Store) migrate() error {
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_records_module_date_key ON records(module, date, key);
 		CREATE INDEX IF NOT EXISTS idx_records_module_date ON records(module, date);
+		CREATE TABLE IF NOT EXISTS bash_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			cmd TEXT NOT NULL,
+			stdout TEXT NOT NULL DEFAULT '',
+			stderr TEXT NOT NULL DEFAULT '',
+			exit_code INTEGER NOT NULL,
+			duration_ms INTEGER NOT NULL,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_bash_history_created ON bash_history(created_at DESC);
 	`)
 	return err
 }
