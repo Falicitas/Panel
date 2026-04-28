@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class AppState {
+    var selectedTab: AppTab = .todolist
     var active: [ListEntry] = []
     var done: [ListEntry] = []
     var anchor: String?

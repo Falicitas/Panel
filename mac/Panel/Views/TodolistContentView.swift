@@ -1,28 +1,36 @@
 import SwiftUI
 
-struct SidebarView: View {
+struct TodolistContentView: View {
     @Environment(AppState.self) private var state
-    @Binding var selectedName: String?
+    @State private var selectedName: String?
 
     var body: some View {
         List(selection: $selectedName) {
             if !state.active.isEmpty {
                 Section("进行中") {
                     ForEach(state.active) { entry in
-                        SidebarRow(entry: entry).tag(entry.name as String?)
+                        TodolistRow(entry: entry).tag(entry.name as String?)
                     }
                 }
             }
             if !state.done.isEmpty {
                 Section("已完成") {
                     ForEach(state.done) { entry in
-                        SidebarRow(entry: entry).tag(entry.name as String?)
+                        TodolistRow(entry: entry).tag(entry.name as String?)
                     }
                 }
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 280)
+        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
+        .navigationTitle("Todolist")
+        .onChange(of: state.anchor, initial: true) { _, newValue in
+            selectedName = newValue
+        }
+        .onChange(of: selectedName) { _, newValue in
+            guard newValue != state.anchor else { return }
+            Task { await state.setAnchor(name: newValue) }
+        }
         .toolbar {
             ToolbarItem {
                 Button {
@@ -47,7 +55,7 @@ struct SidebarView: View {
     }
 }
 
-private struct SidebarRow: View {
+private struct TodolistRow: View {
     let entry: ListEntry
 
     var body: some View {
