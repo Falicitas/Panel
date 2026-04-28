@@ -45,7 +45,7 @@ struct TodolistContentView: View {
         let isAnchored = entry.name == state.anchor
         TodolistRow(entry: entry, isAnchored: isAnchored)
             .tag(entry.name as String?)
-            .listRowBackground(isAnchored ? Color.accentColor : Color.clear)
+            .listRowBackground(isAnchored ? Color.anchorAccent : Color.clear)
     }
 }
 

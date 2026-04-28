@@ -52,7 +52,7 @@ final class AppState {
     /// 主题色: 普通无 / 专注柔和橙 / 睡眠淡紫 / 外出蓝
     var themeColor: Color? {
         switch effectiveMode {
-        case "focus":   return Color(red: 0.95, green: 0.65, blue: 0.35)
+        case "focus":   return Color.anchorAccent
         case "sleep":   return Color(red: 0.65, green: 0.55, blue: 0.85)
         case "outside": return Color(red: 0.40, green: 0.65, blue: 0.95)
         default:        return nil

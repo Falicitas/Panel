@@ -33,16 +33,16 @@ struct FocusCard: View {
                         .underline()
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.tint)
+                .foregroundStyle(Color.anchorAccent)
                 .help("跳到锚定 todolist 第 \(n) 行")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(Color.accentColor.opacity(0.08))
+        .background(Color.anchorAccent.opacity(0.08))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+                .stroke(Color.anchorAccent.opacity(0.3), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)

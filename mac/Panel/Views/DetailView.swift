@@ -83,7 +83,7 @@ struct DetailView: View {
             Image(systemName: isAnchored ? "pin.fill" : "pin")
         }
         .help(isAnchored ? "取消锚定" : "锚定为主 todolist")
-        .tint(isAnchored ? Color.accentColor : Color.secondary)
+        .tint(isAnchored ? Color.anchorAccent : Color.secondary)
         .disabled(selected == nil)
     }
 }
