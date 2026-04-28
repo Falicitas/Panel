@@ -14,6 +14,7 @@ import (
 	"panel/msgsource"
 	"panel/server"
 	"panel/store"
+	"panel/supplements"
 	"panel/todolist"
 )
 
@@ -53,6 +54,25 @@ func main() {
 
 	// Phase 9 占位: 启动一个 mock 消息源,验证接口形状
 	_ = msgsource.NewMock("wechat")
+
+	// 食物保健品通知生成器: 每 60s 扫一次,active window 写 notification (幂等)
+	go func() {
+		_, _ = supplements.GenerateNotifications(st, time.Now())
+		tick := time.NewTicker(60 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case t := <-tick.C:
+				if n, err := supplements.GenerateNotifications(st, t); err != nil {
+					log.Printf("supplement notif gen: %v", err)
+				} else if n > 0 {
+					log.Printf("supplement notif gen: %d new", n)
+				}
+			}
+		}
+	}()
 
 	srv := server.New(repo, st, microRepo)
 	httpSrv := &http.Server{

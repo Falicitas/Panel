@@ -53,6 +53,16 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/finance/incomes/{id}", s.handleDeleteIncome)
 	mux.HandleFunc("GET /api/finance/settings", s.handleGetFinanceSettings)
 	mux.HandleFunc("PUT /api/finance/settings", s.handlePutFinanceSettings)
+	mux.HandleFunc("GET /api/supplements", s.handleListSupplements)
+	mux.HandleFunc("POST /api/supplements", s.handleCreateSupplement)
+	mux.HandleFunc("PUT /api/supplements/{id}", s.handleUpdateSupplement)
+	mux.HandleFunc("DELETE /api/supplements/{id}", s.handleDeleteSupplement)
+	mux.HandleFunc("GET /api/state/today", s.handleGetTodayState)
+	mux.HandleFunc("POST /api/state/today", s.handlePostTodayState)
+	mux.HandleFunc("GET /api/state/settings", s.handleGetStateSettings)
+	mux.HandleFunc("PUT /api/state/settings", s.handlePutStateSettings)
+	mux.HandleFunc("GET /api/notifications", s.handleListNotifications)
+	mux.HandleFunc("POST /api/notifications/{id}/dismiss", s.handleDismissNotification)
 	return logMiddleware(mux)
 }
 

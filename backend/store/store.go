@@ -76,6 +76,37 @@ func (s *Store) migrate() error {
 			assumed_annual_rate REAL NOT NULL DEFAULT 0.12
 		);
 		INSERT OR IGNORE INTO finance_settings (id, initial_balance) VALUES (1, 0);
+		CREATE TABLE IF NOT EXISTS supplements (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			type TEXT NOT NULL,
+			windows_json TEXT NOT NULL DEFAULT '[]',
+			notes TEXT NOT NULL DEFAULT ''
+		);
+		CREATE TABLE IF NOT EXISTS daily_state (
+			date TEXT PRIMARY KEY,
+			mode TEXT NOT NULL,
+			wake_time TEXT,
+			mode_set_at INTEGER NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS state_settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			focus_start TEXT NOT NULL DEFAULT '17:00',
+			sleep_start TEXT NOT NULL DEFAULT '22:30'
+		);
+		INSERT OR IGNORE INTO state_settings (id) VALUES (1);
+		CREATE TABLE IF NOT EXISTS notifications (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source TEXT NOT NULL,
+			source_ref TEXT,
+			title TEXT NOT NULL,
+			body TEXT NOT NULL DEFAULT '',
+			level TEXT NOT NULL DEFAULT 'info',
+			created_at INTEGER NOT NULL,
+			dismissed_at INTEGER
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_source_ref ON notifications(source_ref) WHERE source_ref IS NOT NULL;
+		CREATE INDEX IF NOT EXISTS idx_notifications_dismissed ON notifications(dismissed_at);
 	`)
 	return err
 }
