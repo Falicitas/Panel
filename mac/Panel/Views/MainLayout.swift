@@ -24,6 +24,7 @@ private struct ContentColumn: View {
         switch state.selectedTab {
         case .todolist: TodolistContentView()
         case .micro:    MicroContentView()
+        case .finance:  FinanceContentView()
         default:        ComingSoonView(tab: state.selectedTab)
         }
     }
@@ -35,6 +36,7 @@ private struct DetailColumn: View {
         switch state.selectedTab {
         case .todolist: DetailView()
         case .micro:    MicroDetailView()
+        case .finance:  FinanceDetailView()
         default:        ComingSoonView(tab: state.selectedTab)
         }
     }

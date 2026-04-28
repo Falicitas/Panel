@@ -68,13 +68,43 @@ actor APIClient {
     }
 
     func deleteRecurring(id: Int64) async throws {
-        var req = URLRequest(url: url("/api/recurring/\(id)"))
-        req.httpMethod = "DELETE"
-        let (_, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw APIError(message: "DELETE /api/recurring/\(id) failed")
-        }
+        try await delete("/api/recurring/\(id)")
     }
+
+    // MARK: - Finance
+
+    func getFinanceSummary(at: String? = nil) async throws -> FinanceSummary {
+        var path = "/api/finance/summary"
+        if let at = at { path += "?at=\(at)" }
+        return try await get(path)
+    }
+
+    func listBills() async throws -> [Bill] { try await get("/api/finance/bills") }
+    func createBill(_ b: Bill) async throws -> Bill { try await post("/api/finance/bills", body: b) }
+    func updateBill(_ b: Bill) async throws -> [Bill] { try await put("/api/finance/bills/\(b.id)", body: b) }
+    func deleteBill(id: Int64) async throws { try await delete("/api/finance/bills/\(id)") }
+
+    func listFixed() async throws -> [FixedExpense] { try await get("/api/finance/fixed") }
+    func createFixed(_ f: FixedExpense) async throws -> FixedExpense { try await post("/api/finance/fixed", body: f) }
+    func updateFixed(_ f: FixedExpense) async throws -> [FixedExpense] { try await put("/api/finance/fixed/\(f.id)", body: f) }
+    func deleteFixed(id: Int64) async throws { try await delete("/api/finance/fixed/\(id)") }
+
+    func listFree() async throws -> [FreeExpense] { try await get("/api/finance/free") }
+    func createFree(_ f: FreeExpense) async throws -> FreeExpense { try await post("/api/finance/free", body: f) }
+    func updateFree(_ f: FreeExpense) async throws -> [FreeExpense] { try await put("/api/finance/free/\(f.id)", body: f) }
+    func deleteFree(id: Int64) async throws { try await delete("/api/finance/free/\(id)") }
+
+    func listIncomes() async throws -> [Income] { try await get("/api/finance/incomes") }
+    func createIncome(_ i: Income) async throws -> Income { try await post("/api/finance/incomes", body: i) }
+    func updateIncome(_ i: Income) async throws -> [Income] { try await put("/api/finance/incomes/\(i.id)", body: i) }
+    func deleteIncome(id: Int64) async throws { try await delete("/api/finance/incomes/\(id)") }
+
+    func getFinanceSettings() async throws -> FinanceSettings { try await get("/api/finance/settings") }
+    func putFinanceSettings(_ fs: FinanceSettings) async throws -> FinanceSettings {
+        try await put("/api/finance/settings", body: fs)
+    }
+
+    // MARK: - HTTP helpers
 
     private func encode(_ s: String) -> String {
         s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? s
@@ -104,6 +134,15 @@ actor APIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try encoder.encode(body)
         return try await send(req)
+    }
+
+    private func delete(_ path: String) async throws {
+        var req = URLRequest(url: url(path))
+        req.httpMethod = "DELETE"
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "DELETE \(path) failed")
+        }
     }
 
     private func send<T: Decodable>(_ req: URLRequest) async throws -> T {
