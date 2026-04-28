@@ -23,6 +23,9 @@ final class AppState {
     var dailyState: DailyState?
     var stateSettings: StateSettings?
     var notifications: [PanelNotification] = []
+    var grip: GripSummary?
+    var supplementMonthly: SupplementMonthly?
+    var recordsTab: RecordsTab = .grip
     var timeTick: Date = Date()
     var isLoading = false
     var lastError: String?
@@ -93,9 +96,12 @@ final class AppState {
             async let dailyResp = api.getTodayState()
             async let stateSetResp = api.getStateSettings()
             async let notifResp = api.listNotifications()
+            async let gripResp = api.getGripToday()
+            async let suppMonthResp = api.getSupplementsMonth()
             let (l, a, f, m, r) = try await (lists, anchorResp, focusResp, microResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
             let (sp, ds, ss, ns) = try await (supplResp, dailyResp, stateSetResp, notifResp)
+            let (gp, sm) = try await (gripResp, suppMonthResp)
             self.active = l.active
             self.done = l.done
             self.anchor = a.name
@@ -112,6 +118,8 @@ final class AppState {
             self.dailyState = ds
             self.stateSettings = ss
             self.notifications = ns
+            self.grip = gp
+            self.supplementMonthly = sm
             if let name = a.name {
                 self.detail = try await api.getTodolist(name: name)
             } else {
@@ -274,7 +282,10 @@ final class AppState {
     func dismiss(_ n: PanelNotification) async {
         do {
             try await api.dismissNotification(id: n.id)
-            self.notifications = try await api.listNotifications()
+            async let notifs = api.listNotifications()
+            async let monthly = api.getSupplementsMonth()
+            self.notifications = try await notifs
+            self.supplementMonthly = try? await monthly
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -284,6 +295,35 @@ final class AppState {
     func reloadNotifications() async {
         do {
             self.notifications = try await api.listNotifications()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    // MARK: - Records
+
+    func saveGrip(date: String, left: Double, right: Double, note: String = "") async {
+        do {
+            self.grip = try await api.postGrip(date: date, left: left, right: right, note: note)
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func reloadGrip() async {
+        do {
+            self.grip = try await api.getGripToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func reloadSupplementMonthly(month: String? = nil) async {
+        do {
+            self.supplementMonthly = try await api.getSupplementsMonth(month: month)
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription

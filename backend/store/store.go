@@ -107,6 +107,17 @@ func (s *Store) migrate() error {
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_source_ref ON notifications(source_ref) WHERE source_ref IS NOT NULL;
 		CREATE INDEX IF NOT EXISTS idx_notifications_dismissed ON notifications(dismissed_at);
+		CREATE TABLE IF NOT EXISTS records (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			module TEXT NOT NULL,
+			date TEXT NOT NULL,
+			key TEXT NOT NULL,
+			value_num REAL,
+			value_text TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_records_module_date_key ON records(module, date, key);
+		CREATE INDEX IF NOT EXISTS idx_records_module_date ON records(module, date);
 	`)
 	return err
 }

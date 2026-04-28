@@ -17,10 +17,12 @@
 		27D2A375A7B30146C7407436 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D754AC7CF099F8B68D14859D /* DetailView.swift */; };
 		2B70C5CEB7A1FBE2C3854A05 /* FocusCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */; };
 		307B0DE23C7B468B448D8541 /* FinanceForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */; };
+		34415C0BA9E22A6C195DC8C7 /* Records.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6F9936F17C66C82102D617D /* Records.swift */; };
 		364C94E5D4E89FA0E05B85C1 /* Finance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB340428613B213332CFB3E /* Finance.swift */; };
 		390FC385137ADF28255C8BC0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2848561D75BC5D180BEF25 /* ContentView.swift */; };
 		3FB8F396A13890631998595A /* FocusResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E9443571240FF9C3C02AB4 /* FocusResult.swift */; };
 		40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E700AFBBE2CD789E98338 /* PanelApp.swift */; };
+		45DDC97885F099C1FEDB4232 /* RecordsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138C0250B9F183120FC62812 /* RecordsDetailView.swift */; };
 		5FFDE4D66D35B64D3C65A633 /* ListEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65BDF0617EDF92971A4168A2 /* ListEntry.swift */; };
 		6C0A912AC9E07E69812F6B6B /* MainLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF74459F6ADCA6D9056A7911 /* MainLayout.swift */; };
 		757A6755547538FCEF18DAA5 /* SupplementsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3239812DDF9E5DF884297B71 /* SupplementsDetailView.swift */; };
@@ -32,6 +34,7 @@
 		BD93E5AF68EB1BC4E606D012 /* StatusFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D696A31A0D0A222F286504 /* StatusFooter.swift */; };
 		C07107129F13625FCC585BD6 /* WakeMaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3F6994801E0DB41133D4A8 /* WakeMaskView.swift */; };
 		CAB6C8228DF367334DC965FF /* SupplementsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0809016A83D11BDAF4B7EAE /* SupplementsContentView.swift */; };
+		CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */; };
 		D21E7C1BA712B11A9905E04D /* MicroDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F113A383D93E9CC6D17449E9 /* MicroDetailView.swift */; };
 		D829A06EC28905CFCEF0F794 /* SupplementForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22D6102ADB89301B5F475EE /* SupplementForms.swift */; };
 		DE38B0A10BB135A83BD355A4 /* MicroContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA054FCF75A9C754AE1A818 /* MicroContentView.swift */; };
@@ -41,6 +44,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		138C0250B9F183120FC62812 /* RecordsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsDetailView.swift; sourceTree = "<group>"; };
 		25E9443571240FF9C3C02AB4 /* FocusResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusResult.swift; sourceTree = "<group>"; };
 		3239812DDF9E5DF884297B71 /* SupplementsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementsDetailView.swift; sourceTree = "<group>"; };
 		3D3F6994801E0DB41133D4A8 /* WakeMaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeMaskView.swift; sourceTree = "<group>"; };
@@ -60,9 +64,11 @@
 		949D45B8D7790DE2C2ED50ED /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
 		A22D6102ADB89301B5F475EE /* SupplementForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementForms.swift; sourceTree = "<group>"; };
 		A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceForms.swift; sourceTree = "<group>"; };
+		A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsContentView.swift; sourceTree = "<group>"; };
 		B18E8C1E08A00B871A4C9C04 /* RecurringTodo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringTodo.swift; sourceTree = "<group>"; };
 		B68E700AFBBE2CD789E98338 /* PanelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelApp.swift; sourceTree = "<group>"; };
 		B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBar.swift; sourceTree = "<group>"; };
+		B6F9936F17C66C82102D617D /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		BF74459F6ADCA6D9056A7911 /* MainLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainLayout.swift; sourceTree = "<group>"; };
 		C1C3DA32EC86A724BA60EAD7 /* Todolist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Todolist.swift; sourceTree = "<group>"; };
 		D754AC7CF099F8B68D14859D /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
@@ -101,6 +107,8 @@
 				F113A383D93E9CC6D17449E9 /* MicroDetailView.swift */,
 				B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */,
 				DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */,
+				A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */,
+				138C0250B9F183120FC62812 /* RecordsDetailView.swift */,
 				5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */,
 				49D696A31A0D0A222F286504 /* StatusFooter.swift */,
 				A22D6102ADB89301B5F475EE /* SupplementForms.swift */,
@@ -155,6 +163,7 @@
 				6EB340428613B213332CFB3E /* Finance.swift */,
 				25E9443571240FF9C3C02AB4 /* FocusResult.swift */,
 				65BDF0617EDF92971A4168A2 /* ListEntry.swift */,
+				B6F9936F17C66C82102D617D /* Records.swift */,
 				B18E8C1E08A00B871A4C9C04 /* RecurringTodo.swift */,
 				87F59C4D70D2A509B0F65C2F /* Supplements.swift */,
 				C1C3DA32EC86A724BA60EAD7 /* Todolist.swift */,
@@ -254,6 +263,9 @@
 				213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */,
 				40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */,
 				BD0AC0B4D2ECBB42811F4516 /* PrimarySidebarView.swift in Sources */,
+				34415C0BA9E22A6C195DC8C7 /* Records.swift in Sources */,
+				CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */,
+				45DDC97885F099C1FEDB4232 /* RecordsDetailView.swift in Sources */,
 				EDD047A4C24549C7D1DBB979 /* RecurringSheet.swift in Sources */,
 				233031829FFF2C248FA085A0 /* RecurringTodo.swift in Sources */,
 				BD93E5AF68EB1BC4E606D012 /* StatusFooter.swift in Sources */,

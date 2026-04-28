@@ -15,6 +15,13 @@ private struct RecurringPayload: Encodable {
     }
 }
 
+private struct GripPayload: Encodable {
+    let date: String
+    let left: Double
+    let right: Double
+    let note: String
+}
+
 actor APIClient {
     static let shared = APIClient()
 
@@ -133,6 +140,22 @@ actor APIClient {
     func listNotifications(all: Bool = false) async throws -> [PanelNotification] {
         try await get(all ? "/api/notifications?all=1" : "/api/notifications")
     }
+    // MARK: - Records (grip + supplement monthly)
+
+    func getGripToday() async throws -> GripSummary {
+        try await get("/api/records/grip/today")
+    }
+
+    func postGrip(date: String, left: Double, right: Double, note: String = "") async throws -> GripSummary {
+        try await post("/api/records/grip", body: GripPayload(date: date, left: left, right: right, note: note))
+    }
+
+    func getSupplementsMonth(month: String? = nil) async throws -> SupplementMonthly {
+        var path = "/api/records/supplements/month"
+        if let m = month { path += "?month=\(m)" }
+        return try await get(path)
+    }
+
     func dismissNotification(id: Int64) async throws {
         var req = URLRequest(url: url("/api/notifications/\(id)/dismiss"))
         req.httpMethod = "POST"

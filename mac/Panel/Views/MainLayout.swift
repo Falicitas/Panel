@@ -26,6 +26,7 @@ private struct ContentColumn: View {
         case .micro:       MicroContentView()
         case .finance:     FinanceContentView()
         case .supplements: SupplementsContentView()
+        case .records:     RecordsContentView()
         default:           ComingSoonView(tab: state.selectedTab)
         }
     }
@@ -39,6 +40,7 @@ private struct DetailColumn: View {
         case .micro:       MicroDetailView()
         case .finance:     FinanceDetailView()
         case .supplements: SupplementsDetailView()
+        case .records:     RecordsDetailView()
         default:           ComingSoonView(tab: state.selectedTab)
         }
     }

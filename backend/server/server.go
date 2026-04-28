@@ -63,6 +63,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/state/settings", s.handlePutStateSettings)
 	mux.HandleFunc("GET /api/notifications", s.handleListNotifications)
 	mux.HandleFunc("POST /api/notifications/{id}/dismiss", s.handleDismissNotification)
+	mux.HandleFunc("POST /api/records/grip", s.handlePostGrip)
+	mux.HandleFunc("GET /api/records/grip/today", s.handleGetGripToday)
+	mux.HandleFunc("GET /api/records/supplements/month", s.handleGetSupplementsMonth)
 	return logMiddleware(mux)
 }
 
