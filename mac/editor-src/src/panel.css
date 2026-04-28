@@ -22,16 +22,16 @@ html, body {
   line-height: 1.65;
 }
 
-/* 任务列表 checkbox — gfm preset 输出 li[data-list-type="task"][data-checked="true|false"]
+/* 任务列表 checkbox — gfm preset 输出 li[data-item-type="task"][data-checked="true|false"]
    用 ::before 加 ☐ / ☑ 字符,inline 风格(跟 Typora 一致) */
-.milkdown li[data-list-type="task"] {
+.milkdown li[data-item-type="task"] {
   list-style: none;
   position: relative;
 }
-.milkdown li[data-list-type="task"]::marker {
+.milkdown li[data-item-type="task"]::marker {
   content: none;
 }
-.milkdown li[data-list-type="task"] > p:first-child::before {
+.milkdown li[data-item-type="task"] > p:first-child::before {
   content: '☐';
   display: inline-block;
   width: 1.1em;
@@ -39,10 +39,10 @@ html, body {
   color: rgba(243, 166, 89, 0.95);  /* anchorAccent 暖橙 */
   font-weight: 600;
 }
-.milkdown li[data-list-type="task"][data-checked="true"] > p:first-child::before {
+.milkdown li[data-item-type="task"][data-checked="true"] > p:first-child::before {
   content: '☑';
 }
-.milkdown li[data-list-type="task"][data-checked="true"] > p:first-child {
+.milkdown li[data-item-type="task"][data-checked="true"] > p:first-child {
   opacity: 0.55;
   text-decoration: line-through;
 }
