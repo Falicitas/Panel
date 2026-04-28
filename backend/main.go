@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"panel/micro"
 	"panel/msgsource"
 	"panel/server"
 	"panel/store"
@@ -40,6 +41,10 @@ func main() {
 	repo := todolist.NewRepo(todolistsDir)
 	log.Printf("todolists: %s", todolistsDir)
 
+	microDir := filepath.Join(todolistsDir, "micro")
+	microRepo := micro.NewRepo(microDir)
+	log.Printf("micro: %s", microDir)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := repo.Watch(ctx); err != nil {
@@ -49,7 +54,7 @@ func main() {
 	// Phase 9 占位: 启动一个 mock 消息源,验证接口形状
 	_ = msgsource.NewMock("wechat")
 
-	srv := server.New(repo, st)
+	srv := server.New(repo, st, microRepo)
 	httpSrv := &http.Server{
 		Addr:              listenAddr,
 		Handler:           srv.Routes(),

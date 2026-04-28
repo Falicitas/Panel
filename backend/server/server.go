@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"panel/micro"
 	"panel/store"
 	"panel/todolist"
 )
@@ -11,10 +12,11 @@ import (
 type Server struct {
 	repo  *todolist.Repo
 	store *store.Store
+	micro *micro.Repo
 }
 
-func New(repo *todolist.Repo, st *store.Store) *Server {
-	return &Server{repo: repo, store: st}
+func New(repo *todolist.Repo, st *store.Store, microRepo *micro.Repo) *Server {
+	return &Server{repo: repo, store: st, micro: microRepo}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -26,6 +28,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/anchor", s.handleGetAnchor)
 	mux.HandleFunc("POST /api/anchor", s.handlePostAnchor)
 	mux.HandleFunc("GET /api/focus", s.handleGetFocus)
+	mux.HandleFunc("GET /api/micro/today", s.handleGetMicroToday)
+	mux.HandleFunc("PUT /api/micro/today", s.handlePutMicroToday)
+	mux.HandleFunc("GET /api/recurring", s.handleListRecurring)
+	mux.HandleFunc("POST /api/recurring", s.handleCreateRecurring)
+	mux.HandleFunc("PUT /api/recurring/{id}", s.handleUpdateRecurring)
+	mux.HandleFunc("DELETE /api/recurring/{id}", s.handleDeleteRecurring)
 	return logMiddleware(mux)
 }
 
