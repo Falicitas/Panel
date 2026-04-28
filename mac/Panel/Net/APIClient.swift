@@ -22,10 +22,27 @@ private struct GripPayload: Encodable {
     let note: String
 }
 
-actor APIClient {
+private struct ExecPayload: Encodable {
+    let cmd: String
+    let timeoutMs: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case cmd
+        case timeoutMs = "timeout_ms"
+    }
+}
+
+actor APIClient: BackendClient {
     static let shared = APIClient()
 
-    private let baseURL = URL(string: "http://127.0.0.1:8089")!
+    /// 字面量 URL 解析失败 = 编程错误,fatalError 即可。
+    private static let baseURL: URL = {
+        guard let u = URL(string: "http://127.0.0.1:8089") else {
+            fatalError("invalid baseURL literal")
+        }
+        return u
+    }()
+
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
@@ -156,8 +173,18 @@ actor APIClient {
         return try await get(path)
     }
 
+    // MARK: - Bash
+
+    func execCommand(_ cmd: String, timeoutMs: Int? = nil) async throws -> BashExecResult {
+        try await post("/api/exec", body: ExecPayload(cmd: cmd, timeoutMs: timeoutMs))
+    }
+
+    func listBashHistory(limit: Int = 100) async throws -> [BashHistoryEntry] {
+        try await get("/api/exec/history?limit=\(limit)")
+    }
+
     func dismissNotification(id: Int64) async throws {
-        var req = URLRequest(url: url("/api/notifications/\(id)/dismiss"))
+        var req = URLRequest(url: try url("/api/notifications/\(id)/dismiss"))
         req.httpMethod = "POST"
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -171,18 +198,21 @@ actor APIClient {
         s.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? s
     }
 
-    private func url(_ path: String) -> URL {
-        URL(string: path, relativeTo: baseURL)!
+    private func url(_ path: String) throws -> URL {
+        guard let u = URL(string: path, relativeTo: APIClient.baseURL) else {
+            throw APIError(message: "invalid URL path: \(path)")
+        }
+        return u
     }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
-        var req = URLRequest(url: url(path))
+        var req = URLRequest(url: try url(path))
         req.httpMethod = "GET"
         return try await send(req)
     }
 
     private func put<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        var req = URLRequest(url: url(path))
+        var req = URLRequest(url: try url(path))
         req.httpMethod = "PUT"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try encoder.encode(body)
@@ -190,7 +220,7 @@ actor APIClient {
     }
 
     private func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        var req = URLRequest(url: url(path))
+        var req = URLRequest(url: try url(path))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try encoder.encode(body)
@@ -198,7 +228,7 @@ actor APIClient {
     }
 
     private func delete(_ path: String) async throws {
-        var req = URLRequest(url: url(path))
+        var req = URLRequest(url: try url(path))
         req.httpMethod = "DELETE"
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {

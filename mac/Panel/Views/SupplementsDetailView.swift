@@ -28,17 +28,19 @@ private struct StateCard: View {
                 .font(.title3.weight(.semibold))
             HStack(spacing: 16) {
                 LabeledValue(label: "状态", value: modeLabel(state.dailyState?.mode ?? "normal"))
-                LabeledValue(
-                    label: "wake_time",
-                    value: state.dailyState?.wakeTime.isEmpty == false
-                        ? state.dailyState!.wakeTime
-                        : "未设 (Phase 5.C 蒙版)"
-                )
+                LabeledValue(label: "wake_time", value: wakeTimeLabel)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var wakeTimeLabel: String {
+        guard let wake = state.dailyState?.wakeTime, !wake.isEmpty else {
+            return "未设 (Phase 5.C 蒙版)"
+        }
+        return wake
     }
 
     private var dateLabel: String {

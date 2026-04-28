@@ -26,6 +26,9 @@ final class AppState {
     var grip: GripSummary?
     var supplementMonthly: SupplementMonthly?
     var recordsTab: RecordsTab = .grip
+    var bashTranscript: [BashHistoryEntry] = []
+    var bashHistory: [BashHistoryEntry] = []
+    var bashIsRunning = false
     var timeTick: Date = Date()
     var isLoading = false
     var lastError: String?
@@ -74,8 +77,12 @@ final class AppState {
         return h * 60 + m
     }
 
-    private let api = APIClient.shared
+    private let api: any BackendClient
     private var pollTask: Task<Void, Never>?
+
+    init(api: any BackendClient = APIClient.shared) {
+        self.api = api
+    }
 
     func loadAll() async {
         isLoading = true
@@ -86,7 +93,7 @@ final class AppState {
             async let focusResp = api.getFocus()
             async let microResp = api.getMicroToday()
             async let recurResp = api.listRecurring()
-            async let summaryResp = api.getFinanceSummary()
+            async let summaryResp = api.getFinanceSummary(at: nil)
             async let settingsResp = api.getFinanceSettings()
             async let billsResp = api.listBills()
             async let fixedResp = api.listFixed()
@@ -95,9 +102,9 @@ final class AppState {
             async let supplResp = api.listSupplements()
             async let dailyResp = api.getTodayState()
             async let stateSetResp = api.getStateSettings()
-            async let notifResp = api.listNotifications()
+            async let notifResp = api.listNotifications(all: false)
             async let gripResp = api.getGripToday()
-            async let suppMonthResp = api.getSupplementsMonth()
+            async let suppMonthResp = api.getSupplementsMonth(month: nil)
             let (l, a, f, m, r) = try await (lists, anchorResp, focusResp, microResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
             let (sp, ds, ss, ns) = try await (supplResp, dailyResp, stateSetResp, notifResp)
@@ -135,7 +142,7 @@ final class AppState {
 
     func reloadFinance() async {
         do {
-            async let sum = api.getFinanceSummary()
+            async let sum = api.getFinanceSummary(at: nil)
             async let bs = api.listBills()
             async let fx = api.listFixed()
             async let fr = api.listFree()
@@ -221,7 +228,7 @@ final class AppState {
     func saveFinanceSettings(_ fs: FinanceSettings) async {
         do {
             self.financeSettings = try await api.putFinanceSettings(fs)
-            self.financeSummary = try await api.getFinanceSummary()
+            self.financeSummary = try await api.getFinanceSummary(at: nil)
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -282,8 +289,8 @@ final class AppState {
     func dismiss(_ n: PanelNotification) async {
         do {
             try await api.dismissNotification(id: n.id)
-            async let notifs = api.listNotifications()
-            async let monthly = api.getSupplementsMonth()
+            async let notifs = api.listNotifications(all: false)
+            async let monthly = api.getSupplementsMonth(month: nil)
             self.notifications = try await notifs
             self.supplementMonthly = try? await monthly
             self.lastError = nil
@@ -294,7 +301,7 @@ final class AppState {
 
     func reloadNotifications() async {
         do {
-            self.notifications = try await api.listNotifications()
+            self.notifications = try await api.listNotifications(all: false)
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -415,7 +422,7 @@ final class AppState {
                 if f != self.focus { self.focus = f }
             }
             async let micro = api.getMicroToday()
-            async let notif = api.listNotifications()
+            async let notif = api.listNotifications(all: false)
             async let daily = api.getTodayState()
             let (m, ns, ds) = try await (micro, notif, daily)
             if m != self.microToday { self.microToday = m }
