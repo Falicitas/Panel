@@ -1,7 +1,12 @@
-import { Crepe } from '@milkdown/crepe'
-import { replaceAll } from '@milkdown/kit/utils'
-import '@milkdown/crepe/theme/common/style.css'
-import '@milkdown/crepe/theme/frame.css'
+import { Editor, rootCtx, defaultValueCtx } from '@milkdown/kit/core'
+import { commonmark } from '@milkdown/kit/preset/commonmark'
+import { gfm } from '@milkdown/kit/preset/gfm'
+import { history } from '@milkdown/kit/plugin/history'
+import { clipboard } from '@milkdown/kit/plugin/clipboard'
+import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
+import { replaceAll, getMarkdown } from '@milkdown/kit/utils'
+import { nord } from '@milkdown/theme-nord'
+import '@milkdown/theme-nord/style.css'
 
 declare global {
   interface Window {
@@ -19,58 +24,57 @@ declare global {
   }
 }
 
-let crepe: Crepe | null = null
+let editor: Editor | null = null
 let suppressNext = false
 
 function postToSwift(payload: unknown): void {
-  if (window.webkit?.messageHandlers?.markdown) {
-    window.webkit.messageHandlers.markdown.postMessage(payload)
-  }
+  window.webkit?.messageHandlers?.markdown?.postMessage(payload)
 }
 
 async function init(initialMarkdown: string): Promise<void> {
   const root = document.getElementById('editor')
   if (!root) throw new Error('#editor missing')
-  crepe = new Crepe({ root, defaultValue: initialMarkdown })
-  await crepe.create()
-  crepe.on((listener) => {
-    listener.markdownUpdated((_ctx, md, prev) => {
-      if (suppressNext) {
-        suppressNext = false
-        return
-      }
-      if (md !== prev) postToSwift({ type: 'change', md })
+  editor = await Editor
+    .make()
+    .config((ctx) => {
+      ctx.set(rootCtx, root)
+      ctx.set(defaultValueCtx, initialMarkdown)
+      ctx.get(listenerCtx).markdownUpdated((_ctx, md, prev) => {
+        if (suppressNext) {
+          suppressNext = false
+          return
+        }
+        if (md !== prev) postToSwift({ type: 'change', md })
+      })
     })
-  })
+    .config(nord)
+    .use(commonmark)
+    .use(gfm)
+    .use(history)
+    .use(clipboard)
+    .use(listener)
+    .create()
   postToSwift({ type: 'ready' })
 }
 
 async function setRaw(markdown: string): Promise<void> {
-  if (!crepe) {
+  if (!editor) {
     await init(markdown)
     return
   }
-  // 通过底层 editor 走 replaceAll,避免 destroy/recreate 重置滚动 / 焦点
-  const editor = (crepe as unknown as { editor?: { action: (cmd: unknown) => void } }).editor
-  if (editor && typeof editor.action === 'function') {
-    suppressNext = true
-    editor.action(replaceAll(markdown, true))
-  } else {
-    // fallback: destroy + recreate
-    await crepe.destroy()
-    crepe = null
-    await init(markdown)
-  }
+  suppressNext = true
+  editor.action(replaceAll(markdown, true))
 }
 
 function getRaw(): string {
-  return crepe?.getMarkdown() ?? ''
+  if (!editor) return ''
+  return editor.action(getMarkdown())
 }
 
 async function destroy(): Promise<void> {
-  if (crepe) {
-    await crepe.destroy()
-    crepe = null
+  if (editor) {
+    await editor.destroy()
+    editor = null
   }
 }
 
