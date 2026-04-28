@@ -43,6 +43,39 @@ func (s *Store) migrate() error {
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL
 		);
+		CREATE TABLE IF NOT EXISTS bills (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			monthly_amount INTEGER NOT NULL,
+			total_months INTEGER NOT NULL,
+			started_month TEXT NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS fixed_expenses (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			monthly_amount INTEGER NOT NULL,
+			started_month TEXT NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS free_expenses (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			date TEXT NOT NULL,
+			amount INTEGER NOT NULL,
+			note TEXT NOT NULL DEFAULT ''
+		);
+		CREATE TABLE IF NOT EXISTS incomes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			date TEXT NOT NULL,
+			amount INTEGER NOT NULL,
+			note TEXT NOT NULL DEFAULT ''
+		);
+		CREATE TABLE IF NOT EXISTS finance_settings (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			initial_balance INTEGER NOT NULL DEFAULT 0,
+			free_cap_monthly INTEGER NOT NULL DEFAULT 100000,
+			assumed_n_months INTEGER NOT NULL DEFAULT 12,
+			assumed_annual_rate REAL NOT NULL DEFAULT 0.12
+		);
+		INSERT OR IGNORE INTO finance_settings (id, initial_balance) VALUES (1, 0);
 	`)
 	return err
 }
