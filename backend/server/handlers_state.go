@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"panel/store"
@@ -73,7 +74,41 @@ func (s *Server) handlePostTodayState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// 当日首次进入普通模式 -> 注入复发 todo 到 micro 顶部 (PRD: 蒙版选普通时注入,选外出不注入)
+	wasFirstSet := cur.ModeSetAt == 0
+	if wasFirstSet && p.Mode == "normal" {
+		if err := s.injectRecurringIntoMicro(); err != nil {
+			// 不阻断状态切换,只 log
+			writeJSON(w, http.StatusOK, map[string]any{"daily_state": ds, "inject_error": err.Error()})
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, ds)
+}
+
+func (s *Server) injectRecurringIntoMicro() error {
+	recur, err := s.store.ListRecurring()
+	if err != nil {
+		return err
+	}
+	if len(recur) == 0 {
+		return nil
+	}
+	today, err := s.micro.LoadToday()
+	if err != nil {
+		return err
+	}
+	var sb strings.Builder
+	for _, r := range recur {
+		sb.WriteString("- [ ] ")
+		sb.WriteString(r.Content)
+		sb.WriteString("\n")
+	}
+	if today.RawMD != "" {
+		sb.WriteString("\n")
+		sb.WriteString(today.RawMD)
+	}
+	return s.micro.WriteToday(sb.String())
 }
 
 func (s *Server) handleGetStateSettings(w http.ResponseWriter, r *http.Request) {
