@@ -27,7 +27,7 @@ private struct ContentColumn: View {
         case .finance:     FinanceContentView()
         case .supplements: SupplementsContentView()
         case .records:     RecordsContentView()
-        default:           ComingSoonView(tab: state.selectedTab)
+        case .bash:        BashContentView()
         }
     }
 }
@@ -41,7 +41,7 @@ private struct DetailColumn: View {
         case .finance:     FinanceDetailView()
         case .supplements: SupplementsDetailView()
         case .records:     RecordsDetailView()
-        default:           ComingSoonView(tab: state.selectedTab)
+        case .bash:        BashDetailView()
         }
     }
 }

@@ -398,6 +398,36 @@ final class AppState {
         }
     }
 
+    // MARK: - Bash
+
+    func execCommand(_ cmd: String, timeoutMs: Int? = nil) async {
+        let trimmed = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        bashIsRunning = true
+        do {
+            let result = try await api.execCommand(trimmed, timeoutMs: timeoutMs)
+            bashTranscript.append(result.asHistoryEntry)
+            bashHistory = try await api.listBashHistory(limit: 100)
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+        bashIsRunning = false
+    }
+
+    func loadBashHistory(limit: Int = 100) async {
+        do {
+            bashHistory = try await api.listBashHistory(limit: limit)
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func loadBashEntryToTranscript(_ entry: BashHistoryEntry) {
+        bashTranscript.append(entry)
+    }
+
     /// 后台 polling: 处理外部编辑器(Typora 等)修改了文件的情况。
     /// 后端 fsnotify 已经失效缓存,这里只是周期性拉取看是否有新内容。
     func startPolling() async {
