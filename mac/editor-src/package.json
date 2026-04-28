@@ -8,7 +8,6 @@
     "watch": "node build.mjs --watch"
   },
   "dependencies": {
-    "@milkdown/components": "^7.20.0",
     "@milkdown/kit": "^7.5.0",
     "@milkdown/theme-nord": "^7.20.0"
   },

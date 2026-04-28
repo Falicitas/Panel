@@ -22,10 +22,29 @@ html, body {
   line-height: 1.65;
 }
 
-/* 任务列表 checkbox 容器:list-item-block 用 .list-item__checkbox / .list-item__label,
-   颜色统一深底浅字 */
-.milkdown li[data-list-type="task"] .list-item__checkbox {
-  accent-color: rgba(243, 166, 89, 0.95);  /* anchorAccent 暖橙 */
+/* 任务列表 checkbox — gfm preset 输出 li[data-list-type="task"][data-checked="true|false"]
+   用 ::before 加 ☐ / ☑ 字符,inline 风格(跟 Typora 一致) */
+.milkdown li[data-list-type="task"] {
+  list-style: none;
+  position: relative;
+}
+.milkdown li[data-list-type="task"]::marker {
+  content: none;
+}
+.milkdown li[data-list-type="task"] > p:first-child::before {
+  content: '☐';
+  display: inline-block;
+  width: 1.1em;
+  margin-right: 0.35em;
+  color: rgba(243, 166, 89, 0.95);  /* anchorAccent 暖橙 */
+  font-weight: 600;
+}
+.milkdown li[data-list-type="task"][data-checked="true"] > p:first-child::before {
+  content: '☑';
+}
+.milkdown li[data-list-type="task"][data-checked="true"] > p:first-child {
+  opacity: 0.55;
+  text-decoration: line-through;
 }
 
 /* 选中 / 焦点提亮 */
