@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
@@ -22,8 +23,53 @@ final class AppState {
     var dailyState: DailyState?
     var stateSettings: StateSettings?
     var notifications: [PanelNotification] = []
+    var timeTick: Date = Date()
     var isLoading = false
     var lastError: String?
+
+    /// 当前有效 mode (考虑 sleep/focus 自动转换 + 优先级 sleep > outside > focus > normal)。
+    /// effectiveMode 不直接修改 dailyState.mode (那个是用户显式设置的)。
+    var effectiveMode: String {
+        let _ = timeTick  // 触发 SwiftUI 跟踪,timeTick 变化时 view 重计算
+        guard let ds = dailyState, let ss = stateSettings else { return "normal" }
+        let nowMin = minutesOfDay(Date())
+        let sleepMin = hmToMinutes(ss.sleepStart)
+        let focusMin = hmToMinutes(ss.focusStart)
+        if nowMin >= sleepMin { return "sleep" }
+        if ds.mode == "outside" { return "outside" }
+        if nowMin >= focusMin && nowMin < sleepMin { return "focus" }
+        return ds.mode
+    }
+
+    /// 主题色: 普通无 / 专注柔和橙 / 睡眠淡紫 / 外出蓝
+    var themeColor: Color? {
+        switch effectiveMode {
+        case "focus":   return Color(red: 0.95, green: 0.65, blue: 0.35)
+        case "sleep":   return Color(red: 0.65, green: 0.55, blue: 0.85)
+        case "outside": return Color(red: 0.40, green: 0.65, blue: 0.95)
+        default:        return nil
+        }
+    }
+
+    var modeLabel: String {
+        switch effectiveMode {
+        case "focus":   return "专注"
+        case "sleep":   return "睡眠"
+        case "outside": return "外出"
+        default:        return "普通"
+        }
+    }
+
+    private func minutesOfDay(_ d: Date) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    }
+
+    private func hmToMinutes(_ hm: String) -> Int {
+        let parts = hm.split(separator: ":")
+        guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return 0 }
+        return h * 60 + m
+    }
 
     private let api = APIClient.shared
     private var pollTask: Task<Void, Never>?
@@ -319,6 +365,7 @@ final class AppState {
     }
 
     private func tick() async {
+        self.timeTick = Date()
         do {
             if let name = anchor {
                 async let detail = api.getTodolist(name: name)

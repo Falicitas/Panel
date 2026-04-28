@@ -49,8 +49,17 @@ struct NotificationBar: View {
         .padding(.horizontal, 12)
         .frame(height: 28)
         .frame(maxWidth: .infinity)
-        .background(.bar)
+        .background(barBackground)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    @ViewBuilder
+    private var barBackground: some View {
+        if let c = state.themeColor {
+            c.opacity(0.20)
+        } else {
+            Rectangle().fill(.bar)
+        }
     }
 }
 
