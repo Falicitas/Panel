@@ -10,6 +10,8 @@ final class AppState {
     var anchor: String?
     var focus: FocusResult?
     var detail: Todolist?
+    var microToday: Todolist?
+    var recurring: [RecurringTodo] = []
     var isLoading = false
     var lastError: String?
 
@@ -23,16 +25,50 @@ final class AppState {
             async let lists = api.listTodolists()
             async let anchorResp = api.getAnchor()
             async let focusResp = api.getFocus()
-            let (l, a, f) = try await (lists, anchorResp, focusResp)
+            async let microResp = api.getMicroToday()
+            async let recurResp = api.listRecurring()
+            let (l, a, f, m, r) = try await (lists, anchorResp, focusResp, microResp, recurResp)
             self.active = l.active
             self.done = l.done
             self.anchor = a.name
             self.focus = f
+            self.microToday = m
+            self.recurring = r
             if let name = a.name {
                 self.detail = try await api.getTodolist(name: name)
             } else {
                 self.detail = nil
             }
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func saveMicroToday(rawMD: String) async {
+        do {
+            self.microToday = try await api.putMicroToday(rawMD: rawMD)
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func addRecurring(content: String) async {
+        let nextOrder = (recurring.last?.sortOrder ?? -1) + 1
+        do {
+            _ = try await api.createRecurring(content: content, sortOrder: nextOrder)
+            self.recurring = try await api.listRecurring()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func deleteRecurring(_ item: RecurringTodo) async {
+        do {
+            try await api.deleteRecurring(id: item.id)
+            self.recurring = try await api.listRecurring()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -84,13 +120,16 @@ final class AppState {
     }
 
     private func tick() async {
-        guard let name = anchor else { return }
         do {
-            async let detail = api.getTodolist(name: name)
-            async let focus = api.getFocus()
-            let (d, f) = try await (detail, focus)
-            if d != self.detail { self.detail = d }
-            if f != self.focus { self.focus = f }
+            if let name = anchor {
+                async let detail = api.getTodolist(name: name)
+                async let focus = api.getFocus()
+                let (d, f) = try await (detail, focus)
+                if d != self.detail { self.detail = d }
+                if f != self.focus { self.focus = f }
+            }
+            let m = try await api.getMicroToday()
+            if m != self.microToday { self.microToday = m }
         } catch {
             // 静默,等下次
         }

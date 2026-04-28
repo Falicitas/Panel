@@ -5,6 +5,16 @@ struct APIError: LocalizedError {
     var errorDescription: String? { message }
 }
 
+private struct RecurringPayload: Encodable {
+    let content: String
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case content
+        case sortOrder = "sort_order"
+    }
+}
+
 actor APIClient {
     static let shared = APIClient()
 
@@ -35,6 +45,35 @@ actor APIClient {
 
     func getFocus() async throws -> FocusResult {
         try await get("/api/focus")
+    }
+
+    func getMicroToday() async throws -> Todolist {
+        try await get("/api/micro/today")
+    }
+
+    func putMicroToday(rawMD: String) async throws -> Todolist {
+        try await put("/api/micro/today", body: ["raw_md": rawMD])
+    }
+
+    func listRecurring() async throws -> [RecurringTodo] {
+        try await get("/api/recurring")
+    }
+
+    func createRecurring(content: String, sortOrder: Int) async throws -> RecurringTodo {
+        try await post("/api/recurring", body: RecurringPayload(content: content, sortOrder: sortOrder))
+    }
+
+    func updateRecurring(id: Int64, content: String, sortOrder: Int) async throws -> [RecurringTodo] {
+        try await put("/api/recurring/\(id)", body: RecurringPayload(content: content, sortOrder: sortOrder))
+    }
+
+    func deleteRecurring(id: Int64) async throws {
+        var req = URLRequest(url: url("/api/recurring/\(id)"))
+        req.httpMethod = "DELETE"
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "DELETE /api/recurring/\(id) failed")
+        }
     }
 
     private func encode(_ s: String) -> String {
