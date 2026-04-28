@@ -18,6 +18,10 @@ final class AppState {
     var fixed: [FixedExpense] = []
     var frees: [FreeExpense] = []
     var incomes: [Income] = []
+    var supplements: [Supplement] = []
+    var dailyState: DailyState?
+    var stateSettings: StateSettings?
+    var notifications: [PanelNotification] = []
     var isLoading = false
     var lastError: String?
 
@@ -39,8 +43,13 @@ final class AppState {
             async let fixedResp = api.listFixed()
             async let freesResp = api.listFree()
             async let incomesResp = api.listIncomes()
+            async let supplResp = api.listSupplements()
+            async let dailyResp = api.getTodayState()
+            async let stateSetResp = api.getStateSettings()
+            async let notifResp = api.listNotifications()
             let (l, a, f, m, r) = try await (lists, anchorResp, focusResp, microResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
+            let (sp, ds, ss, ns) = try await (supplResp, dailyResp, stateSetResp, notifResp)
             self.active = l.active
             self.done = l.done
             self.anchor = a.name
@@ -53,6 +62,10 @@ final class AppState {
             self.fixed = fx
             self.frees = fr
             self.incomes = inc
+            self.supplements = sp
+            self.dailyState = ds
+            self.stateSettings = ss
+            self.notifications = ns
             if let name = a.name {
                 self.detail = try await api.getTodolist(name: name)
             } else {
@@ -161,6 +174,76 @@ final class AppState {
         }
     }
 
+    // MARK: - Supplements / State / Notifications
+
+    func reloadSupplements() async {
+        do {
+            self.supplements = try await api.listSupplements()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func saveSupplement(_ sp: Supplement, isNew: Bool) async {
+        do {
+            if isNew {
+                _ = try await api.createSupplement(sp)
+            } else {
+                _ = try await api.updateSupplement(sp)
+            }
+            await reloadSupplements()
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func deleteSupplement(id: Int64) async {
+        do {
+            try await api.deleteSupplement(id: id)
+            await reloadSupplements()
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func setMode(_ mode: String, wakeTime: String? = nil) async {
+        do {
+            self.dailyState = try await api.setTodayState(mode: mode, wakeTime: wakeTime)
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func saveStateSettings(_ ss: StateSettings) async {
+        do {
+            self.stateSettings = try await api.putStateSettings(ss)
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func dismiss(_ n: PanelNotification) async {
+        do {
+            try await api.dismissNotification(id: n.id)
+            self.notifications = try await api.listNotifications()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    func reloadNotifications() async {
+        do {
+            self.notifications = try await api.listNotifications()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     func saveMicroToday(rawMD: String) async {
         do {
             self.microToday = try await api.putMicroToday(rawMD: rawMD)
@@ -244,8 +327,13 @@ final class AppState {
                 if d != self.detail { self.detail = d }
                 if f != self.focus { self.focus = f }
             }
-            let m = try await api.getMicroToday()
+            async let micro = api.getMicroToday()
+            async let notif = api.listNotifications()
+            async let daily = api.getTodayState()
+            let (m, ns, ds) = try await (micro, notif, daily)
             if m != self.microToday { self.microToday = m }
+            if ns != self.notifications { self.notifications = ns }
+            if ds != self.dailyState { self.dailyState = ds }
         } catch {
             // 静默,等下次
         }

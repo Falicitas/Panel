@@ -22,10 +22,11 @@ private struct ContentColumn: View {
     @Environment(AppState.self) private var state
     var body: some View {
         switch state.selectedTab {
-        case .todolist: TodolistContentView()
-        case .micro:    MicroContentView()
-        case .finance:  FinanceContentView()
-        default:        ComingSoonView(tab: state.selectedTab)
+        case .todolist:    TodolistContentView()
+        case .micro:       MicroContentView()
+        case .finance:     FinanceContentView()
+        case .supplements: SupplementsContentView()
+        default:           ComingSoonView(tab: state.selectedTab)
         }
     }
 }
@@ -34,10 +35,11 @@ private struct DetailColumn: View {
     @Environment(AppState.self) private var state
     var body: some View {
         switch state.selectedTab {
-        case .todolist: DetailView()
-        case .micro:    MicroDetailView()
-        case .finance:  FinanceDetailView()
-        default:        ComingSoonView(tab: state.selectedTab)
+        case .todolist:    DetailView()
+        case .micro:       MicroDetailView()
+        case .finance:     FinanceDetailView()
+        case .supplements: SupplementsDetailView()
+        default:           ComingSoonView(tab: state.selectedTab)
         }
     }
 }

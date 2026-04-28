@@ -1,0 +1,154 @@
+import SwiftUI
+
+extension Supplement {
+    static var blank: Supplement {
+        Supplement(id: 0, name: "", type: "supplement", windows: [], notes: "")
+    }
+}
+
+struct SupplementFormSheet: View {
+    let initial: Supplement
+    let isNew: Bool
+
+    @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
+    @State private var item: Supplement = .blank
+    @State private var confirmingDelete = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(isNew ? "新增食物 / 保健品" : "编辑")
+                    .font(.headline)
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("保存") {
+                    Task {
+                        await state.saveSupplement(item, isNew: isNew)
+                        dismiss()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+            }
+            .padding()
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("名称").frame(width: 70, alignment: .leading)
+                        TextField("维生素 C / 早餐 / ...", text: $item.name)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Text("类型").frame(width: 70, alignment: .leading)
+                        Picker("", selection: $item.type) {
+                            Text("食物").tag("food")
+                            Text("保健品").tag("supplement")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("时段").frame(width: 70, alignment: .leading)
+                            Spacer()
+                            Button {
+                                item.windows.append(SupplementWindow(start: "08:00", end: "10:00"))
+                            } label: {
+                                Label("添加时段", systemImage: "plus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        if item.windows.isEmpty {
+                            Text("尚无时段(无时段则不会触发提醒)")
+                                .font(.caption).foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 70)
+                        } else {
+                            ForEach(Array(item.windows.enumerated()), id: \.offset) { idx, _ in
+                                WindowRow(
+                                    start: $item.windows[idx].start,
+                                    end: $item.windows[idx].end,
+                                    onDelete: { item.windows.remove(at: idx) }
+                                )
+                            }
+                            Text("时段表达式: HH:MM 或 wake / wake+Nh / wake-Nm")
+                                .font(.caption2).foregroundStyle(.tertiary)
+                                .padding(.leading, 70)
+                        }
+                    }
+
+                    HStack(alignment: .top) {
+                        Text("备注").frame(width: 70, alignment: .leading)
+                        TextEditor(text: $item.notes)
+                            .frame(minHeight: 60, maxHeight: 100)
+                            .border(.tertiary.opacity(0.3))
+                    }
+                }
+                .padding()
+            }
+
+            if !isNew {
+                Divider()
+                HStack {
+                    Spacer()
+                    Button(role: .destructive) {
+                        confirmingDelete = true
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                    .confirmationDialog("确认删除?", isPresented: $confirmingDelete) {
+                        Button("删除", role: .destructive) {
+                            Task {
+                                await state.deleteSupplement(id: initial.id)
+                                dismiss()
+                            }
+                        }
+                        Button("取消", role: .cancel) {}
+                    }
+                }
+                .padding()
+            }
+        }
+        .frame(minWidth: 520, minHeight: 460)
+        .onAppear { item = initial }
+    }
+
+    private var canSave: Bool {
+        !item.name.trimmingCharacters(in: .whitespaces).isEmpty
+            && (item.type == "food" || item.type == "supplement")
+            && item.windows.allSatisfy {
+                !$0.start.trimmingCharacters(in: .whitespaces).isEmpty
+                    && !$0.end.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+    }
+}
+
+private struct WindowRow: View {
+    @Binding var start: String
+    @Binding var end: String
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Spacer().frame(width: 70 - 8)
+            TextField("起", text: $start)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 120)
+            Text("→").foregroundStyle(.tertiary)
+            TextField("止", text: $end)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 120)
+            Spacer()
+            Button(action: onDelete) {
+                Image(systemName: "minus.circle")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+}

@@ -34,16 +34,15 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     var isEnabled: Bool {
         switch self {
-        case .todolist, .micro, .finance: true
+        case .todolist, .micro, .finance, .supplements: true
         default: false
         }
     }
 
     var comingSoonHint: String {
         switch self {
-        case .supplements: "Phase 5"
-        case .records:     "Phase 6"
-        case .bash:        "Phase 7"
+        case .records: "Phase 6"
+        case .bash:    "Phase 7"
         default: ""
         }
     }

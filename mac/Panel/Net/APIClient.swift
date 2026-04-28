@@ -104,6 +104,44 @@ actor APIClient {
         try await put("/api/finance/settings", body: fs)
     }
 
+    // MARK: - Supplements
+
+    func listSupplements() async throws -> [Supplement] { try await get("/api/supplements") }
+    func createSupplement(_ s: Supplement) async throws -> Supplement {
+        try await post("/api/supplements", body: s)
+    }
+    func updateSupplement(_ s: Supplement) async throws -> [Supplement] {
+        try await put("/api/supplements/\(s.id)", body: s)
+    }
+    func deleteSupplement(id: Int64) async throws { try await delete("/api/supplements/\(id)") }
+
+    // MARK: - State
+
+    func getTodayState() async throws -> DailyState { try await get("/api/state/today") }
+    func setTodayState(mode: String, wakeTime: String? = nil) async throws -> DailyState {
+        var body: [String: String] = ["mode": mode]
+        if let w = wakeTime { body["wake_time"] = w }
+        return try await post("/api/state/today", body: body)
+    }
+    func getStateSettings() async throws -> StateSettings { try await get("/api/state/settings") }
+    func putStateSettings(_ ss: StateSettings) async throws -> StateSettings {
+        try await put("/api/state/settings", body: ss)
+    }
+
+    // MARK: - Notifications
+
+    func listNotifications(all: Bool = false) async throws -> [PanelNotification] {
+        try await get(all ? "/api/notifications?all=1" : "/api/notifications")
+    }
+    func dismissNotification(id: Int64) async throws {
+        var req = URLRequest(url: url("/api/notifications/\(id)/dismiss"))
+        req.httpMethod = "POST"
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "dismiss notification \(id) failed")
+        }
+    }
+
     // MARK: - HTTP helpers
 
     private func encode(_ s: String) -> String {
