@@ -34,7 +34,7 @@ func Parse(content string) []TodoItem {
 	var headingLevels []int
 	var listStack []frame
 
-	var items []TodoItem
+	items := []TodoItem{}
 	for i, line := range strings.Split(content, "\n") {
 		if m := headingRe.FindStringSubmatch(line); m != nil {
 			level := len(m[1])
