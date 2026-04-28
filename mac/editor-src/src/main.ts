@@ -6,7 +6,9 @@ import { clipboard } from '@milkdown/kit/plugin/clipboard'
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener'
 import { replaceAll, getMarkdown } from '@milkdown/kit/utils'
 import { nord } from '@milkdown/theme-nord'
+import { listItemBlockComponent } from '@milkdown/components/list-item-block'
 import '@milkdown/theme-nord/style.css'
+import './panel.css'
 
 declare global {
   interface Window {
@@ -53,6 +55,7 @@ async function init(initialMarkdown: string): Promise<void> {
     .use(history)
     .use(clipboard)
     .use(listener)
+    .use(listItemBlockComponent)
     .create()
   postToSwift({ type: 'ready' })
 }

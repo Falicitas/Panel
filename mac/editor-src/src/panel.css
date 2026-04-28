@@ -1,0 +1,48 @@
+/* Panel WYSIWYG override — 让 nord 主题融入 SwiftUI dark window 背景 */
+
+html, body {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* nord theme 容器背景置透明 */
+.milkdown,
+.milkdown .editor,
+.milkdown .ProseMirror {
+  background: transparent !important;
+  color: rgba(236, 239, 244, 0.92);  /* nord snow,稍暗 */
+}
+
+/* 文档左右居中限宽,Typora-like */
+.milkdown .editor {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 28px 80px;
+  line-height: 1.65;
+}
+
+/* 任务列表 checkbox 容器:list-item-block 用 .list-item__checkbox / .list-item__label,
+   颜色统一深底浅字 */
+.milkdown li[data-list-type="task"] .list-item__checkbox {
+  accent-color: rgba(243, 166, 89, 0.95);  /* anchorAccent 暖橙 */
+}
+
+/* 选中 / 焦点提亮 */
+.milkdown .ProseMirror-focused {
+  outline: none;
+}
+
+/* 滚动条:macOS 系统风,深色环境下可见 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
