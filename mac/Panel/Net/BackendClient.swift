@@ -16,11 +16,13 @@ protocol BackendClient: Sendable {
     // MARK: Micro
     func getMicroToday() async throws -> Todolist
     func putMicroToday(rawMD: String) async throws -> Todolist
+    func getMicroProgress() async throws -> MicroProgress
 
     // MARK: Recurring
     func listRecurring() async throws -> [RecurringTodo]
-    func createRecurring(content: String, sortOrder: Int) async throws -> RecurringTodo
-    func updateRecurring(id: Int64, content: String, sortOrder: Int) async throws -> [RecurringTodo]
+    func createRecurring(content: String, kind: RecurringKind) async throws -> RecurringTodo
+    func updateRecurring(id: Int64, content: String, kind: RecurringKind) async throws -> [RecurringTodo]
+    func reorderRecurring(kind: RecurringKind, ids: [Int64]) async throws -> [RecurringTodo]
     func deleteRecurring(id: Int64) async throws
 
     // MARK: Finance

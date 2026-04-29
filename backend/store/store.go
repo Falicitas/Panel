@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -41,7 +42,13 @@ func (s *Store) migrate() error {
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			content    TEXT NOT NULL,
 			sort_order INTEGER NOT NULL DEFAULT 0,
-			created_at INTEGER NOT NULL
+			created_at INTEGER NOT NULL,
+			kind       TEXT NOT NULL DEFAULT 'free'
+		);
+		CREATE TABLE IF NOT EXISTS micro_progress (
+			date             TEXT PRIMARY KEY,
+			morning_start_at INTEGER,
+			morning_end_at   INTEGER
 		);
 		CREATE TABLE IF NOT EXISTS bills (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +136,25 @@ func (s *Store) migrate() error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_bash_history_created ON bash_history(created_at DESC);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	// 老数据库补列(SQLite 没有 ADD COLUMN IF NOT EXISTS — duplicate column 错误吞掉即可)
+	if _, err := s.db.Exec(`ALTER TABLE recurring_todos ADD COLUMN kind TEXT NOT NULL DEFAULT 'free'`); err != nil {
+		if !isDuplicateColumnErr(err) {
+			return fmt.Errorf("add recurring_todos.kind: %w", err)
+		}
+	}
+	return nil
+}
+
+func isDuplicateColumnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	// modernc.org/sqlite: "duplicate column name: kind (1)"
+	return strings.Contains(msg, "duplicate column")
 }
 
 const anchorKey = "anchor"

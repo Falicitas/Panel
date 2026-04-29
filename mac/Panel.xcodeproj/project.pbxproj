@@ -37,6 +37,7 @@
 		BD0AC0B4D2ECBB42811F4516 /* PrimarySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */; };
 		BD93E5AF68EB1BC4E606D012 /* StatusFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D696A31A0D0A222F286504 /* StatusFooter.swift */; };
 		C07107129F13625FCC585BD6 /* WakeMaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3F6994801E0DB41133D4A8 /* WakeMaskView.swift */; };
+		C8B3B69D8B987C49D4B142C6 /* MicroProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF389499A461D89EC2F91FB3 /* MicroProgress.swift */; };
 		CAB6C8228DF367334DC965FF /* SupplementsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0809016A83D11BDAF4B7EAE /* SupplementsContentView.swift */; };
 		CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */; };
 		D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */; };
@@ -74,6 +75,7 @@
 		A22D6102ADB89301B5F475EE /* SupplementForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementForms.swift; sourceTree = "<group>"; };
 		A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceForms.swift; sourceTree = "<group>"; };
 		A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsContentView.swift; sourceTree = "<group>"; };
+		AF389499A461D89EC2F91FB3 /* MicroProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicroProgress.swift; sourceTree = "<group>"; };
 		B18E8C1E08A00B871A4C9C04 /* RecurringTodo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringTodo.swift; sourceTree = "<group>"; };
 		B68E700AFBBE2CD789E98338 /* PanelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelApp.swift; sourceTree = "<group>"; };
 		B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBar.swift; sourceTree = "<group>"; };
@@ -183,6 +185,7 @@
 				6EB340428613B213332CFB3E /* Finance.swift */,
 				25E9443571240FF9C3C02AB4 /* FocusResult.swift */,
 				65BDF0617EDF92971A4168A2 /* ListEntry.swift */,
+				AF389499A461D89EC2F91FB3 /* MicroProgress.swift */,
 				B6F9936F17C66C82102D617D /* Records.swift */,
 				B18E8C1E08A00B871A4C9C04 /* RecurringTodo.swift */,
 				87F59C4D70D2A509B0F65C2F /* Supplements.swift */,
@@ -293,6 +296,7 @@
 				3FB8F396A13890631998595A /* FocusResult.swift in Sources */,
 				5FFDE4D66D35B64D3C65A633 /* ListEntry.swift in Sources */,
 				6C0A912AC9E07E69812F6B6B /* MainLayout.swift in Sources */,
+				C8B3B69D8B987C49D4B142C6 /* MicroProgress.swift in Sources */,
 				D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */,
 				213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */,
 				40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */,

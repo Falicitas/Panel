@@ -7,12 +7,12 @@ struct APIError: LocalizedError {
 
 private struct RecurringPayload: Encodable {
     let content: String
-    let sortOrder: Int
+    let kind: String
+}
 
-    enum CodingKeys: String, CodingKey {
-        case content
-        case sortOrder = "sort_order"
-    }
+private struct ReorderPayload: Encodable {
+    let kind: String
+    let ids: [Int64]
 }
 
 private struct GripPayload: Encodable {
@@ -79,16 +79,24 @@ actor APIClient: BackendClient {
         try await put("/api/micro/today", body: ["raw_md": rawMD])
     }
 
+    func getMicroProgress() async throws -> MicroProgress {
+        try await get("/api/micro/today/progress")
+    }
+
     func listRecurring() async throws -> [RecurringTodo] {
         try await get("/api/recurring")
     }
 
-    func createRecurring(content: String, sortOrder: Int) async throws -> RecurringTodo {
-        try await post("/api/recurring", body: RecurringPayload(content: content, sortOrder: sortOrder))
+    func createRecurring(content: String, kind: RecurringKind) async throws -> RecurringTodo {
+        try await post("/api/recurring", body: RecurringPayload(content: content, kind: kind.rawValue))
     }
 
-    func updateRecurring(id: Int64, content: String, sortOrder: Int) async throws -> [RecurringTodo] {
-        try await put("/api/recurring/\(id)", body: RecurringPayload(content: content, sortOrder: sortOrder))
+    func updateRecurring(id: Int64, content: String, kind: RecurringKind) async throws -> [RecurringTodo] {
+        try await put("/api/recurring/\(id)", body: RecurringPayload(content: content, kind: kind.rawValue))
+    }
+
+    func reorderRecurring(kind: RecurringKind, ids: [Int64]) async throws -> [RecurringTodo] {
+        try await post("/api/recurring/reorder", body: ReorderPayload(kind: kind.rawValue, ids: ids))
     }
 
     func deleteRecurring(id: Int64) async throws {

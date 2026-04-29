@@ -28,6 +28,7 @@ final class AppState {
     var microLoadedFor: String?
     var pendingScrollText: String?
     var microToday: Todolist?
+    var microProgress: MicroProgress?
     var recurring: [RecurringTodo] = []
     var financeSummary: FinanceSummary?
     var financeSettings: FinanceSettings?
@@ -108,6 +109,7 @@ final class AppState {
             async let anchorResp = api.getAnchor()
             async let focusResp = api.getFocus()
             async let microResp = api.getMicroToday()
+            async let microProgResp = api.getMicroProgress()
             async let recurResp = api.listRecurring()
             async let summaryResp = api.getFinanceSummary(at: nil)
             async let settingsResp = api.getFinanceSettings()
@@ -121,7 +123,7 @@ final class AppState {
             async let notifResp = api.listNotifications(all: false)
             async let gripResp = api.getGripToday()
             async let suppMonthResp = api.getSupplementsMonth(month: nil)
-            let (l, a, f, m, r) = try await (lists, anchorResp, focusResp, microResp, recurResp)
+            let (l, a, f, m, mp, r) = try await (lists, anchorResp, focusResp, microResp, microProgResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
             let (sp, ds, ss, ns) = try await (supplResp, dailyResp, stateSetResp, notifResp)
             let (gp, sm) = try await (gripResp, suppMonthResp)
@@ -130,6 +132,7 @@ final class AppState {
             self.anchor = a.name
             self.focus = f
             self.microToday = m
+            self.microProgress = mp
             self.recurring = r
             self.financeSummary = sum
             self.financeSettings = set
@@ -358,17 +361,38 @@ final class AppState {
     func saveMicroToday(rawMD: String) async {
         do {
             self.microToday = try await api.putMicroToday(rawMD: rawMD)
+            self.microProgress = try await api.getMicroProgress()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
         }
     }
 
-    func addRecurring(content: String) async {
-        let nextOrder = (recurring.last?.sortOrder ?? -1) + 1
+    func addRecurring(content: String, kind: RecurringKind) async {
         do {
-            _ = try await api.createRecurring(content: content, sortOrder: nextOrder)
+            _ = try await api.createRecurring(content: content, kind: kind)
             self.recurring = try await api.listRecurring()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 切换某条 recurring 的 kind (会自动放到目标段末尾)。
+    func setRecurringKind(_ item: RecurringTodo, _ kind: RecurringKind) async {
+        guard item.kind != kind else { return }
+        do {
+            self.recurring = try await api.updateRecurring(id: item.id, content: item.content, kind: kind)
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 重排某 kind 段内的 recurring 顺序。ids 应仅含目标 kind 的项。
+    func reorderRecurring(kind: RecurringKind, ids: [Int64]) async {
+        do {
+            self.recurring = try await api.reorderRecurring(kind: kind, ids: ids)
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -508,6 +532,7 @@ final class AppState {
             do {
                 self.microToday = try await api.putMicroToday(rawMD: microBuffer)
                 self.microBuffer = self.microToday?.rawMD ?? microBuffer
+                self.microProgress = try await api.getMicroProgress()
             } catch {
                 self.lastError = error.localizedDescription
             }
@@ -529,15 +554,17 @@ final class AppState {
                 if f != self.focus { self.focus = f }
             }
             async let micro = api.getMicroToday()
+            async let microProg = api.getMicroProgress()
             async let notif = api.listNotifications(all: false)
             async let daily = api.getTodayState()
-            let (m, ns, ds) = try await (micro, notif, daily)
+            let (m, mp, ns, ds) = try await (micro, microProg, notif, daily)
             if m != self.microToday {
                 self.microToday = m
                 if microLoadedFor == m.name && microBuffer != m.rawMD {
                     microBuffer = m.rawMD
                 }
             }
+            if mp != self.microProgress { self.microProgress = mp }
             if ns != self.notifications { self.notifications = ns }
             if ds != self.dailyState { self.dailyState = ds }
         } catch {
