@@ -9,7 +9,13 @@ enum ContentMode: String { case todolist, micro }
 final class AppState {
     var selectedTab: AppTab = .todolist
     var contentMode: ContentMode = .todolist
-    var editorPageZoom: Double = 1.0
+    var editorPageZoom: Double = AppState.loadZoom() {
+        didSet { UserDefaults.standard.set(editorPageZoom, forKey: Self.zoomKey) }
+    }
+    private static let zoomKey = "editor.pageZoom"
+    private static func loadZoom() -> Double {
+        (UserDefaults.standard.object(forKey: zoomKey) as? Double) ?? 1.0
+    }
     var active: [ListEntry] = []
     var done: [ListEntry] = []
     var anchor: String?

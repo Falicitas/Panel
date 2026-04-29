@@ -65,34 +65,40 @@ async function destroy(): Promise<void> {
 }
 
 /** 把后端给的 focus.text (任务原文,parser 已剥 markdown 标记) 在 webview
- * DOM 里 scrollIntoView + 短暂高亮。比从 raw md 行号反推干净很多。 */
+ * DOM 里 scrollIntoView + 短暂高亮。
+ * 走 block 级元素的整段 textContent — autolink / inline code / strong 等
+ * 切分文本节点也能命中。 */
 function scrollToText(text: string): void {
-  const probe = text.trim().slice(0, 40)
+  const probe = normalize(text).slice(0, 40)
   if (!probe) return
 
   const root = document.querySelector('.ProseMirror') ?? document.querySelector('.milkdown')
   if (!root) return
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  let node: Node | null
-  while ((node = walker.nextNode())) {
-    if ((node.textContent ?? '').includes(probe)) {
-      const block = climbToBlock(node.parentElement)
-      block?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      flashHighlight(block)
+  // 候选 block:任务项、普通 li、段落、标题、引用
+  const candidates = root.querySelectorAll('li, p, h1, h2, h3, h4, h5, h6, blockquote')
+  for (const el of Array.from(candidates) as HTMLElement[]) {
+    if (normalize(el.textContent ?? '').includes(probe)) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      flashHighlight(el)
       return
     }
   }
 }
 
-function climbToBlock(el: HTMLElement | null): HTMLElement | null {
-  let cur = el
-  while (cur && cur !== document.body) {
-    const display = getComputedStyle(cur).display
-    if (display.startsWith('block') || display === 'list-item' || display === 'flex') return cur
-    cur = cur.parentElement
-  }
-  return el
+/** 容错:中英标点 / 全角半角 / 多空格 等差异不应阻碍匹配。 */
+function normalize(s: string): string {
+  return s
+    .replace(/\s+/g, ' ')
+    .replace(/[，]/g, ',')
+    .replace(/[。]/g, '.')
+    .replace(/[：]/g, ':')
+    .replace(/[；]/g, ';')
+    .replace(/[（]/g, '(')
+    .replace(/[）]/g, ')')
+    .replace(/[""]/g, '"')
+    .replace(/['']/g, "'")
+    .trim()
 }
 
 function flashHighlight(el: HTMLElement | null): void {
