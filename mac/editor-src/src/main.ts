@@ -1,6 +1,6 @@
 import { Crepe } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
-import '@milkdown/crepe/theme/frame-dark.css'
+import '@milkdown/crepe/theme/classic.css'
 import './panel.css'
 
 declare global {
