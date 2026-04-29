@@ -7,12 +7,20 @@ import (
 )
 
 var (
-	headingRe     = regexp.MustCompile(`^(#{1,6})\s+(.*)$`)
-	listRe        = regexp.MustCompile(`^(\s*)([-*+])\s+(.*)$`)
-	taskRe        = regexp.MustCompile(`^\[([ xX])\]\s*(.*)$`)
-	skipRe        = regexp.MustCompile(`\[\[\[skip\]\]\]`)
-	inlineCodeRe  = regexp.MustCompile("`[^`]*`")
+	headingRe    = regexp.MustCompile(`^(#{1,6})\s+(.*)$`)
+	listRe       = regexp.MustCompile(`^(\s*)([-*+])\s+(.*)$`)
+	taskRe       = regexp.MustCompile(`^\[([ xX])\]\s*(.*)$`)
+	skipRe       = regexp.MustCompile(`\[\[\[skip\]\]\]`)
+	inlineCodeRe = regexp.MustCompile("`[^`]*`")
+	// GFM 可转义的 ASCII 标点 (CommonMark spec §6.1)
+	mdEscapeRe = regexp.MustCompile("\\\\([!\"#$%&'()*+,\\-./:;<=>?@\\[\\\\\\]^_`{|}~])")
 )
+
+// unescapeMarkdown 把 \~ \_ \* 等 markdown 转义还原成字面字符,
+// 用于把 raw md 文本变成"给人看"的形态 (focus card / breadcrumb 等)。
+func unescapeMarkdown(s string) string {
+	return mdEscapeRe.ReplaceAllString(s, "$1")
+}
 
 // hasSkipMarker 判断 task 文本是否带 [[[skip]]] 标签。
 // 反引号内的 [[[skip]]] 视为字面引用 (例如解释性的 markdown 段落),不算真标记。
@@ -38,7 +46,7 @@ func Parse(content string) []TodoItem {
 	for i, line := range strings.Split(content, "\n") {
 		if m := headingRe.FindStringSubmatch(line); m != nil {
 			level := len(m[1])
-			text := strings.TrimSpace(m[2])
+			text := unescapeMarkdown(strings.TrimSpace(m[2]))
 			for len(headings) > 0 && headingLevels[len(headingLevels)-1] >= level {
 				headings = headings[:len(headings)-1]
 				headingLevels = headingLevels[:len(headingLevels)-1]
@@ -65,19 +73,20 @@ func Parse(content string) []TodoItem {
 
 			if tm := taskRe.FindStringSubmatch(rest); tm != nil {
 				checked := tm[1] != " "
-				taskText := strings.TrimSpace(tm[2])
-				skip := hasSkipMarker(taskText)
+				rawTaskText := strings.TrimSpace(tm[2])
+				skip := hasSkipMarker(rawTaskText)  // skip 检测在 unescape 前 (避免 \[ 干扰)
+				cleanText := unescapeMarkdown(rawTaskText)
 				items = append(items, TodoItem{
 					LineNo:      i + 1,
 					Level:       len(listStack),
-					Text:        taskText,
+					Text:        cleanText,
 					Checked:     checked,
 					Skip:        skip,
 					ParentChain: parent,
 				})
-				listStack = append(listStack, frame{indent, taskText})
+				listStack = append(listStack, frame{indent, cleanText})
 			} else {
-				listStack = append(listStack, frame{indent, strings.TrimSpace(rest)})
+				listStack = append(listStack, frame{indent, unescapeMarkdown(strings.TrimSpace(rest))})
 			}
 			continue
 		}
