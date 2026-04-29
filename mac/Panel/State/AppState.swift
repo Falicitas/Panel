@@ -9,6 +9,7 @@ enum ContentMode: String { case todolist, micro }
 final class AppState {
     var selectedTab: AppTab = .todolist
     var contentMode: ContentMode = .todolist
+    var isDetailLoading: Bool = false
     var editorPageZoom: Double = AppState.loadZoom() {
         didSet { UserDefaults.standard.set(editorPageZoom, forKey: Self.zoomKey) }
     }
@@ -409,6 +410,8 @@ final class AppState {
             editorBuffer = ""
             return
         }
+        isDetailLoading = true
+        defer { isDetailLoading = false }
         do {
             detail = try await api.getTodolist(name: name)
             editorBuffer = detail?.rawMD ?? ""

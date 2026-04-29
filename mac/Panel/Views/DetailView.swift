@@ -6,15 +6,29 @@ struct DetailView: View {
 
     var body: some View {
         Group {
-            switch state.contentMode {
-            case .micro:    microView
-            case .todolist: todolistView
+            if state.isDetailLoading {
+                loadingView
+            } else {
+                switch state.contentMode {
+                case .micro:    microView
+                case .todolist: todolistView
+                }
             }
         }
         .toolbar { toolbarItems }
         .sheet(isPresented: $isShowingRecurring) {
             RecurringSheet().environment(state)
         }
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 12) {
+            ProgressView().controlSize(.large)
+            Text("加载中…")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
