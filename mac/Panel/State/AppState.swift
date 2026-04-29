@@ -412,9 +412,15 @@ final class AppState {
         }
     }
 
-    /// 聚焦卡 L{n} 链接:先把 selection 切回锚定列表,再发 scroll trigger。
-    /// 0.8s 延迟与具体滚动动画由 DetailView 监听 pendingScrollLine 实现。
-    func jumpToAnchorLine(_ line: Int) async {
+    /// 聚焦卡 L{n} 链接:
+    /// - todolist 模式:若不在锚定 todolist 上,先切回 anchor,再发 scroll trigger
+    /// - micro 模式:直接发 scroll trigger (micro 隐含锚定为当日文件)
+    /// scroll 由 MilkDownEditor 监听 pendingScrollLine,evaluateJavaScript 触发。
+    func jumpToFocusLine(_ line: Int) async {
+        if contentMode == .micro {
+            pendingScrollLine = line
+            return
+        }
         guard let target = anchor else { return }
         if selectedName != target {
             await selectList(target)

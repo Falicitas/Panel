@@ -25,8 +25,12 @@ struct DetailView: View {
                 if let focus = state.focus, focus.found {
                     FocusCard(focus: focus)
                 }
-                MilkDownEditor(text: $bindable.editorBuffer, pageZoom: state.editorPageZoom)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MilkDownEditor(
+                    text: $bindable.editorBuffer,
+                    pageZoom: state.editorPageZoom,
+                    scrollLine: $bindable.pendingScrollLine
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.vertical, 12)
             .frame(minWidth: 520)
@@ -45,10 +49,14 @@ struct DetailView: View {
                 if let mfocus = microFocus(today: today) {
                     FocusCard(focus: mfocus)
                 }
-                MilkDownEditor(text: $bindable.microBuffer, pageZoom: state.editorPageZoom)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear { syncMicroBuffer(today: today) }
-                    .onChange(of: today.name) { _, _ in syncMicroBuffer(today: today) }
+                MilkDownEditor(
+                    text: $bindable.microBuffer,
+                    pageZoom: state.editorPageZoom,
+                    scrollLine: $bindable.pendingScrollLine
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear { syncMicroBuffer(today: today) }
+                .onChange(of: today.name) { _, _ in syncMicroBuffer(today: today) }
             }
             .padding(.vertical, 12)
             .frame(minWidth: 520)

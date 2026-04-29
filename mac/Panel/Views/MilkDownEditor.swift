@@ -4,6 +4,17 @@ import WebKit
 struct MilkDownEditor: NSViewRepresentable {
     @Binding var text: String
     var pageZoom: Double = 1.0
+    @Binding var scrollLine: Int?
+
+    init(
+        text: Binding<String>,
+        pageZoom: Double = 1.0,
+        scrollLine: Binding<Int?> = .constant(nil)
+    ) {
+        self._text = text
+        self.pageZoom = pageZoom
+        self._scrollLine = scrollLine
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -45,6 +56,10 @@ struct MilkDownEditor: NSViewRepresentable {
             coord.lastSyncedMarkdown = text
             coord.evalSetRaw(text)
         }
+        if let line = scrollLine {
+            coord.evalScrollToLine(line)
+            DispatchQueue.main.async { self.scrollLine = nil }
+        }
     }
 
     @MainActor
@@ -79,6 +94,14 @@ struct MilkDownEditor: NSViewRepresentable {
             guard let webView else { return }
             let escaped = Self.jsEscape(md)
             webView.evaluateJavaScript("window.panelEditor.setRaw(\(escaped))", completionHandler: nil)
+        }
+
+        func evalScrollToLine(_ line: Int) {
+            guard let webView else { return }
+            // 等内容渲染完(setRaw 是 destroy+recreate)再 scroll;短延迟保险
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak webView] in
+                webView?.evaluateJavaScript("window.panelEditor.scrollToLine(\(line))", completionHandler: nil)
+            }
         }
 
         nonisolated func userContentController(
