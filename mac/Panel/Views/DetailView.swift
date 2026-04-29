@@ -5,79 +5,69 @@ struct DetailView: View {
     @State private var isShowingRecurring = false
 
     var body: some View {
-        Group {
-            if state.isDetailLoading {
-                loadingView
+        @Bindable var bindable = state
+
+        let title: String?
+        let focusForCard: FocusResult?
+        let bufferBinding: Binding<String>
+        let hasContent: Bool
+
+        switch state.contentMode {
+        case .micro:
+            if let today = state.microToday {
+                title = today.name
+                focusForCard = microFocus(today: today)
+                bufferBinding = $bindable.microBuffer
+                hasContent = true
             } else {
-                switch state.contentMode {
-                case .micro:    microView
-                case .todolist: todolistView
-                }
+                title = nil
+                focusForCard = nil
+                bufferBinding = .constant("")
+                hasContent = false
+            }
+        case .todolist:
+            if let detail = state.detail {
+                title = detail.name
+                focusForCard = state.focus?.found == true ? state.focus : nil
+                bufferBinding = $bindable.editorBuffer
+                hasContent = true
+            } else {
+                title = nil
+                focusForCard = nil
+                bufferBinding = .constant("")
+                hasContent = false
             }
         }
+
+        return Group {
+            if hasContent, let title {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let focus = focusForCard {
+                        FocusCard(focus: focus)
+                    }
+                    MilkDownEditor(
+                        text: bufferBinding,
+                        pageZoom: state.editorPageZoom,
+                        scrollText: $bindable.pendingScrollText
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .padding(.vertical, 12)
+                .frame(minWidth: 520)
+                .navigationTitle(title)
+            } else if state.contentMode == .micro {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                EmptyState(selectedName: state.selectedName)
+            }
+        }
+        .background(saveShortcut)
         .toolbar { toolbarItems }
+        .onAppear { syncMicroIfNeeded() }
+        .onChange(of: state.contentMode) { _, _ in syncMicroIfNeeded() }
+        .onChange(of: state.microToday?.name) { _, _ in syncMicroIfNeeded() }
         .sheet(isPresented: $isShowingRecurring) {
             RecurringSheet().environment(state)
-        }
-    }
-
-    private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView().controlSize(.large)
-            Text("加载中…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    @ViewBuilder
-    private var todolistView: some View {
-        if let detail = state.detail {
-            @Bindable var bindable = state
-            VStack(alignment: .leading, spacing: 16) {
-                if let focus = state.focus, focus.found {
-                    FocusCard(focus: focus)
-                }
-                MilkDownEditor(
-                    text: $bindable.editorBuffer,
-                    pageZoom: state.editorPageZoom,
-                    scrollText: $bindable.pendingScrollText
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .padding(.vertical, 12)
-            .frame(minWidth: 520)
-            .navigationTitle(detail.name)
-            .background(saveTodoShortcut)
-        } else {
-            EmptyState(selectedName: state.selectedName)
-        }
-    }
-
-    @ViewBuilder
-    private var microView: some View {
-        if let today = state.microToday {
-            @Bindable var bindable = state
-            VStack(alignment: .leading, spacing: 16) {
-                if let mfocus = microFocus(today: today) {
-                    FocusCard(focus: mfocus)
-                }
-                MilkDownEditor(
-                    text: $bindable.microBuffer,
-                    pageZoom: state.editorPageZoom,
-                    scrollText: $bindable.pendingScrollText
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onAppear { syncMicroBuffer(today: today) }
-                .onChange(of: today.name) { _, _ in syncMicroBuffer(today: today) }
-            }
-            .padding(.vertical, 12)
-            .frame(minWidth: 520)
-            .navigationTitle(today.name)
-            .background(saveMicroShortcut(today: today))
-        } else {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -142,23 +132,28 @@ struct DetailView: View {
         .disabled(state.editorPageZoom >= 1.8)
     }
 
-    private var saveTodoShortcut: some View {
-        Button("") { Task { await state.saveDetail() } }
-            .keyboardShortcut("s", modifiers: .command)
-            .frame(width: 0, height: 0)
-            .opacity(0)
-            .accessibilityHidden(true)
-    }
-
-    private func saveMicroShortcut(today: Todolist) -> some View {
+    private var saveShortcut: some View {
         Button("") {
-            guard state.microBuffer != today.rawMD else { return }
-            Task { await state.saveMicroToday(rawMD: state.microBuffer) }
+            switch state.contentMode {
+            case .todolist:
+                Task { await state.saveDetail() }
+            case .micro:
+                guard let mt = state.microToday, state.microBuffer != mt.rawMD else { return }
+                Task { await state.saveMicroToday(rawMD: state.microBuffer) }
+            }
         }
         .keyboardShortcut("s", modifiers: .command)
         .frame(width: 0, height: 0)
         .opacity(0)
         .accessibilityHidden(true)
+    }
+
+    private func syncMicroIfNeeded() {
+        guard state.contentMode == .micro, let today = state.microToday else { return }
+        if state.microLoadedFor != today.name {
+            state.microBuffer = today.rawMD
+            state.microLoadedFor = today.name
+        }
     }
 
     private func microFocus(today: Todolist) -> FocusResult? {
@@ -172,13 +167,6 @@ struct DetailView: View {
             lineNo: first.lineNo,
             breadcrumbs: first.parentChain
         )
-    }
-
-    private func syncMicroBuffer(today: Todolist) {
-        if state.microLoadedFor != today.name {
-            state.microBuffer = today.rawMD
-            state.microLoadedFor = today.name
-        }
     }
 }
 
