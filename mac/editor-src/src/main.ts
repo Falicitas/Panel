@@ -40,6 +40,9 @@ async function init(initialMarkdown: string): Promise<void> {
       }
       if (md !== prev) postToSwift({ type: 'change', md })
     })
+    listener.blur((_ctx) => {
+      postToSwift({ type: 'blur' })
+    })
   })
   postToSwift({ type: 'ready' })
 }

@@ -3,6 +3,7 @@ import WebKit
 
 struct MilkDownEditor: NSViewRepresentable {
     @Binding var text: String
+    var onBlur: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -94,6 +95,8 @@ struct MilkDownEditor: NSViewRepresentable {
                     lastSyncedMarkdown = md
                     parent.text = md
                 }
+            case "blur":
+                parent.onBlur()
             case "ready", "loaded":
                 break
             default:

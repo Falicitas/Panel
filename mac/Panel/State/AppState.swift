@@ -12,6 +12,7 @@ final class AppState {
     var selectedName: String?
     var focus: FocusResult?
     var detail: Todolist?
+    var editorBuffer: String = ""
     var pendingScrollLine: Int?
     var microToday: Todolist?
     var recurring: [RecurringTodo] = []
@@ -135,6 +136,7 @@ final class AppState {
             } else {
                 self.detail = nil
             }
+            self.editorBuffer = self.detail?.rawMD ?? ""
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -382,14 +384,20 @@ final class AppState {
     }
 
     /// 切换右栏显示的 todolist。不影响 anchor / focus。
+    /// 切换前若当前 editorBuffer 比 detail.rawMD 新,先保存,避免丢失。
     func selectList(_ name: String?) async {
+        if let cur = detail, editorBuffer != cur.rawMD {
+            await saveDetail()
+        }
         selectedName = name
         guard let name else {
             detail = nil
+            editorBuffer = ""
             return
         }
         do {
             detail = try await api.getTodolist(name: name)
+            editorBuffer = detail?.rawMD ?? ""
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -406,10 +414,14 @@ final class AppState {
         pendingScrollLine = line
     }
 
-    func saveDetail(rawMD: String) async {
+    /// 保存当前 detail。若 rawMD 不传,默认保存 editorBuffer 当前内容。
+    func saveDetail(rawMD: String? = nil) async {
         guard let name = detail?.name else { return }
+        let content = rawMD ?? editorBuffer
+        guard content != detail?.rawMD else { return }  // 无变化跳过
         do {
-            self.detail = try await api.putTodolist(name: name, rawMD: rawMD)
+            self.detail = try await api.putTodolist(name: name, rawMD: content)
+            self.editorBuffer = self.detail?.rawMD ?? content
             self.focus = try await api.getFocus()
             self.lastError = nil
         } catch {

@@ -1,39 +1,29 @@
 import SwiftUI
-import MarkdownUI
 
 struct MicroContentView: View {
     @Environment(AppState.self) private var state
-    @State private var isEditing = false
-    @State private var editorBuffer = ""
+    @State private var buffer: String = ""
+    @State private var loadedFor: String?  // 当前 buffer 对应的 todolist name
     @State private var isShowingRecurring = false
 
     var body: some View {
         Group {
             if let today = state.microToday {
-                content(for: today)
+                editor(for: today)
                     .navigationTitle(today.name)
+                    .background(saveShortcut(for: today))
                     .toolbar {
-                        ToolbarItemGroup {
+                        ToolbarItem {
                             Button {
                                 isShowingRecurring = true
                             } label: {
                                 Label("管理复发", systemImage: "repeat")
                             }
                             .help("管理每日复发 todo")
-                            if !isEditing {
-                                Button {
-                                    editorBuffer = today.rawMD
-                                    isEditing = true
-                                } label: {
-                                    Image(systemName: "pencil")
-                                }
-                                .help("编辑当日 micro")
-                            }
                         }
                     }
                     .sheet(isPresented: $isShowingRecurring) {
-                        RecurringSheet()
-                            .environment(state)
+                        RecurringSheet().environment(state)
                     }
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -42,55 +32,43 @@ struct MicroContentView: View {
     }
 
     @ViewBuilder
-    private func content(for today: Todolist) -> some View {
-        if isEditing {
-            EditorView(
-                text: $editorBuffer,
-                onSave: {
-                    Task {
-                        await state.saveMicroToday(rawMD: editorBuffer)
-                        isEditing = false
-                    }
-                },
-                onCancel: { isEditing = false }
+    private func editor(for today: Todolist) -> some View {
+        ScrollView {
+            MilkDownEditor(
+                text: $buffer,
+                onBlur: { saveIfChanged(today: today) }
             )
-        } else if today.rawMD.isEmpty {
-            EmptyMicro {
-                editorBuffer = ""
-                isEditing = true
-            }
-        } else {
-            ScrollView {
-                Markdown(today.rawMD)
-                    .markdownTheme(.gitHub)
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 480)
+            .padding(.horizontal)
+            .padding(.vertical, 12)
+        }
+        .onAppear { syncBuffer(today: today) }
+        .onChange(of: today.name) { _, _ in syncBuffer(today: today) }
+        .onChange(of: today.rawMD) { _, newValue in
+            // 外部修改 (panel 后台 polling 检测到 .md 文件变化) 同步到 buffer
+            if loadedFor == today.name && buffer != newValue {
+                buffer = newValue
             }
         }
     }
-}
 
-private struct EmptyMicro: View {
-    let onEdit: () -> Void
-    var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            ContentUnavailableView {
-                Label("今日 Micro 还没有任何条目", systemImage: "calendar.badge.plus")
-            } description: {
-                Text("点上方铅笔开始添加今天的临时事务")
-            }
-            Button {
-                onEdit()
-            } label: {
-                Label("编辑当日", systemImage: "pencil")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            Spacer()
+    private func syncBuffer(today: Todolist) {
+        if loadedFor != today.name {
+            buffer = today.rawMD
+            loadedFor = today.name
         }
-        .padding()
+    }
+
+    private func saveIfChanged(today: Todolist) {
+        guard buffer != today.rawMD else { return }
+        Task { await state.saveMicroToday(rawMD: buffer) }
+    }
+
+    private func saveShortcut(for today: Todolist) -> some View {
+        Button("") { saveIfChanged(today: today) }
+            .keyboardShortcut("s", modifiers: .command)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
     }
 }
