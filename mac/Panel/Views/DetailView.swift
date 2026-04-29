@@ -44,6 +44,8 @@ struct DetailView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     if let focus = focusForCard {
                         FocusCard(focus: focus)
+                            .id(focus.text ?? "")
+                            .transition(.opacity)
                     }
                     MilkDownEditor(
                         text: bufferBinding,
@@ -52,6 +54,7 @@ struct DetailView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .animation(.easeInOut(duration: 0.18), value: focusForCard?.text)
                 .padding(.vertical, 12)
                 .frame(minWidth: 520)
                 .navigationTitle(title)
