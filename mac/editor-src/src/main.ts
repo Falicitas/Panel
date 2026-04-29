@@ -86,9 +86,19 @@ function scrollToText(text: string): void {
   }
 }
 
-/** 容错:中英标点 / 全角半角 / 多空格 等差异不应阻碍匹配。 */
+/** 容错:把 markdown 行内标记剥到跟 DOM textContent 同形态。
+ * focus.text 是 raw md (后端 parser 只剥了 - [ ] 前缀);DOM 是渲染后,
+ * 标记符已被 ProseMirror 消化。两边都跑这个,probe 才能命中。 */
 function normalize(s: string): string {
   return s
+    .replace(/<(https?:\/\/[^>\s]+)>/g, '$1')
+    .replace(/`+/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(?<!\*)\*(?!\*)([^*]+?)\*(?!\*)/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/(?<!_)_(?!_)([^_]+?)_(?!_)/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/\\([\\`*_{}\[\]()#+\-.!])/g, '$1')
     .replace(/\s+/g, ' ')
     .replace(/[，]/g, ',')
     .replace(/[。]/g, '.')
