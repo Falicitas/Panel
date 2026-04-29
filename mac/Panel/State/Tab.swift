@@ -2,7 +2,6 @@ import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case todolist
-    case micro
     case finance
     case supplements
     case records
@@ -13,7 +12,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var label: String {
         switch self {
         case .todolist:    "Todolist"
-        case .micro:       "Micro"
         case .finance:     "财务"
         case .supplements: "保健品"
         case .records:     "记录"
@@ -24,7 +22,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .todolist:    "checklist"
-        case .micro:       "calendar"
         case .finance:     "creditcard"
         case .supplements: "pills"
         case .records:     "chart.bar"
@@ -34,13 +31,13 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     var isEnabled: Bool {
         switch self {
-        case .todolist, .micro, .finance, .supplements, .records, .bash: true
+        case .todolist, .finance, .supplements, .records, .bash: true
         }
     }
 
     var comingSoonHint: String {
         switch self {
-        case .todolist, .micro, .finance, .supplements, .records, .bash: ""
+        case .todolist, .finance, .supplements, .records, .bash: ""
         }
     }
 }

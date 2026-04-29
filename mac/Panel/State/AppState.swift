@@ -2,10 +2,14 @@ import Foundation
 import Observation
 import SwiftUI
 
+enum ContentMode: String { case todolist, micro }
+
 @MainActor
 @Observable
 final class AppState {
     var selectedTab: AppTab = .todolist
+    var contentMode: ContentMode = .todolist
+    var editorPageZoom: Double = 1.0
     var active: [ListEntry] = []
     var done: [ListEntry] = []
     var anchor: String?
@@ -387,10 +391,12 @@ final class AppState {
 
     /// 切换右栏显示的 todolist。不影响 anchor / focus。
     /// 切换前若当前 editorBuffer 比 detail.rawMD 新,先保存,避免丢失。
+    /// 副作用:把 contentMode 切回 .todolist (用户点 sidebar 项 = 离开 micro 模式)。
     func selectList(_ name: String?) async {
         if let cur = detail, editorBuffer != cur.rawMD {
             await saveDetail()
         }
+        contentMode = .todolist
         selectedName = name
         guard let name else {
             detail = nil
@@ -467,7 +473,7 @@ final class AppState {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: .seconds(3))
                 await self?.tick()
             }
         }

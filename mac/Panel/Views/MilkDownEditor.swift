@@ -3,6 +3,7 @@ import WebKit
 
 struct MilkDownEditor: NSViewRepresentable {
     @Binding var text: String
+    var pageZoom: Double = 1.0
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -37,6 +38,8 @@ struct MilkDownEditor: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         let coord = context.coordinator
         coord.parent = self
+        let zoom = CGFloat(pageZoom)
+        if webView.pageZoom != zoom { webView.pageZoom = zoom }
         guard coord.isReady else { return }
         if coord.lastSyncedMarkdown != text {
             coord.lastSyncedMarkdown = text
