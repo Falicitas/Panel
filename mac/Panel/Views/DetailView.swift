@@ -13,10 +13,7 @@ struct DetailView: View {
                             if let focus = state.focus, focus.found {
                                 FocusCard(focus: focus)
                             }
-                            MilkDownEditor(
-                                text: $bindable.editorBuffer,
-                                onBlur: { Task { await state.saveDetail() } }
-                            )
+                            MilkDownEditor(text: $bindable.editorBuffer)
                             .frame(minHeight: 480)
                             .padding(.horizontal)
                             .id("md-content")
@@ -36,7 +33,6 @@ struct DetailView: View {
                 .frame(minWidth: 520)
                 .navigationTitle(detail.name)
                 .background(saveShortcut)
-                .onDisappear { Task { await state.saveDetail() } }
                 .toolbar {
                     ToolbarItem { anchorButton }
                 }

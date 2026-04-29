@@ -13,6 +13,8 @@ final class AppState {
     var focus: FocusResult?
     var detail: Todolist?
     var editorBuffer: String = ""
+    var microBuffer: String = ""
+    var microLoadedFor: String?
     var pendingScrollLine: Int?
     var microToday: Todolist?
     var recurring: [RecurringTodo] = []
@@ -459,13 +461,13 @@ final class AppState {
         bashTranscript.append(entry)
     }
 
-    /// 后台 polling: 处理外部编辑器(Typora 等)修改了文件的情况。
-    /// 后端 fsnotify 已经失效缓存,这里只是周期性拉取看是否有新内容。
+    /// 5s tick: 1) 把 editorBuffer / microBuffer 的 dirty 内容写回后端
+    /// 2) 拉外部修改 (Typora 等改了 .md 文件) 同步到 panel
     func startPolling() async {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                try? await Task.sleep(for: .seconds(5))
                 await self?.tick()
             }
         }
@@ -474,10 +476,30 @@ final class AppState {
 
     private func tick() async {
         self.timeTick = Date()
+
+        // 1. autosave dirty buffers (先 save 再 fetch,避免 fetch 把 dirty buffer 覆盖)
+        if let cur = detail, editorBuffer != cur.rawMD {
+            await saveDetail()
+        }
+        if let mt = microToday, microLoadedFor == mt.name, microBuffer != mt.rawMD {
+            do {
+                self.microToday = try await api.putMicroToday(rawMD: microBuffer)
+                self.microBuffer = self.microToday?.rawMD ?? microBuffer
+            } catch {
+                self.lastError = error.localizedDescription
+            }
+        }
+
+        // 2. poll 外部修改
         do {
             if let name = selectedName {
                 let d = try await api.getTodolist(name: name)
-                if d != self.detail { self.detail = d }
+                if d != self.detail {
+                    self.detail = d
+                    if editorBuffer != (d.rawMD) {
+                        editorBuffer = d.rawMD
+                    }
+                }
             }
             if anchor != nil {
                 let f = try await api.getFocus()
@@ -487,7 +509,12 @@ final class AppState {
             async let notif = api.listNotifications(all: false)
             async let daily = api.getTodayState()
             let (m, ns, ds) = try await (micro, notif, daily)
-            if m != self.microToday { self.microToday = m }
+            if m != self.microToday {
+                self.microToday = m
+                if microLoadedFor == m.name && microBuffer != m.rawMD {
+                    microBuffer = m.rawMD
+                }
+            }
             if ns != self.notifications { self.notifications = ns }
             if ds != self.dailyState { self.dailyState = ds }
         } catch {
