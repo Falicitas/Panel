@@ -12,6 +12,7 @@ struct MicroContentView: View {
                 editor(for: today)
                     .navigationTitle(today.name)
                     .background(saveShortcut(for: today))
+                    .onDisappear { saveIfChanged(today: today) }
                     .toolbar {
                         ToolbarItem {
                             Button {

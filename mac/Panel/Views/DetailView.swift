@@ -36,6 +36,7 @@ struct DetailView: View {
                 .frame(minWidth: 520)
                 .navigationTitle(detail.name)
                 .background(saveShortcut)
+                .onDisappear { Task { await state.saveDetail() } }
                 .toolbar {
                     ToolbarItem { anchorButton }
                 }
