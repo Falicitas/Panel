@@ -8,11 +8,11 @@ struct RatingReferencePanel: View {
     /// 距右侧 (pt)。
     static let trailingInset: CGFloat = 40
     /// 浮窗宽度 (pt)。
-    static let panelWidth: CGFloat = 750
+    static let panelWidth: CGFloat = 850
     /// 浮窗高度 (pt)。
-    static let panelHeight: CGFloat = 500
-    /// MilkDown pageZoom — 1.0 是默认,1.2 = 默认 +2 级。
-    static let panelZoom: Double = 1.2
+    static let panelHeight: CGFloat = 756
+    /// MilkDown pageZoom — 1.0 是默认,每 0.1 = 1 级。1.4 = 默认 +4 级。
+    static let panelZoom: Double = 1.4
 
     let onClose: () -> Void
     @State private var content: String = Self.markdown
@@ -60,7 +60,7 @@ struct RatingReferencePanel: View {
 
     /// 评估参考文本。Markdown 由 MilkDown 渲染。
     private static let markdown: String = """
-    # 问题星级评估
+    # 🌟 问题星级评估
 
     - **1星**:直接上手,5 分钟内完成。做什么、怎么做都清楚。
     - **2星**:需要拆 2-3 步,但每步都清楚,查一两个东西就够。

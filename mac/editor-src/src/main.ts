@@ -35,7 +35,10 @@ async function init(initialMarkdown: string, readonly = false): Promise<void> {
   if (!root) throw new Error('#editor missing')
   crepe = new Crepe({ root, defaultValue: initialMarkdown })
   await crepe.create()
-  if (readonly) crepe.setReadonly(true)
+  if (readonly) {
+    crepe.setReadonly(true)
+    document.body.classList.add('readonly')
+  }
   crepe.on((listener) => {
     listener.markdownUpdated((_ctx, md, prev) => {
       if (suppressNext) {
@@ -51,6 +54,7 @@ async function init(initialMarkdown: string, readonly = false): Promise<void> {
 function setReadonly(readonly: boolean): void {
   if (!crepe) return
   crepe.setReadonly(readonly)
+  document.body.classList.toggle('readonly', readonly)
 }
 
 async function setRaw(markdown: string): Promise<void> {

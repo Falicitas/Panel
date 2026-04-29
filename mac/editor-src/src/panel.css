@@ -11,6 +11,11 @@ html, body {
   background: transparent !important;
 }
 
+/* 只读模式 (RatingReferencePanel 这种)缩小左右边距 — Crepe 默认 60/120 太占空间 */
+body.readonly .milkdown .ProseMirror {
+  padding: 32px 32px !important;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
