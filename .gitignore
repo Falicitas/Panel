@@ -25,6 +25,10 @@ xcuserdata/
 backend/panel
 backend/*.test
 backend/coverage.out
+bin/
+
+# 运行时每日 micro 文件 (每天一个)
+todolists/micro/
 
 # Editor
 .vscode/
