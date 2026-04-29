@@ -1,4 +1,5 @@
 import { Crepe } from '@milkdown/crepe'
+import { replaceAll } from '@milkdown/kit/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/classic.css'
 import '@milkdown/crepe/theme/classic-dark.css'
@@ -46,11 +47,13 @@ async function init(initialMarkdown: string): Promise<void> {
 }
 
 async function setRaw(markdown: string): Promise<void> {
-  if (crepe) {
-    await crepe.destroy()
-    crepe = null
+  if (!crepe) {
+    await init(markdown)
+    return
   }
-  await init(markdown)
+  // 用 replaceAll macro 替换内容,不销毁 DOM 容器,避免切文件时的 0.2s 空白闪烁
+  suppressNext = true
+  crepe.editor.action(replaceAll(markdown, true))
 }
 
 function getRaw(): string {
