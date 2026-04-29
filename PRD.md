@@ -30,30 +30,41 @@
 
 **Panel 行为**:
 - 列出 `todolists/` 下 `.md` (不递归到 `micro/`)
-- "**锚定**" 一个为当前主 todolist
-  - 初始空
-  - 可锚到已完成的 todolist (简化状态机)
-  - 不跨日自动切换;一天一锚定,中途可手动换
-- 渲染锚定文件全文 (markdown)
-- **聚焦卡片**: 单拎"第一个非 `[[[skip]]]` 的未完成 `- [ ]`",独立 card 展示
+- **锚定 / 选定 分离**:
+  - **选定** (selectedName): 决定右栏渲染哪个文件,点 sidebar 列表项即可任意切换
+  - **锚定** (anchor): 决定聚焦卡指向哪个 todolist,只由 toolbar **锚定按钮** (`pin` / `pin.fill`) 显式设置
+  - 锚定项在左栏用**柔和橙背景**标记,即使列表失焦仍鲜艳 (永不响应失焦变灰)
+  - 初始空;可锚到已完成的 (简化状态机);不跨日自动切;一天一锚,中途可换
+- 右栏渲染选定文件全文 (WYSIWYG,见下方"编辑")
+- **聚焦卡片**: 单拎锚定文件的"第一个非 `[[[skip]]]` 的未完成 `- [ ]`",sticky 在右栏顶部
   - `- [ ]` 可在多级嵌套,需正确解析
-  - card 顶部展示**父节点面包屑** (从顶层往下),每个父节点截断 20 字 (超过加 `...`)
-- **文件监听**: 用户用 Typora/VS Code 改 `.md` 后保存,panel 检测变更后**重新计算**第一个未完成 `- [ ]`
-- **Panel 内编辑**: 直接编辑整个 `.md` 文件,**text only,无 preview/WYSIWYG** (简单实现)
+  - 顶部展示**父节点面包屑** (从顶层往下),每个父节点截断 60 字 (超过加 `...`)
+  - 卡内 `L{n}` 链接: 点击 → 若不在锚定文件,先切回锚定 → scroll 到该任务行 + 暖橙短暂高亮
+- **外部修改同步**: 5s 轮询拉后端,检测到 Typora/VS Code 等外部改了 `.md` 自动同步到右栏 buffer
+- **Panel 内编辑**: WYSIWYG 即时渲染 (所见即所得,无"编辑模式"开关)
+  - 实现: MilkDown (Crepe wrapper, ProseMirror-based) 嵌 WKWebView
+  - 主题: classic / classic-dark,**跟随系统色彩模式**自动切换 (CSS `@media (prefers-color-scheme: dark)`)
+  - 字号 +/- toolbar 按钮控制 WKWebView pageZoom,**UserDefaults 持久化**
+  - 保存: Cmd+S 主动 + **5s 轮询 dirty buffer 自动**;tick 顺序保证 dirty 永远先 save 再 fetch,外部覆盖不丢
+- **外部编辑器同样有效**: Typora / VS Code 都行,panel 不是唯一入口
 
-**外部编辑器同样有效**: Typora / VS Code 都行,panel 不是唯一入口。
-
-### 2. Micro Todolist
+### 2. Micro Todolist (合并入 Todolist tab)
 
 **数据源**: `~/panel/todolists/micro/{YYYY-MM-DD}.md`
+
+**UI 安排**: 不是独立 sidebar tab。Todolist tab 内 toolbar 一个**模式切换按钮** (`calendar` ↔ `list.bullet.rectangle`):
+- **Todolist 模式** (默认): 选定文件 + 锚定文件焦点卡
+- **Micro 模式**: 当日 micro 文件 + 当日第一个未完成 `- [ ]` 焦点卡 (前端 parse,无后端 anchor 概念)
+- 用户在 micro 模式下点 sidebar 任一 todolist → 自动切回 Todolist 模式
 
 **行为**:
 - 当天文件不存在则**自动新建**(空)
 - 平铺所有 `- [ ]` (本来就少,1-3 条/日)
-- panel 内可直接编辑 `.md` (text only,同主 todolist)
+- 编辑器同 Todolist (WYSIWYG, 5s 轮询自动保存)
+- Micro **隐含锚定**为当日唯一文件,锚定按钮在 micro 模式下 disabled
 
 **每日复发 todo**:
-- 入口: micro 模块内一个按钮 (位置直观即可) → 打开**模态框**管理
+- 入口: 切到 Micro 模式后,toolbar 的 `repeat` 按钮 → 打开**模态框**管理
 - 模态框 = 复发 todo 的**唯一**永久增删改入口
 - **注入时机**: 早晨蒙版用户选 "进入普通模式" 时,把当日复发 todo 注入到当天 micro 文件顶部 (选 "外出" 则**不注入**)
 - 当天 micro 文件中: **只能勾选 / 加 [[[skip]]]**, 不提供"删除"动作 (避免误删)
@@ -177,13 +188,23 @@ balance = 初始值 + Σ(手动收入) − Σ(月末结算的所有支出)
 - 可选 OneBot client (Phase 9)
 
 ### 前端
-- 框架: SwiftUI macOS App
+- 框架: SwiftUI macOS App (deployment target macOS 14)
 - 位置: `~/panel/mac/`
-- 布局: Tab 或 Sidebar (UI 设计阶段定)
-- 渲染: Markdown
-- 编辑: text-only (无 WYSIWYG)
-- 主题: 4 状态动态切换
-- 全局快捷键: 后续 phase 加
+- 布局: `NavigationSplitView` 三栏
+  - sidebar: tab (Todolist / 财务 / 保健品 / 记录 / Bash; Micro 已并入 Todolist)
+  - content: 当前 tab 的列表 (todolists 列出 / 财务支出列表 / etc.)
+  - detail: 渲染区
+- WYSIWYG 编辑器:
+  - 库: MilkDown (Crepe wrapper, ProseMirror + remark)
+  - 集成: WKWebView (NSViewRepresentable),JS↔Swift bridge 走 `postMessage` / `evaluateJavaScript`
+  - 源码: `mac/editor-src/` (npm + esbuild,iife bundle)
+  - 产物: `mac/Panel/Resources/editor/{index.html, bundle.js, bundle.css}` (folder reference 进 .app)
+  - 透明背景 + scroll 自管,字号通过 `webView.pageZoom` 控制
+- 主题:
+  - WYSIWYG: classic / classic-dark,跟随系统色彩 (CSS `@media`)
+  - 4 状态(普通/专注/睡眠/外出): 顶部通知栏背景色 + 锚定行底色 (柔和橙) 等局部叠加
+- 状态管理: `@Observable AppState` 单例,5s polling 处理外部改动 + dirty buffer autosave
+- 全局快捷键: 后续 phase 加 (当前只有 `Cmd+S` 保存)
 
 ### 数据持久化
 - 用户可读改: Markdown 文件
@@ -213,9 +234,16 @@ balance = 初始值 + Σ(手动收入) − Σ(月末结算的所有支出)
 │   ├── panel-construction.md           ← panel 自身的构建 todolist
 │   └── micro/
 │       └── YYYY-MM-DD.md               ← 当天临时事务
-├── backend/                            ← Go 后端 (Phase 1+)
-├── mac/                                ← SwiftUI macOS App (Phase 2+)
-├── data/                               ← 运行时 panel.db (gitignored)
+├── backend/                            ← Go 后端 (HTTP :8089)
+├── mac/                                ← SwiftUI macOS App
+│   ├── Panel/                          ←   Swift 源
+│   ├── Panel/Resources/editor/         ←   MilkDown bundle 产物 (folder ref 进 .app)
+│   ├── editor-src/                     ←   MilkDown 源 (npm + esbuild;node_modules ignored)
+│   └── project.yml                     ←   xcodegen
+├── scripts/
+│   ├── com.kinesis.panel.plist         ← launchd LaunchAgent 模板
+│   └── install.sh                      ← 等幂安装/重装 backend
+├── data/                               ← 运行时 panel.db / panel.log / backups/ (gitignored)
 ├── wechat_chatter/                     ← 已有,Phase 9 选做时用
 ├── frida-devkit/                       ← 已有
 └── frida-gadget-17.9.1-*.dylib         ← 已有
