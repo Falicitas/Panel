@@ -32,14 +32,10 @@ struct MicroContentView: View {
     @ViewBuilder
     private func editor(for today: Todolist) -> some View {
         @Bindable var bindable = state
-        ScrollView {
-            MilkDownEditor(text: $bindable.microBuffer)
-                .frame(minHeight: 480)
-                .padding(.horizontal)
-                .padding(.vertical, 12)
-        }
-        .onAppear { syncBuffer(today: today) }
-        .onChange(of: today.name) { _, _ in syncBuffer(today: today) }
+        MilkDownEditor(text: $bindable.microBuffer)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear { syncBuffer(today: today) }
+            .onChange(of: today.name) { _, _ in syncBuffer(today: today) }
     }
 
     private func syncBuffer(today: Todolist) {

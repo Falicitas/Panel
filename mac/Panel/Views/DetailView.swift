@@ -7,29 +7,14 @@ struct DetailView: View {
         Group {
             if let detail = state.detail {
                 @Bindable var bindable = state
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            if let focus = state.focus, focus.found {
-                                FocusCard(focus: focus)
-                            }
-                            MilkDownEditor(text: $bindable.editorBuffer)
-                            .frame(minHeight: 480)
-                            .padding(.horizontal)
-                            .id("md-content")
-                        }
-                        .padding(.vertical, 12)
+                VStack(alignment: .leading, spacing: 16) {
+                    if let focus = state.focus, focus.found {
+                        FocusCard(focus: focus)
                     }
-                    .onChange(of: state.pendingScrollLine) { _, newValue in
-                        guard let line = newValue else { return }
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(800))
-                            // TODO(user): proxy.scrollTo("line-\(line)", anchor: .top)
-                            let _ = (proxy, line)
-                            state.pendingScrollLine = nil
-                        }
-                    }
+                    MilkDownEditor(text: $bindable.editorBuffer)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .padding(.vertical, 12)
                 .frame(minWidth: 520)
                 .navigationTitle(detail.name)
                 .background(saveShortcut)
