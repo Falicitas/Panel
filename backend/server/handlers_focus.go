@@ -6,7 +6,7 @@ import (
 	"panel/todolist"
 )
 
-const breadcrumbMaxRunes = 20
+const breadcrumbMaxRunes = 60
 
 type focusResp struct {
 	Anchored    *string  `json:"anchored"`
