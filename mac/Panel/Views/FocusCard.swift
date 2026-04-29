@@ -26,7 +26,7 @@ struct FocusCard: View {
                 .textSelection(.enabled)
             if let n = focus.lineNo {
                 Button {
-                    Task { await state.jumpToFocusLine(n) }
+                    Task { await state.jumpToFocus(focus.text) }
                 } label: {
                     Text("L\(n)")
                         .font(.body.monospacedDigit())

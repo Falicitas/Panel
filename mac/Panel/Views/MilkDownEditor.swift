@@ -4,16 +4,16 @@ import WebKit
 struct MilkDownEditor: NSViewRepresentable {
     @Binding var text: String
     var pageZoom: Double = 1.0
-    @Binding var scrollLine: Int?
+    @Binding var scrollText: String?
 
     init(
         text: Binding<String>,
         pageZoom: Double = 1.0,
-        scrollLine: Binding<Int?> = .constant(nil)
+        scrollText: Binding<String?> = .constant(nil)
     ) {
         self._text = text
         self.pageZoom = pageZoom
-        self._scrollLine = scrollLine
+        self._scrollText = scrollText
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -56,9 +56,9 @@ struct MilkDownEditor: NSViewRepresentable {
             coord.lastSyncedMarkdown = text
             coord.evalSetRaw(text)
         }
-        if let line = scrollLine {
-            coord.evalScrollToLine(line)
-            DispatchQueue.main.async { self.scrollLine = nil }
+        if let text = scrollText, !text.isEmpty {
+            coord.evalScrollToText(text)
+            DispatchQueue.main.async { self.scrollText = nil }
         }
     }
 
@@ -96,11 +96,12 @@ struct MilkDownEditor: NSViewRepresentable {
             webView.evaluateJavaScript("window.panelEditor.setRaw(\(escaped))", completionHandler: nil)
         }
 
-        func evalScrollToLine(_ line: Int) {
+        func evalScrollToText(_ text: String) {
             guard let webView else { return }
+            let escaped = Self.jsEscape(text)
             // 等内容渲染完(setRaw 是 destroy+recreate)再 scroll;短延迟保险
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak webView] in
-                webView?.evaluateJavaScript("window.panelEditor.scrollToLine(\(line))", completionHandler: nil)
+                webView?.evaluateJavaScript("window.panelEditor.scrollToText(\(escaped))", completionHandler: nil)
             }
         }
 

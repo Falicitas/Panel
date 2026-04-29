@@ -28,7 +28,7 @@ struct DetailView: View {
                 MilkDownEditor(
                     text: $bindable.editorBuffer,
                     pageZoom: state.editorPageZoom,
-                    scrollLine: $bindable.pendingScrollLine
+                    scrollText: $bindable.pendingScrollText
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -52,7 +52,7 @@ struct DetailView: View {
                 MilkDownEditor(
                     text: $bindable.microBuffer,
                     pageZoom: state.editorPageZoom,
-                    scrollLine: $bindable.pendingScrollLine
+                    scrollText: $bindable.pendingScrollText
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onAppear { syncMicroBuffer(today: today) }

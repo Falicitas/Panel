@@ -11,7 +11,7 @@ declare global {
       setRaw(markdown: string): Promise<void>
       getRaw(): string
       destroy(): Promise<void>
-      scrollToLine(line: number): void
+      scrollToText(text: string): void
     }
     webkit?: {
       messageHandlers: {
@@ -64,31 +64,15 @@ async function destroy(): Promise<void> {
   }
 }
 
-/** 把 .md 行号近似映射到 webview DOM 元素并 scroll + 短暂高亮。
- * 用 raw markdown 第 line-1 行的纯文本片段,在 ProseMirror DOM 树里找
- * 包含此片段的最浅 block 元素。不依赖 milkdown sourcemap (那个被 PM 转换吞了)。
- */
-function scrollToLine(line: number): void {
-  if (!crepe || line < 1) return
-  const raw = crepe.getMarkdown()
-  const rawLine = raw.split('\n')[line - 1]
-  if (!rawLine) return
-
-  // 提取纯文本:剥行首列表/标题/引用标记 + 行内 markdown 标记
-  const probe = rawLine
-    .replace(/^[\s>#]+/, '')
-    .replace(/^[*\-+]\s+/, '')
-    .replace(/^\d+\.\s+/, '')
-    .replace(/^\[[ xX]\]\s*/, '')
-    .replace(/[*_`~]+/g, '')
-    .trim()
-    .slice(0, 30)
+/** 把后端给的 focus.text (任务原文,parser 已剥 markdown 标记) 在 webview
+ * DOM 里 scrollIntoView + 短暂高亮。比从 raw md 行号反推干净很多。 */
+function scrollToText(text: string): void {
+  const probe = text.trim().slice(0, 40)
   if (!probe) return
 
   const root = document.querySelector('.ProseMirror') ?? document.querySelector('.milkdown')
   if (!root) return
 
-  // 直接 walker,找首个 textContent 包含 probe 的文本节点的 block 父级
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   let node: Node | null
   while ((node = walker.nextNode())) {
@@ -123,5 +107,5 @@ function flashHighlight(el: HTMLElement | null): void {
   }, 1200)
 }
 
-window.panelEditor = { init, setRaw, getRaw, destroy, scrollToLine }
+window.panelEditor = { init, setRaw, getRaw, destroy, scrollToText }
 postToSwift({ type: 'loaded' })

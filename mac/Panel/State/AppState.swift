@@ -19,7 +19,7 @@ final class AppState {
     var editorBuffer: String = ""
     var microBuffer: String = ""
     var microLoadedFor: String?
-    var pendingScrollLine: Int?
+    var pendingScrollText: String?
     var microToday: Todolist?
     var recurring: [RecurringTodo] = []
     var financeSummary: FinanceSummary?
@@ -415,17 +415,19 @@ final class AppState {
     /// 聚焦卡 L{n} 链接:
     /// - todolist 模式:若不在锚定 todolist 上,先切回 anchor,再发 scroll trigger
     /// - micro 模式:直接发 scroll trigger (micro 隐含锚定为当日文件)
-    /// scroll 由 MilkDownEditor 监听 pendingScrollLine,evaluateJavaScript 触发。
-    func jumpToFocusLine(_ line: Int) async {
+    /// 用 focus 自带的 text 作 scroll 目标 (parser 已剥 markdown 标记的干净文本),
+    /// 不再走 lineNo→raw md 反推。MilkDownEditor 监听 pendingScrollText 触发。
+    func jumpToFocus(_ text: String?) async {
+        guard let text, !text.isEmpty else { return }
         if contentMode == .micro {
-            pendingScrollLine = line
+            pendingScrollText = text
             return
         }
         guard let target = anchor else { return }
         if selectedName != target {
             await selectList(target)
         }
-        pendingScrollLine = line
+        pendingScrollText = text
     }
 
     /// 保存当前 detail。若 rawMD 不传,默认保存 editorBuffer 当前内容。
