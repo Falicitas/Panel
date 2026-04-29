@@ -74,8 +74,10 @@ func Parse(content string) []TodoItem {
 			if tm := taskRe.FindStringSubmatch(rest); tm != nil {
 				checked := tm[1] != " "
 				rawTaskText := strings.TrimSpace(tm[2])
-				skip := hasSkipMarker(rawTaskText)  // skip 检测在 unescape 前 (避免 \[ 干扰)
 				cleanText := unescapeMarkdown(rawTaskText)
+				// skip 检测必须在 unescape 之后:Typora 等编辑器会自动给
+				// [ 加转义 (\[\[\[skip]]]),不剥转义则没有连续三个 [,skipRe 失配。
+				skip := hasSkipMarker(cleanText)
 				items = append(items, TodoItem{
 					LineNo:      i + 1,
 					Level:       len(listStack),
