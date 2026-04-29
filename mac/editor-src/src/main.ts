@@ -8,11 +8,12 @@ import './panel.css'
 declare global {
   interface Window {
     panelEditor: {
-      init(initialMarkdown: string): Promise<void>
+      init(initialMarkdown: string, readonly?: boolean): Promise<void>
       setRaw(markdown: string): Promise<void>
       getRaw(): string
       destroy(): Promise<void>
       scrollToText(text: string): void
+      setReadonly(readonly: boolean): void
     }
     webkit?: {
       messageHandlers: {
@@ -29,11 +30,12 @@ function postToSwift(payload: unknown): void {
   window.webkit?.messageHandlers?.markdown?.postMessage(payload)
 }
 
-async function init(initialMarkdown: string): Promise<void> {
+async function init(initialMarkdown: string, readonly = false): Promise<void> {
   const root = document.getElementById('editor')
   if (!root) throw new Error('#editor missing')
   crepe = new Crepe({ root, defaultValue: initialMarkdown })
   await crepe.create()
+  if (readonly) crepe.setReadonly(true)
   crepe.on((listener) => {
     listener.markdownUpdated((_ctx, md, prev) => {
       if (suppressNext) {
@@ -44,6 +46,11 @@ async function init(initialMarkdown: string): Promise<void> {
     })
   })
   postToSwift({ type: 'ready' })
+}
+
+function setReadonly(readonly: boolean): void {
+  if (!crepe) return
+  crepe.setReadonly(readonly)
 }
 
 async function setRaw(markdown: string): Promise<void> {
@@ -126,5 +133,5 @@ function flashHighlight(el: HTMLElement | null): void {
   }, 1200)
 }
 
-window.panelEditor = { init, setRaw, getRaw, destroy, scrollToText }
+window.panelEditor = { init, setRaw, getRaw, destroy, scrollToText, setReadonly }
 postToSwift({ type: 'loaded' })

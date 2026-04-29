@@ -5,15 +5,18 @@ struct MilkDownEditor: NSViewRepresentable {
     @Binding var text: String
     var pageZoom: Double = 1.0
     @Binding var scrollText: String?
+    var readOnly: Bool = false
 
     init(
         text: Binding<String>,
         pageZoom: Double = 1.0,
-        scrollText: Binding<String?> = .constant(nil)
+        scrollText: Binding<String?> = .constant(nil),
+        readOnly: Bool = false
     ) {
         self._text = text
         self.pageZoom = pageZoom
         self._scrollText = scrollText
+        self.readOnly = readOnly
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -56,6 +59,10 @@ struct MilkDownEditor: NSViewRepresentable {
             coord.lastSyncedMarkdown = text
             coord.evalSetRaw(text)
         }
+        if coord.lastReadOnly != readOnly {
+            coord.lastReadOnly = readOnly
+            coord.evalSetReadonly(readOnly)
+        }
         if let text = scrollText, !text.isEmpty {
             coord.evalScrollToText(text)
             DispatchQueue.main.async { self.scrollText = nil }
@@ -68,6 +75,7 @@ struct MilkDownEditor: NSViewRepresentable {
         weak var webView: WKWebView?
         var isReady = false
         var lastSyncedMarkdown: String?
+        var lastReadOnly: Bool = false
 
         init(_ parent: MilkDownEditor) {
             self.parent = parent
@@ -84,10 +92,18 @@ struct MilkDownEditor: NSViewRepresentable {
             guard let webView else { return }
             let initial = parent.text
             lastSyncedMarkdown = initial
+            lastReadOnly = parent.readOnly
             let escaped = Self.jsEscape(initial)
-            webView.evaluateJavaScript("window.panelEditor.init(\(escaped))") { [weak self] _, _ in
+            let readonlyArg = parent.readOnly ? "true" : "false"
+            webView.evaluateJavaScript("window.panelEditor.init(\(escaped), \(readonlyArg))") { [weak self] _, _ in
                 self?.isReady = true
             }
+        }
+
+        func evalSetReadonly(_ readonly: Bool) {
+            guard let webView else { return }
+            let arg = readonly ? "true" : "false"
+            webView.evaluateJavaScript("window.panelEditor.setReadonly(\(arg))", completionHandler: nil)
         }
 
         func evalSetRaw(_ md: String) {

@@ -7,7 +7,7 @@ struct MainLayout: View {
         @Bindable var state = state
         VStack(spacing: 0) {
             NotificationBar()
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $state.splitVisibility) {
                 PrimarySidebarView(selected: $state.selectedTab)
             } content: {
                 ContentColumn()

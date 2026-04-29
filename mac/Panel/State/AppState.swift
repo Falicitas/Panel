@@ -10,6 +10,8 @@ final class AppState {
     var selectedTab: AppTab = .todolist
     var contentMode: ContentMode = .todolist
     var isDetailLoading: Bool = false
+    /// 专注模式:折叠 sidebar + content 列,只显示 detail。
+    var splitVisibility: NavigationSplitViewVisibility = .all
     var editorPageZoom: Double = AppState.loadZoom() {
         didSet { UserDefaults.standard.set(editorPageZoom, forKey: Self.zoomKey) }
     }

@@ -26,6 +26,7 @@
 		3FB8F396A13890631998595A /* FocusResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25E9443571240FF9C3C02AB4 /* FocusResult.swift */; };
 		40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E700AFBBE2CD789E98338 /* PanelApp.swift */; };
 		45DDC97885F099C1FEDB4232 /* RecordsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138C0250B9F183120FC62812 /* RecordsDetailView.swift */; };
+		4A56D791D4DB2788B95FF24E /* RatingReferencePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DDBB57FF684EC13D8A724B5 /* RatingReferencePanel.swift */; };
 		5FFDE4D66D35B64D3C65A633 /* ListEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65BDF0617EDF92971A4168A2 /* ListEntry.swift */; };
 		6C0A912AC9E07E69812F6B6B /* MainLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF74459F6ADCA6D9056A7911 /* MainLayout.swift */; };
 		757A6755547538FCEF18DAA5 /* SupplementsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3239812DDF9E5DF884297B71 /* SupplementsDetailView.swift */; };
@@ -49,6 +50,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0DDBB57FF684EC13D8A724B5 /* RatingReferencePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReferencePanel.swift; sourceTree = "<group>"; };
 		138C0250B9F183120FC62812 /* RecordsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsDetailView.swift; sourceTree = "<group>"; };
 		25E9443571240FF9C3C02AB4 /* FocusResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusResult.swift; sourceTree = "<group>"; };
 		3239812DDF9E5DF884297B71 /* SupplementsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementsDetailView.swift; sourceTree = "<group>"; };
@@ -117,6 +119,7 @@
 				50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */,
 				B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */,
 				DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */,
+				0DDBB57FF684EC13D8A724B5 /* RatingReferencePanel.swift */,
 				A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */,
 				138C0250B9F183120FC62812 /* RecordsDetailView.swift */,
 				5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */,
@@ -301,6 +304,7 @@
 				213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */,
 				40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */,
 				BD0AC0B4D2ECBB42811F4516 /* PrimarySidebarView.swift in Sources */,
+				4A56D791D4DB2788B95FF24E /* RatingReferencePanel.swift in Sources */,
 				34415C0BA9E22A6C195DC8C7 /* Records.swift in Sources */,
 				CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */,
 				45DDC97885F099C1FEDB4232 /* RecordsDetailView.swift in Sources */,
