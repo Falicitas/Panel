@@ -86,7 +86,6 @@ struct DetailView: View {
     private var toolbarItems: some ToolbarContent {
         ToolbarItem { modeToggleButton }
         ToolbarItem { anchorButton }
-        ToolbarItem { focusModeButton }
         ToolbarItem { ratingButton }
         ToolbarItem { fontSmallerButton }
         ToolbarItem { fontLargerButton }
@@ -98,19 +97,6 @@ struct DetailView: View {
                 .help("管理每日复发 todo")
             }
         }
-    }
-
-    /// 专注模式:折叠 sidebar + content,只留 detail 列。
-    private var focusModeButton: some View {
-        let isFocused = state.splitVisibility == .detailOnly
-        return Button {
-            state.splitVisibility = isFocused ? .all : .detailOnly
-        } label: {
-            Image(systemName: isFocused
-                  ? "rectangle.expand.vertical"
-                  : "rectangle.compress.vertical")
-        }
-        .help(isFocused ? "退出专注模式 (展开侧栏)" : "专注模式 (隐藏侧栏)")
     }
 
     /// 星级评估浮窗 toggle。

@@ -22,7 +22,6 @@ struct TodolistContentView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
         .navigationTitle("Todolist")
         .onChange(of: state.selectedName) { _, newValue in
             Task { await state.selectList(newValue) }

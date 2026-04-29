@@ -8,7 +8,7 @@ struct RatingReferencePanel: View {
     /// 距右侧 (pt)。
     static let trailingInset: CGFloat = 40
     /// 浮窗宽度 (pt)。
-    static let panelWidth: CGFloat = 300
+    static let panelWidth: CGFloat = 750
     /// 浮窗高度 (pt)。
     static let panelHeight: CGFloat = 500
     /// MilkDown pageZoom — 1.0 是默认,1.2 = 默认 +2 级。
