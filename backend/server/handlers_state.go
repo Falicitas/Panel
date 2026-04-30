@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"panel/dateutil"
 	"panel/store"
+	"panel/supplements"
 )
 
 var hhmmRegex = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -84,6 +86,12 @@ func (s *Server) handlePostTodayState(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{"daily_state": ds, "inject_error": err.Error()})
 			return
 		}
+	}
+	// wake_time 一旦写入,引用 wake 的 supplement window 可能立刻 active — 立即扫一次通知
+	if n, err := supplements.GenerateNotifications(s.store, time.Now()); err != nil {
+		log.Printf("supplement notif gen (post-state): %v", err)
+	} else if n > 0 {
+		log.Printf("supplement notif gen (post-state): %d new", n)
 	}
 	writeJSON(w, http.StatusOK, ds)
 }
@@ -167,6 +175,13 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetMealTime(today, p.Meal, p.Time); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	// 触发餐后立刻扫一次通知 — 否则下次生成器跑要等到 60s tick,
+	// 引用了这餐的 supplement 当前若处于 active 也得拖到一分钟内才弹
+	if n, err := supplements.GenerateNotifications(s.store, time.Now()); err != nil {
+		log.Printf("supplement notif gen (post-meal): %v", err)
+	} else if n > 0 {
+		log.Printf("supplement notif gen (post-meal): %d new", n)
 	}
 	ds, _ := s.store.GetDailyState(today)
 	writeJSON(w, http.StatusOK, ds)
