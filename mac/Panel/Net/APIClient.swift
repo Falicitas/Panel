@@ -194,6 +194,15 @@ actor APIClient: BackendClient {
         try await put("/api/state/settings", body: ss)
     }
 
+    func setMeal(meal: String, time: String?, clear: Bool) async throws -> DailyState {
+        struct Body: Encodable {
+            let meal: String
+            let time: String?
+            let clear: Bool
+        }
+        return try await post("/api/state/meal", body: Body(meal: meal, time: time, clear: clear))
+    }
+
     // MARK: - Notifications
 
     func listNotifications(all: Bool = false) async throws -> [PanelNotification] {

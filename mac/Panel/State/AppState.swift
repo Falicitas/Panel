@@ -357,6 +357,17 @@ final class AppState {
         }
     }
 
+    /// 触发某餐:meal ∈ {"breakfast","lunch","dinner"};time=nil 用现在,clear=true 清空。
+    func triggerMeal(_ meal: String, time: String? = nil, clear: Bool = false) async {
+        do {
+            self.dailyState = try await api.setMeal(meal: meal, time: time, clear: clear)
+            self.supplementsToday = try await api.getSupplementsToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     func dismiss(_ n: PanelNotification) async {
         do {
             try await api.dismissNotification(id: n.id)

@@ -97,7 +97,10 @@ func (s *Store) migrate() error {
 			date TEXT PRIMARY KEY,
 			mode TEXT NOT NULL,
 			wake_time TEXT,
-			mode_set_at INTEGER NOT NULL
+			mode_set_at INTEGER NOT NULL,
+			breakfast_at TEXT,
+			lunch_at TEXT,
+			dinner_at TEXT
 		);
 		CREATE TABLE IF NOT EXISTS state_settings (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -151,6 +154,9 @@ func (s *Store) migrate() error {
 		{"supplements.dose", `ALTER TABLE supplements ADD COLUMN dose TEXT NOT NULL DEFAULT ''`},
 		{"supplements.enabled", `ALTER TABLE supplements ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`},
 		{"supplements.paused_until", `ALTER TABLE supplements ADD COLUMN paused_until INTEGER`},
+		{"daily_state.breakfast_at", `ALTER TABLE daily_state ADD COLUMN breakfast_at TEXT`},
+		{"daily_state.lunch_at", `ALTER TABLE daily_state ADD COLUMN lunch_at TEXT`},
+		{"daily_state.dinner_at", `ALTER TABLE daily_state ADD COLUMN dinner_at TEXT`},
 	} {
 		if _, err := s.db.Exec(alter.sql); err != nil {
 			if !isDuplicateColumnErr(err) {

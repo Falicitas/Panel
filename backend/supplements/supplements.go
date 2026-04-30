@@ -10,78 +10,109 @@ import (
 	"panel/store"
 )
 
-// ParseTimeExpr 解析时间表达式,基于 today/wakeTime,返回当日的具体时刻。
-// 支持:
-//   - "HH:MM"          固定时刻
-//   - "wake"           wakeTime 当时刻
-//   - "wake+Nh"/-Nh    wakeTime ± N 小时
-//   - "wake+Nm"/-Nm    wakeTime ± N 分钟
+// Anchors 是时间表达式可引用的"锚点":HH:MM 字符串,空表示未设。
+type Anchors struct {
+	Wake      string
+	Breakfast string
+	Lunch     string
+	Dinner    string
+}
+
+// 锚点名 → 取值;按这个顺序匹配 (注意 wake / breakfast / lunch / dinner 互不前缀,
+// 但 dinner / lunch / breakfast / wake 都是单词开头,直接 HasPrefix 即可)。
+func (a Anchors) byName(name string) (string, bool) {
+	switch name {
+	case "wake":
+		return a.Wake, true
+	case "breakfast":
+		return a.Breakfast, true
+	case "lunch":
+		return a.Lunch, true
+	case "dinner":
+		return a.Dinner, true
+	}
+	return "", false
+}
+
+var anchorNames = []string{"wake", "breakfast", "lunch", "dinner"}
+
+// ParseTimeExpr 解析时间表达式,基于 today + anchors。返回 (时刻, ok, missing)。
+//   - missing: 若表达式以某锚点起头但锚点未设,填入锚点名 ("wake"/"breakfast"/...);
+//     其他失败原因 missing 留空。
 //
-// 若 wakeTime 为空但表达式以 wake 开头,返回 ok=false。
-func ParseTimeExpr(expr, wakeTime string, today time.Time) (time.Time, bool) {
+// 支持:
+//   - "HH:MM"
+//   - "<anchor>"           取该锚点的当日时刻
+//   - "<anchor>+Nh"/-Nh    锚点 ± N 小时
+//   - "<anchor>+Nm"/-Nm    锚点 ± N 分钟
+func ParseTimeExpr(expr string, anchors Anchors, today time.Time) (time.Time, bool, string) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
-		return time.Time{}, false
+		return time.Time{}, false, ""
 	}
 	loc := today.Location()
 
 	// HH:MM
 	if t, err := time.ParseInLocation("15:04", expr, loc); err == nil {
-		return time.Date(today.Year(), today.Month(), today.Day(), t.Hour(), t.Minute(), 0, 0, loc), true
+		return time.Date(today.Year(), today.Month(), today.Day(), t.Hour(), t.Minute(), 0, 0, loc), true, ""
 	}
 
-	// wake[+/-N{h,m}]
-	if !strings.HasPrefix(expr, "wake") {
-		return time.Time{}, false
+	// <anchor>[+/-N{h,m}]
+	for _, name := range anchorNames {
+		if !strings.HasPrefix(expr, name) {
+			continue
+		}
+		val, _ := anchors.byName(name)
+		if val == "" {
+			return time.Time{}, false, name
+		}
+		base, err := time.ParseInLocation("15:04", val, loc)
+		if err != nil {
+			return time.Time{}, false, ""
+		}
+		baseT := time.Date(today.Year(), today.Month(), today.Day(), base.Hour(), base.Minute(), 0, 0, loc)
+		rest := strings.TrimPrefix(expr, name)
+		if rest == "" {
+			return baseT, true, ""
+		}
+		if len(rest) < 2 {
+			return time.Time{}, false, ""
+		}
+		sign := rest[0]
+		if sign != '+' && sign != '-' {
+			return time.Time{}, false, ""
+		}
+		rest = rest[1:]
+		unit := byte('h')
+		if last := rest[len(rest)-1]; last == 'h' || last == 'm' {
+			unit = last
+			rest = rest[:len(rest)-1]
+		}
+		n, err := strconv.Atoi(rest)
+		if err != nil {
+			return time.Time{}, false, ""
+		}
+		if sign == '-' {
+			n = -n
+		}
+		var d time.Duration
+		if unit == 'h' {
+			d = time.Duration(n) * time.Hour
+		} else {
+			d = time.Duration(n) * time.Minute
+		}
+		return baseT.Add(d), true, ""
 	}
-	if wakeTime == "" {
-		return time.Time{}, false
-	}
-	base, err := time.ParseInLocation("15:04", wakeTime, loc)
-	if err != nil {
-		return time.Time{}, false
-	}
-	baseT := time.Date(today.Year(), today.Month(), today.Day(), base.Hour(), base.Minute(), 0, 0, loc)
-	rest := strings.TrimPrefix(expr, "wake")
-	if rest == "" {
-		return baseT, true
-	}
-	if len(rest) < 2 {
-		return time.Time{}, false
-	}
-	sign := rest[0]
-	if sign != '+' && sign != '-' {
-		return time.Time{}, false
-	}
-	rest = rest[1:]
-	unit := byte('h')
-	if last := rest[len(rest)-1]; last == 'h' || last == 'm' {
-		unit = last
-		rest = rest[:len(rest)-1]
-	}
-	n, err := strconv.Atoi(rest)
-	if err != nil {
-		return time.Time{}, false
-	}
-	if sign == '-' {
-		n = -n
-	}
-	var d time.Duration
-	if unit == 'h' {
-		d = time.Duration(n) * time.Hour
-	} else {
-		d = time.Duration(n) * time.Minute
-	}
-	return baseT.Add(d), true
+	return time.Time{}, false, ""
 }
 
 // IsWindowActive 当前 now 是否落在 window 内 (左闭右开)。
-func IsWindowActive(w store.Window, wakeTime string, now time.Time) bool {
-	start, ok := ParseTimeExpr(w.Start, wakeTime, now)
+func IsWindowActive(w store.Window, anchors Anchors, now time.Time) bool {
+	start, ok, _ := ParseTimeExpr(w.Start, anchors, now)
 	if !ok {
 		return false
 	}
-	end, ok := ParseTimeExpr(w.End, wakeTime, now)
+	end, ok, _ := ParseTimeExpr(w.End, anchors, now)
 	if !ok {
 		return false
 	}
@@ -107,6 +138,13 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 		return 0, err
 	}
 
+	anchors := Anchors{
+		Wake:      state.WakeTime,
+		Breakfast: state.BreakfastAt,
+		Lunch:     state.LunchAt,
+		Dinner:    state.DinnerAt,
+	}
+
 	created := 0
 	for _, sp := range suppls {
 		// 禁用 / 暂停期内不弹通知 (历史数据保留)
@@ -114,7 +152,7 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			continue
 		}
 		for idx, w := range sp.Windows {
-			if !IsWindowActive(w, state.WakeTime, now) {
+			if !IsWindowActive(w, anchors, now) {
 				continue
 			}
 			ref := fmt.Sprintf("supplement:%d:window:%d:date:%s", sp.ID, idx, today)

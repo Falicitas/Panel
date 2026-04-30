@@ -189,12 +189,13 @@ func (s *Server) handleEnableSupplement(w http.ResponseWriter, r *http.Request) 
 
 // supplementTodayResp / windowStatus 给前端 per-item 视图用。
 type windowStatus struct {
-	Start     string `json:"start"`      // 原表达式
-	End       string `json:"end"`
-	StartHM   string `json:"start_hm"`   // 解析后 HH:MM (wake 解析失败 = "")
-	EndHM     string `json:"end_hm"`
-	Status    string `json:"status"`     // "passed" | "active" | "upcoming" | "unknown"
-	DoneToday bool   `json:"done_today"` // 该 window 当日是否已勾
+	Start         string `json:"start"`          // 原表达式
+	End           string `json:"end"`
+	StartHM       string `json:"start_hm"`       // 解析后 HH:MM (锚点未触发/解析失败 = "")
+	EndHM         string `json:"end_hm"`
+	Status        string `json:"status"`         // "passed" | "active" | "upcoming" | "unknown"
+	DoneToday     bool   `json:"done_today"`     // 该 window 当日是否已勾
+	RequiresMeal  string `json:"requires_meal"`  // "breakfast"/"lunch"/"dinner" — 表达式引用了未触发的餐;前端隐藏
 }
 
 type supplementTodayItem struct {
@@ -252,6 +253,13 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 		doneSet[id][idx] = true
 	}
 
+	anchors := supplements.Anchors{
+		Wake:      state.WakeTime,
+		Breakfast: state.BreakfastAt,
+		Lunch:     state.LunchAt,
+		Dinner:    state.DinnerAt,
+	}
+
 	resp := supplementTodayResp{Date: today, Items: []supplementTodayItem{}}
 	nowUnix := now.Unix()
 
@@ -276,8 +284,12 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				Status:    "unknown",
 				DoneToday: doneSet[sp.ID][idx],
 			}
-			startT, okS := supplements.ParseTimeExpr(win.Start, state.WakeTime, now)
-			endT, okE := supplements.ParseTimeExpr(win.End, state.WakeTime, now)
+			startT, okS, missS := supplements.ParseTimeExpr(win.Start, anchors, now)
+			endT, okE, missE := supplements.ParseTimeExpr(win.End, anchors, now)
+			// 引用未触发的餐 → 标记 requires_meal,前端隐藏 (wake 不算 meal,有自己的设置 flow)
+			if miss := firstMealMiss(missS, missE); miss != "" {
+				ws.RequiresMeal = miss
+			}
 			if okS {
 				ws.StartHM = startT.Format("15:04")
 			}
@@ -298,6 +310,10 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				}
 			}
 			item.Windows = append(item.Windows, ws)
+			// 未浮现的 window (餐未触发) 不计入 dose 统计 / allDone 判断
+			if ws.RequiresMeal != "" {
+				continue
+			}
 			if !ws.DoneToday {
 				allDone = false
 			}
@@ -320,6 +336,16 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// firstMealMiss 返回 a/b 里第一个非空且非 wake 的 anchor 名;否则 ""。
+func firstMealMiss(a, b string) string {
+	for _, x := range []string{a, b} {
+		if x == "breakfast" || x == "lunch" || x == "dinner" {
+			return x
+		}
+	}
+	return ""
 }
 
 func validateSupplement(sp *store.Supplement) error {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,6 +120,68 @@ func (s *Server) handleGetStateSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, ss)
+}
+
+// handlePostMeal POST /api/state/meal body {meal, time?}
+//   - meal ∈ {"breakfast","lunch","dinner"}
+//   - time 缺省 = 当前 HH:MM;不缺省必须为 HH:MM
+//   - 验证小时落在 meal 区间内 (breakfast 7-11, lunch 12-15, dinner 16-23)
+//   - meal="" + time="" 视作清空 (取消触发)
+func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
+	var p struct {
+		Meal  string `json:"meal"`
+		Time  string `json:"time"`
+		Clear bool   `json:"clear"`
+	}
+	if err := decodeJSON(r, &p); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if p.Meal != "breakfast" && p.Meal != "lunch" && p.Meal != "dinner" {
+		writeError(w, http.StatusBadRequest, errors.New("meal must be breakfast | lunch | dinner"))
+		return
+	}
+	today := dateutil.LogicalToday(time.Now())
+	if p.Clear {
+		if err := s.store.SetMealTime(today, p.Meal, ""); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		ds, _ := s.store.GetDailyState(today)
+		writeJSON(w, http.StatusOK, ds)
+		return
+	}
+	if p.Time == "" {
+		p.Time = time.Now().Format("15:04")
+	}
+	if !hhmmRegex.MatchString(p.Time) {
+		writeError(w, http.StatusBadRequest, errors.New("time must be HH:MM"))
+		return
+	}
+	hour, _ := strconv.Atoi(strings.SplitN(p.Time, ":", 2)[0])
+	if !validMealHour(p.Meal, hour) {
+		writeError(w, http.StatusBadRequest,
+			errors.New(p.Meal+" out of range (breakfast 7-11, lunch 12-15, dinner 16-23)"))
+		return
+	}
+	if err := s.store.SetMealTime(today, p.Meal, p.Time); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	ds, _ := s.store.GetDailyState(today)
+	writeJSON(w, http.StatusOK, ds)
+}
+
+func validMealHour(meal string, hour int) bool {
+	switch meal {
+	case "breakfast":
+		return hour >= 7 && hour <= 11
+	case "lunch":
+		return hour >= 12 && hour <= 15
+	case "dinner":
+		return hour >= 16 && hour <= 23
+	}
+	return false
 }
 
 func (s *Server) handlePutStateSettings(w http.ResponseWriter, r *http.Request) {

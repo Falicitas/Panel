@@ -171,28 +171,44 @@ func (s *Store) DeleteSupplement(id int64) error {
 // ---- daily_state ----
 
 type DailyState struct {
-	Date      string `json:"date"`        // YYYY-MM-DD
-	Mode      string `json:"mode"`        // "normal" | "focus" | "sleep" | "outside"
-	WakeTime  string `json:"wake_time"`   // "HH:MM" or ""
-	ModeSetAt int64  `json:"mode_set_at"`
+	Date         string `json:"date"`         // YYYY-MM-DD
+	Mode         string `json:"mode"`         // "normal" | "focus" | "sleep" | "outside"
+	WakeTime     string `json:"wake_time"`    // "HH:MM" or ""
+	ModeSetAt    int64  `json:"mode_set_at"`
+	BreakfastAt  string `json:"breakfast_at"` // "HH:MM" or "" — 用户主动触发的早餐时刻
+	LunchAt      string `json:"lunch_at"`
+	DinnerAt     string `json:"dinner_at"`
 }
 
 func (s *Store) GetDailyState(date string) (DailyState, error) {
 	var ds DailyState
-	var wake sql.NullString
+	var wake, bf, lu, di sql.NullString
 	err := s.db.QueryRow(
-		`SELECT date, mode, wake_time, mode_set_at FROM daily_state WHERE date=?`, date,
-	).Scan(&ds.Date, &ds.Mode, &wake, &ds.ModeSetAt)
+		`SELECT date, mode, wake_time, mode_set_at, breakfast_at, lunch_at, dinner_at
+		   FROM daily_state WHERE date=?`, date,
+	).Scan(&ds.Date, &ds.Mode, &wake, &ds.ModeSetAt, &bf, &lu, &di)
 	if errors.Is(err, sql.ErrNoRows) {
 		return DailyState{Date: date, Mode: "normal", WakeTime: "", ModeSetAt: 0}, nil
+	}
+	if err != nil {
+		return DailyState{}, err
 	}
 	if wake.Valid {
 		ds.WakeTime = wake.String
 	}
-	return ds, err
+	if bf.Valid {
+		ds.BreakfastAt = bf.String
+	}
+	if lu.Valid {
+		ds.LunchAt = lu.String
+	}
+	if di.Valid {
+		ds.DinnerAt = di.String
+	}
+	return ds, nil
 }
 
-// SetDailyState upsert 当日状态。
+// SetDailyState upsert mode + wake_time。不动 meal_at 字段 (餐由 SetMealTime 单独写)。
 func (s *Store) SetDailyState(ds DailyState) error {
 	var wake any
 	if ds.WakeTime == "" {
@@ -206,6 +222,40 @@ func (s *Store) SetDailyState(ds DailyState) error {
 		ON CONFLICT(date) DO UPDATE SET mode=excluded.mode, wake_time=excluded.wake_time, mode_set_at=excluded.mode_set_at
 	`, ds.Date, ds.Mode, wake, ds.ModeSetAt)
 	return err
+}
+
+// SetMealTime 单列写 meal_at;hhmm="" 表示清空。
+// meal ∈ {"breakfast","lunch","dinner"}。
+func (s *Store) SetMealTime(date, meal, hhmm string) error {
+	col, ok := mealColumn(meal)
+	if !ok {
+		return errors.New("invalid meal")
+	}
+	var v any
+	if hhmm == "" {
+		v = nil
+	} else {
+		v = hhmm
+	}
+	// 没有 daily_state 行时先用默认 mode/normal,wake/null 占位再 update meal 列
+	_, err := s.db.Exec(`
+		INSERT INTO daily_state (date, mode, wake_time, mode_set_at, `+col+`)
+		VALUES (?, 'normal', NULL, 0, ?)
+		ON CONFLICT(date) DO UPDATE SET `+col+` = excluded.`+col+`
+	`, date, v)
+	return err
+}
+
+func mealColumn(meal string) (string, bool) {
+	switch meal {
+	case "breakfast":
+		return "breakfast_at", true
+	case "lunch":
+		return "lunch_at", true
+	case "dinner":
+		return "dinner_at", true
+	}
+	return "", false
 }
 
 // ---- state_settings ----

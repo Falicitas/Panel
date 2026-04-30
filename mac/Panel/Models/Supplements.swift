@@ -29,12 +29,14 @@ struct SupplementWindowStatus: Codable, Hashable {
     let endHM: String
     let status: String      // "passed" | "active" | "upcoming" | "unknown"
     let doneToday: Bool     // 该 window 当日是否已勾
+    let requiresMeal: String  // "breakfast"/"lunch"/"dinner" — 表达式引用了未触发的餐;前端隐藏
 
     enum CodingKeys: String, CodingKey {
         case start, end, status
         case startHM = "start_hm"
         case endHM = "end_hm"
         case doneToday = "done_today"
+        case requiresMeal = "requires_meal"
     }
 }
 
@@ -78,14 +80,20 @@ struct SupplementToday: Codable, Hashable {
 
 struct DailyState: Codable, Hashable {
     let date: String
-    var mode: String       // "normal" | "focus" | "sleep" | "outside"
-    var wakeTime: String   // "HH:MM" or ""
+    var mode: String         // "normal" | "focus" | "sleep" | "outside"
+    var wakeTime: String     // "HH:MM" or ""
     var modeSetAt: Int64
+    var breakfastAt: String  // "HH:MM" or "" — 用户主动触发的早餐时刻
+    var lunchAt: String
+    var dinnerAt: String
 
     enum CodingKeys: String, CodingKey {
         case date, mode
         case wakeTime = "wake_time"
         case modeSetAt = "mode_set_at"
+        case breakfastAt = "breakfast_at"
+        case lunchAt = "lunch_at"
+        case dinnerAt = "dinner_at"
     }
 }
 

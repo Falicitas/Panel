@@ -14,6 +14,11 @@ struct SupplementsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Header(filter: $filter, search: $search, today: state.supplementsToday, onAdd: { creating = true })
+                MealsSection(
+                    dailyState: state.dailyState,
+                    onTrigger: { meal in Task { await state.triggerMeal(meal) } },
+                    onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } }
+                )
                 AllListSection(
                     today: state.supplementsToday,
                     supplementsByID: supplementsByID,
@@ -118,6 +123,138 @@ private struct StatChip: View {
     }
 }
 
+// MARK: - 餐 Section (置顶 3 张餐卡)
+
+private struct MealMeta {
+    let key: String      // breakfast/lunch/dinner
+    let label: String    // 早餐/午餐/晚餐
+    let icon: String     // SF symbol
+    let validRange: ClosedRange<Int>  // 小时 (闭区间) — 7...11 / 12...15 / 16...23
+    let rangeLabel: String  // "7:00-11:59"
+}
+
+private let mealMetas: [MealMeta] = [
+    .init(key: "breakfast", label: "早餐", icon: "sun.haze", validRange: 7...11, rangeLabel: "7:00–11:59"),
+    .init(key: "lunch",     label: "午餐", icon: "sun.max",  validRange: 12...15, rangeLabel: "12:00–15:59"),
+    .init(key: "dinner",    label: "晚餐", icon: "moon",     validRange: 16...23, rangeLabel: "16:00–23:59"),
+]
+
+private struct MealsSection: View {
+    let dailyState: DailyState?
+    let onTrigger: (String) -> Void
+    let onClear: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "fork.knife")
+                    .foregroundStyle(.secondary)
+                Text("今日三餐 (锚点)")
+                    .font(.headline)
+                Text("触发后,引用 breakfast/lunch/dinner 的保健品时段才会浮现")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                ForEach(mealMetas, id: \.key) { meta in
+                    MealCard(
+                        meta: meta,
+                        recordedAt: recorded(meta.key),
+                        onTrigger: { onTrigger(meta.key) },
+                        onClear: { onClear(meta.key) }
+                    )
+                }
+            }
+        }
+    }
+
+    private func recorded(_ key: String) -> String? {
+        guard let ds = dailyState else { return nil }
+        let v: String
+        switch key {
+        case "breakfast": v = ds.breakfastAt
+        case "lunch":     v = ds.lunchAt
+        case "dinner":    v = ds.dinnerAt
+        default:          v = ""
+        }
+        return v.isEmpty ? nil : v
+    }
+}
+
+private struct MealCard: View {
+    let meta: MealMeta
+    let recordedAt: String?
+    let onTrigger: () -> Void
+    let onClear: () -> Void
+
+    @Environment(AppState.self) private var state
+
+    private var inRange: Bool {
+        let _ = state.timeTick
+        let hour = Calendar.current.component(.hour, from: Date())
+        return meta.validRange.contains(hour)
+    }
+
+    var body: some View {
+        let _ = state.timeTick
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: meta.icon)
+                    .foregroundStyle(recordedAt != nil ? Color.green : Color.anchorAccent)
+                    .imageScale(.large)
+                Text(meta.label)
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                if let at = recordedAt {
+                    Text(at)
+                        .font(.body.monospacedDigit())
+                        .foregroundStyle(.green)
+                }
+            }
+            Text(meta.rangeLabel)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            HStack {
+                if let at = recordedAt {
+                    Label("已记 \(at)", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Button("清空") { onClear() }
+                        .buttonStyle(.borderless)
+                        .help("撤销今日触发")
+                } else {
+                    Button(action: onTrigger) {
+                        Label("现在记", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!inRange)
+                    .help(inRange ? "记录当前时刻为 \(meta.label)" : "不在 \(meta.label) 时段")
+                    Spacer()
+                    if !inRange {
+                        Text("不在区间")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            (recordedAt != nil ? Color.green : Color.anchorAccent).opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(
+                    (recordedAt != nil ? Color.green : Color.anchorAccent).opacity(0.35),
+                    lineWidth: 1
+                )
+        )
+    }
+}
+
 // MARK: - 清单 (per-item 聚合)
 
 private struct AllListSection: View {
@@ -210,15 +347,25 @@ private struct ItemCard: View {
                 actions
             }
 
-            // per-window checkboxes
+            // per-window checkboxes (引用了未触发餐的 window 隐藏 — 等触发后浮现)
             if item.windows.isEmpty {
                 Text("尚无时段")
                     .foregroundStyle(.tertiary)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], spacing: 10) {
-                    ForEach(Array(item.windows.enumerated()), id: \.offset) { idx, win in
-                        WindowChip(window: win, disabled: item.paused || !item.enabled) {
-                            onToggleWindow(idx)
+                let visibleWindows = item.windows.enumerated().filter { _, w in
+                    w.requiresMeal.isEmpty
+                }
+                if visibleWindows.isEmpty {
+                    let needs = Set(item.windows.compactMap { $0.requiresMeal.isEmpty ? nil : $0.requiresMeal })
+                    Label("等待触发: \(needs.sorted().joined(separator: " / "))", systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], spacing: 10) {
+                        ForEach(visibleWindows.map(\.offset), id: \.self) { idx in
+                            WindowChip(window: item.windows[idx], disabled: item.paused || !item.enabled) {
+                                onToggleWindow(idx)
+                            }
                         }
                     }
                 }
@@ -399,7 +546,7 @@ private struct WindowChip: View {
     }
 
     private var statusText: String {
-        if window.doneToday { return "✓ 已" }
+        if window.doneToday { return "✓ 已完成" }
         switch window.status {
         case "active":   return "可勾"
         case "passed":   return "已过"
@@ -458,6 +605,7 @@ private struct ItemTimeline: View {
     private struct Seg { let start: Double; let width: Double }
 
     private func segment(for w: SupplementWindowStatus) -> Seg? {
+        guard w.requiresMeal.isEmpty else { return nil }   // 未触发餐 — 不画
         guard let s = parseHM(w.startHM), let e = parseHM(w.endHM), e > s else { return nil }
         let sf = frac(s)
         let ef = frac(e)
