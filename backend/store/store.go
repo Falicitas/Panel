@@ -88,7 +88,10 @@ func (s *Store) migrate() error {
 			name TEXT NOT NULL,
 			type TEXT NOT NULL,
 			windows_json TEXT NOT NULL DEFAULT '[]',
-			notes TEXT NOT NULL DEFAULT ''
+			notes TEXT NOT NULL DEFAULT '',
+			dose TEXT NOT NULL DEFAULT '',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			paused_until INTEGER
 		);
 		CREATE TABLE IF NOT EXISTS daily_state (
 			date TEXT PRIMARY KEY,
@@ -140,9 +143,19 @@ func (s *Store) migrate() error {
 		return err
 	}
 	// 老数据库补列(SQLite 没有 ADD COLUMN IF NOT EXISTS — duplicate column 错误吞掉即可)
-	if _, err := s.db.Exec(`ALTER TABLE recurring_todos ADD COLUMN kind TEXT NOT NULL DEFAULT 'free'`); err != nil {
-		if !isDuplicateColumnErr(err) {
-			return fmt.Errorf("add recurring_todos.kind: %w", err)
+	for _, alter := range []struct {
+		desc string
+		sql  string
+	}{
+		{"recurring_todos.kind", `ALTER TABLE recurring_todos ADD COLUMN kind TEXT NOT NULL DEFAULT 'free'`},
+		{"supplements.dose", `ALTER TABLE supplements ADD COLUMN dose TEXT NOT NULL DEFAULT ''`},
+		{"supplements.enabled", `ALTER TABLE supplements ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`},
+		{"supplements.paused_until", `ALTER TABLE supplements ADD COLUMN paused_until INTEGER`},
+	} {
+		if _, err := s.db.Exec(alter.sql); err != nil {
+			if !isDuplicateColumnErr(err) {
+				return fmt.Errorf("migrate %s: %w", alter.desc, err)
+			}
 		}
 	}
 	return nil

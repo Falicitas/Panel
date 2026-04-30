@@ -8,11 +8,14 @@ import (
 
 // 食物 / 保健品
 type Supplement struct {
-	ID      int64    `json:"id"`
-	Name    string   `json:"name"`
-	Type    string   `json:"type"`    // "food" | "supplement"
-	Windows []Window `json:"windows"` // 可空
-	Notes   string   `json:"notes"`
+	ID          int64    `json:"id"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`         // "food" | "supplement"
+	Windows     []Window `json:"windows"`      // 可空
+	Notes       string   `json:"notes"`
+	Dose        string   `json:"dose"`         // "1 颗" / "5 滴" 等,纯字符串
+	Enabled     bool     `json:"enabled"`      // false 时通知不弹,统计不计 expected
+	PausedUntil *int64   `json:"paused_until"` // unix 秒;> now 时不弹通知
 }
 
 // Window 是单个 (start, end) 段。
@@ -22,8 +25,23 @@ type Window struct {
 	End   string `json:"end"`
 }
 
+// IsActive 在 now (Unix 秒) 看,这个 supplement 是否仍受跟踪 (enabled & 未暂停)。
+// disabled 或 paused_until > now → 不算 active。
+func (sp Supplement) IsActive(now int64) bool {
+	if !sp.Enabled {
+		return false
+	}
+	if sp.PausedUntil != nil && *sp.PausedUntil > now {
+		return false
+	}
+	return true
+}
+
 func (s *Store) ListSupplements() ([]Supplement, error) {
-	rows, err := s.db.Query(`SELECT id, name, type, windows_json, notes FROM supplements ORDER BY id`)
+	rows, err := s.db.Query(
+		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until
+		   FROM supplements ORDER BY id`,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -32,16 +50,50 @@ func (s *Store) ListSupplements() ([]Supplement, error) {
 	for rows.Next() {
 		var sp Supplement
 		var raw string
-		if err := rows.Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes); err != nil {
+		var enabledI int
+		var paused sql.NullInt64
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes, &sp.Dose, &enabledI, &paused); err != nil {
 			return nil, err
 		}
 		sp.Windows = []Window{}
 		if raw != "" {
 			_ = json.Unmarshal([]byte(raw), &sp.Windows)
 		}
+		sp.Enabled = enabledI != 0
+		if paused.Valid {
+			v := paused.Int64
+			sp.PausedUntil = &v
+		}
 		out = append(out, sp)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) GetSupplement(id int64) (Supplement, error) {
+	var sp Supplement
+	var raw string
+	var enabledI int
+	var paused sql.NullInt64
+	err := s.db.QueryRow(
+		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until
+		   FROM supplements WHERE id=?`, id,
+	).Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes, &sp.Dose, &enabledI, &paused)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Supplement{}, sql.ErrNoRows
+	}
+	if err != nil {
+		return Supplement{}, err
+	}
+	sp.Windows = []Window{}
+	if raw != "" {
+		_ = json.Unmarshal([]byte(raw), &sp.Windows)
+	}
+	sp.Enabled = enabledI != 0
+	if paused.Valid {
+		v := paused.Int64
+		sp.PausedUntil = &v
+	}
+	return sp, nil
 }
 
 func (s *Store) CreateSupplement(sp Supplement) (Supplement, error) {
@@ -49,9 +101,18 @@ func (s *Store) CreateSupplement(sp Supplement) (Supplement, error) {
 		sp.Windows = []Window{}
 	}
 	raw, _ := json.Marshal(sp.Windows)
+	enabledI := 1
+	if !sp.Enabled {
+		enabledI = 0
+	}
+	var paused any
+	if sp.PausedUntil != nil {
+		paused = *sp.PausedUntil
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO supplements (name, type, windows_json, notes) VALUES (?, ?, ?, ?)`,
-		sp.Name, sp.Type, string(raw), sp.Notes,
+		`INSERT INTO supplements (name, type, windows_json, notes, dose, enabled, paused_until)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused,
 	)
 	if err != nil {
 		return Supplement{}, err
@@ -66,10 +127,39 @@ func (s *Store) UpdateSupplement(sp Supplement) error {
 		sp.Windows = []Window{}
 	}
 	raw, _ := json.Marshal(sp.Windows)
+	enabledI := 1
+	if !sp.Enabled {
+		enabledI = 0
+	}
+	var paused any
+	if sp.PausedUntil != nil {
+		paused = *sp.PausedUntil
+	}
 	_, err := s.db.Exec(
-		`UPDATE supplements SET name=?, type=?, windows_json=?, notes=? WHERE id=?`,
-		sp.Name, sp.Type, string(raw), sp.Notes, sp.ID,
+		`UPDATE supplements SET name=?, type=?, windows_json=?, notes=?, dose=?, enabled=?, paused_until=?
+		   WHERE id=?`,
+		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused, sp.ID,
 	)
+	return err
+}
+
+// SetSupplementEnabled 仅切 enabled。其他字段保持。
+func (s *Store) SetSupplementEnabled(id int64, enabled bool) error {
+	v := 1
+	if !enabled {
+		v = 0
+	}
+	_, err := s.db.Exec(`UPDATE supplements SET enabled=? WHERE id=?`, v, id)
+	return err
+}
+
+// SetSupplementPausedUntil 设置/清除暂停截止 (unix 秒)。nil = 取消暂停。
+func (s *Store) SetSupplementPausedUntil(id int64, until *int64) error {
+	if until == nil {
+		_, err := s.db.Exec(`UPDATE supplements SET paused_until=NULL WHERE id=?`, id)
+		return err
+	}
+	_, err := s.db.Exec(`UPDATE supplements SET paused_until=? WHERE id=?`, *until, id)
 	return err
 }
 
@@ -81,9 +171,9 @@ func (s *Store) DeleteSupplement(id int64) error {
 // ---- daily_state ----
 
 type DailyState struct {
-	Date      string `json:"date"`       // YYYY-MM-DD
-	Mode      string `json:"mode"`       // "normal" | "focus" | "sleep" | "outside"
-	WakeTime  string `json:"wake_time"`  // "HH:MM" or ""
+	Date      string `json:"date"`        // YYYY-MM-DD
+	Mode      string `json:"mode"`        // "normal" | "focus" | "sleep" | "outside"
+	WakeTime  string `json:"wake_time"`   // "HH:MM" or ""
 	ModeSetAt int64  `json:"mode_set_at"`
 }
 
@@ -148,11 +238,11 @@ func (s *Store) SetStateSettings(ss StateSettings) error {
 
 type Notification struct {
 	ID          int64  `json:"id"`
-	Source      string `json:"source"`      // "supplement" / "finance" / "records" / "manual"
-	SourceRef   string `json:"source_ref"`  // 幂等键,空表示无幂等约束
+	Source      string `json:"source"`       // "supplement" / "finance" / "records" / "manual"
+	SourceRef   string `json:"source_ref"`   // 幂等键,空表示无幂等约束
 	Title       string `json:"title"`
 	Body        string `json:"body"`
-	Level       string `json:"level"`       // "info" | "warn" | "alert"
+	Level       string `json:"level"`        // "info" | "warn" | "alert"
 	CreatedAt   int64  `json:"created_at"`
 	DismissedAt *int64 `json:"dismissed_at,omitempty"`
 }

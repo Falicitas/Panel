@@ -109,6 +109,10 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 
 	created := 0
 	for _, sp := range suppls {
+		// 禁用 / 暂停期内不弹通知 (历史数据保留)
+		if !sp.IsActive(now.Unix()) {
+			continue
+		}
 		for idx, w := range sp.Windows {
 			if !IsWindowActive(w, state.WakeTime, now) {
 				continue

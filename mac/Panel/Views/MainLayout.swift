@@ -5,7 +5,10 @@ struct MainLayout: View {
 
     var body: some View {
         @Bindable var state = state
-        let sidebarHidden = state.splitVisibility != .all
+        // 折叠条件:
+        //   - 用户系统 hide sidebar (state.splitVisibility != .all),或
+        //   - 当前 tab 是 supplements (设计上不需要二级列)
+        let collapseContent = state.splitVisibility != .all || state.selectedTab == .supplements
         VStack(spacing: 0) {
             NotificationBar()
             NavigationSplitView(columnVisibility: $state.splitVisibility) {
@@ -13,9 +16,9 @@ struct MainLayout: View {
             } content: {
                 ContentColumn()
                     .navigationSplitViewColumnWidth(
-                        min: sidebarHidden ? 0 : 280,
-                        ideal: sidebarHidden ? 0 : 320,
-                        max: sidebarHidden ? 0 : 400
+                        min: collapseContent ? 0 : 280,
+                        ideal: collapseContent ? 0 : 320,
+                        max: collapseContent ? 0 : 400
                     )
             } detail: {
                 DetailColumn()
@@ -30,7 +33,7 @@ private struct ContentColumn: View {
         switch state.selectedTab {
         case .todolist:    TodolistContentView()
         case .finance:     FinanceContentView()
-        case .supplements: SupplementsContentView()
+        case .supplements: EmptyView()  // supplements 走 2 列布局,内容全在 DetailColumn
         case .records:     RecordsContentView()
         case .bash:        BashContentView()
         }
@@ -43,7 +46,7 @@ private struct DetailColumn: View {
         switch state.selectedTab {
         case .todolist:    DetailView()
         case .finance:     FinanceDetailView()
-        case .supplements: SupplementsDetailView()
+        case .supplements: SupplementsView()
         case .records:     RecordsDetailView()
         case .bash:        BashDetailView()
         }

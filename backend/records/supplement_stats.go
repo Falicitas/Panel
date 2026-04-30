@@ -26,9 +26,11 @@ type SupplementMonthly struct {
 
 // ComputeSupplementMonthly 列出 month (YYYY-MM) 内每个 supplement 的完成度。
 //
-// 数据来源: notifications 表。source='supplement', source_ref 形如
-//   "supplement:{id}:window:{idx}:date:{YYYY-MM-DD}"
-// 这样我们能从 source_ref 解出日期与 supplement_id。
+// 数据来源 (Phase 12 起):
+//   - expected_days: notifications 表 source='supplement' 的 source_ref 解出的当月日期
+//     (= 当月有过 active window 触发的天数)
+//   - completed_days: records 表 module='supplement' key='{id}' 的当月日期
+//     (= 用户主动勾过"今天吃了"的天数,跟 dismiss notification 解耦)
 func ComputeSupplementMonthly(s *store.Store, month string) (SupplementMonthly, error) {
 	resp := SupplementMonthly{Month: month, Entries: []SupplementMonthlyEntry{}}
 
@@ -42,11 +44,7 @@ func ComputeSupplementMonthly(s *store.Store, month string) (SupplementMonthly, 
 		return resp, err
 	}
 
-	type dayPair struct {
-		expected  map[string]struct{}
-		completed map[string]struct{}
-	}
-	bySupp := map[int64]*dayPair{}
+	expectedBySupp := map[int64]map[string]struct{}{}
 	for _, n := range all {
 		if n.Source != "supplement" || n.SourceRef == "" {
 			continue
@@ -58,30 +56,46 @@ func ComputeSupplementMonthly(s *store.Store, month string) (SupplementMonthly, 
 		if !strings.HasPrefix(date, month+"-") {
 			continue
 		}
-		dp, ok := bySupp[id]
+		set, ok := expectedBySupp[id]
 		if !ok {
-			dp = &dayPair{
-				expected:  map[string]struct{}{},
-				completed: map[string]struct{}{},
-			}
-			bySupp[id] = dp
+			set = map[string]struct{}{}
+			expectedBySupp[id] = set
 		}
-		dp.expected[date] = struct{}{}
-		if n.DismissedAt != nil {
-			dp.completed[date] = struct{}{}
+		set[date] = struct{}{}
+	}
+
+	// completed 走 records 表
+	from := month + "-01"
+	to := month + "-31" // ListRecords 是字符串比较,YYYY-MM-31 足以涵盖所有月
+	recs, err := s.ListRecords("supplement", from, to)
+	if err != nil {
+		return resp, err
+	}
+	completedBySupp := map[int64]map[string]struct{}{}
+	for _, rec := range recs {
+		id, perr := parseInt64(rec.Key)
+		if perr != nil {
+			continue
 		}
+		set, ok := completedBySupp[id]
+		if !ok {
+			set = map[string]struct{}{}
+			completedBySupp[id] = set
+		}
+		set[rec.Date] = struct{}{}
 	}
 
 	for _, sp := range supps {
-		dp := bySupp[sp.ID]
 		entry := SupplementMonthlyEntry{
 			SupplementID: sp.ID,
 			Name:         sp.Name,
 			Type:         sp.Type,
 		}
-		if dp != nil {
-			entry.ExpectedDays = len(dp.expected)
-			entry.CompletedDays = len(dp.completed)
+		if e := expectedBySupp[sp.ID]; e != nil {
+			entry.ExpectedDays = len(e)
+		}
+		if c := completedBySupp[sp.ID]; c != nil {
+			entry.CompletedDays = len(c)
 		}
 		resp.Entries = append(resp.Entries, entry)
 	}

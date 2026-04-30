@@ -147,6 +147,32 @@ actor APIClient: BackendClient {
     }
     func deleteSupplement(id: Int64) async throws { try await delete("/api/supplements/\(id)") }
 
+    func getSupplementsToday() async throws -> SupplementToday {
+        try await get("/api/supplements/today")
+    }
+
+    func checkSupplement(id: Int64, date: String?, checked: Bool) async throws {
+        struct Body: Encodable { let date: String?; let checked: Bool }
+        var req = URLRequest(url: try url("/api/supplements/\(id)/check"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(Body(date: date, checked: checked))
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "check supplement \(id) failed")
+        }
+    }
+
+    func pauseSupplement(id: Int64, until: Int64?) async throws -> [Supplement] {
+        struct Body: Encodable { let until: Int64? }
+        return try await post("/api/supplements/\(id)/pause", body: Body(until: until))
+    }
+
+    func enableSupplement(id: Int64, enabled: Bool) async throws -> [Supplement] {
+        struct Body: Encodable { let enabled: Bool }
+        return try await post("/api/supplements/\(id)/enable", body: Body(enabled: enabled))
+    }
+
     // MARK: - State
 
     func getTodayState() async throws -> DailyState { try await get("/api/state/today") }

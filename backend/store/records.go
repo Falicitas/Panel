@@ -102,3 +102,9 @@ func (s *Store) DeleteRecordsForDate(module, date string) error {
 	_, err := s.db.Exec(`DELETE FROM records WHERE module=? AND date=?`, module, date)
 	return err
 }
+
+// DeleteRecord 按 (module, date, key) 精确删除。无匹配静默返回 nil。
+func (s *Store) DeleteRecord(module, date, key string) error {
+	_, err := s.db.Exec(`DELETE FROM records WHERE module=? AND date=? AND key=?`, module, date, key)
+	return err
+}

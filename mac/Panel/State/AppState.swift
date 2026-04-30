@@ -39,6 +39,7 @@ final class AppState {
     var frees: [FreeExpense] = []
     var incomes: [Income] = []
     var supplements: [Supplement] = []
+    var supplementsToday: SupplementToday?
     var dailyState: DailyState?
     var stateSettings: StateSettings?
     var notifications: [PanelNotification] = []
@@ -120,6 +121,7 @@ final class AppState {
             async let freesResp = api.listFree()
             async let incomesResp = api.listIncomes()
             async let supplResp = api.listSupplements()
+            async let supplTodayResp = api.getSupplementsToday()
             async let dailyResp = api.getTodayState()
             async let stateSetResp = api.getStateSettings()
             async let notifResp = api.listNotifications(all: false)
@@ -127,7 +129,7 @@ final class AppState {
             async let suppMonthResp = api.getSupplementsMonth(month: nil)
             let (l, a, f, m, mp, r) = try await (lists, anchorResp, focusResp, microResp, microProgResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
-            let (sp, ds, ss, ns) = try await (supplResp, dailyResp, stateSetResp, notifResp)
+            let (sp, st, ds, ss, ns) = try await (supplResp, supplTodayResp, dailyResp, stateSetResp, notifResp)
             let (gp, sm) = try await (gripResp, suppMonthResp)
             self.active = l.active
             self.done = l.done
@@ -143,6 +145,7 @@ final class AppState {
             self.frees = fr
             self.incomes = inc
             self.supplements = sp
+            self.supplementsToday = st
             self.dailyState = ds
             self.stateSettings = ss
             self.notifications = ns
@@ -262,7 +265,45 @@ final class AppState {
 
     func reloadSupplements() async {
         do {
-            self.supplements = try await api.listSupplements()
+            async let listR = api.listSupplements()
+            async let todayR = api.getSupplementsToday()
+            self.supplements = try await listR
+            self.supplementsToday = try await todayR
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 切换某项今日"已吃"状态。
+    func toggleSupplementCheck(_ item: SupplementTodayItem) async {
+        do {
+            try await api.checkSupplement(id: item.id, date: nil, checked: !item.doneToday)
+            await reloadSupplements()
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 暂停 N 天 (now + days*86400);days = 0 取消暂停。
+    func pauseSupplement(_ sp: Supplement, days: Int) async {
+        let until: Int64? = days > 0
+            ? Int64(Date().timeIntervalSince1970) + Int64(days) * 86400
+            : nil
+        do {
+            self.supplements = try await api.pauseSupplement(id: sp.id, until: until)
+            self.supplementsToday = try await api.getSupplementsToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 切换 enabled。
+    func setSupplementEnabled(_ sp: Supplement, enabled: Bool) async {
+        do {
+            self.supplements = try await api.enableSupplement(id: sp.id, enabled: enabled)
+            self.supplementsToday = try await api.getSupplementsToday()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -559,7 +600,9 @@ final class AppState {
             async let microProg = api.getMicroProgress()
             async let notif = api.listNotifications(all: false)
             async let daily = api.getTodayState()
-            let (m, mp, ns, ds) = try await (micro, microProg, notif, daily)
+            async let supplToday = api.getSupplementsToday()
+            let (m, mp, ns, ds, st) = try await (micro, microProg, notif, daily, supplToday)
+            if st != self.supplementsToday { self.supplementsToday = st }
             if m != self.microToday {
                 self.microToday = m
                 if microLoadedFor == m.name && microBuffer != m.rawMD {

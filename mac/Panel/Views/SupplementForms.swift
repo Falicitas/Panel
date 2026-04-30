@@ -2,7 +2,16 @@ import SwiftUI
 
 extension Supplement {
     static var blank: Supplement {
-        Supplement(id: 0, name: "", type: "supplement", windows: [], notes: "")
+        Supplement(
+            id: 0,
+            name: "",
+            type: "supplement",
+            windows: [],
+            notes: "",
+            dose: "",
+            enabled: true,
+            pausedUntil: nil
+        )
     }
 }
 
@@ -50,6 +59,35 @@ struct SupplementFormSheet: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
+                    }
+
+                    HStack {
+                        Text("剂量").frame(width: 70, alignment: .leading)
+                        TextField("1 颗 / 5 滴 / 30g 等 (可空)", text: $item.dose)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack {
+                        Text("启用").frame(width: 70, alignment: .leading)
+                        Toggle(isOn: $item.enabled) {
+                            Text(item.enabled ? "通知正常,统计计入" : "停用 (通知不弹,但保留历史)")
+                                .font(.caption)
+                                .foregroundStyle(item.enabled ? Color.secondary : Color.red)
+                        }
+                        .toggleStyle(.switch)
+                        Spacer()
+                    }
+
+                    if let until = item.pausedUntil, until > Int64(Date().timeIntervalSince1970) {
+                        HStack {
+                            Text("暂停").frame(width: 70, alignment: .leading)
+                            Text("至 " + pausedUntilLabel(until))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.orange)
+                            Spacer()
+                            Button("取消暂停") { item.pausedUntil = nil }
+                                .buttonStyle(.borderless)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -125,6 +163,12 @@ struct SupplementFormSheet: View {
                 !$0.start.trimmingCharacters(in: .whitespaces).isEmpty
                     && !$0.end.trimmingCharacters(in: .whitespaces).isEmpty
             }
+    }
+
+    private func pausedUntilLabel(_ unix: Int64) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "M月d日 HH:mm"
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(unix)))
     }
 }
 
