@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"panel/dateutil"
 	"panel/store"
 )
 
@@ -90,7 +91,7 @@ func IsWindowActive(w store.Window, wakeTime string, now time.Time) bool {
 // GenerateNotifications 扫所有 supplements,对当前 active window 幂等写 notification。
 // 返回新生成的条数。
 func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
-	today := now.Format("2006-01-02")
+	today := dateutil.LogicalToday(now)
 	state, err := s.GetDailyState(today)
 	if err != nil {
 		return 0, err

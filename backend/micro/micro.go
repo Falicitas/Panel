@@ -7,11 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"panel/dateutil"
 	"panel/todolist"
 )
 
 // Repo 管理 ~/panel/todolists/micro/{YYYY-MM-DD}.md 文件。
 // 当日文件不存在时 LoadToday 会自动创建空文件。
+// "当日"按 dateutil.LogicalToday 算 (06:00 日界,凌晨写的还算前一天)。
 type Repo struct {
 	rootDir string
 }
@@ -23,7 +25,7 @@ func NewRepo(rootDir string) *Repo {
 func (r *Repo) RootDir() string { return r.rootDir }
 
 func (r *Repo) todayName() string {
-	return time.Now().Format("2006-01-02") + ".md"
+	return dateutil.LogicalToday(time.Now()) + ".md"
 }
 
 func (r *Repo) TodayPath() string {

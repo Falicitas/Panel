@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"panel/dateutil"
 	"panel/store"
 )
 
@@ -21,7 +22,7 @@ func validMode(m string) bool {
 }
 
 func (s *Server) handleGetTodayState(w http.ResponseWriter, r *http.Request) {
-	today := time.Now().Format("2006-01-02")
+	today := dateutil.LogicalToday(time.Now())
 	if at := r.URL.Query().Get("date"); at != "" {
 		today = at
 	}
@@ -53,7 +54,7 @@ func (s *Server) handlePostTodayState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
-	today := now.Format("2006-01-02")
+	today := dateutil.LogicalToday(now)
 	cur, err := s.store.GetDailyState(today)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
