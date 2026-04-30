@@ -52,7 +52,7 @@ protocol BackendClient: Sendable {
     func updateSupplement(_ s: Supplement) async throws -> [Supplement]
     func deleteSupplement(id: Int64) async throws
     func getSupplementsToday() async throws -> SupplementToday
-    func checkSupplement(id: Int64, date: String?, checked: Bool) async throws
+    func checkSupplement(id: Int64, date: String?, windowIndex: Int, checked: Bool) async throws
     func pauseSupplement(id: Int64, until: Int64?) async throws -> [Supplement]
     func enableSupplement(id: Int64, enabled: Bool) async throws -> [Supplement]
 

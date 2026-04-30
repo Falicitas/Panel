@@ -73,7 +73,12 @@ func ComputeSupplementMonthly(s *store.Store, month string) (SupplementMonthly, 
 	}
 	completedBySupp := map[int64]map[string]struct{}{}
 	for _, rec := range recs {
-		id, perr := parseInt64(rec.Key)
+		// 兼容老格式 "{id}" 与新格式 "{id}:{idx}";只取 id 前缀
+		idStr := rec.Key
+		if i := strings.IndexByte(idStr, ':'); i >= 0 {
+			idStr = idStr[:i]
+		}
+		id, perr := parseInt64(idStr)
 		if perr != nil {
 			continue
 		}

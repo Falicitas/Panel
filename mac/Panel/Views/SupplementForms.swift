@@ -117,6 +117,17 @@ struct SupplementFormSheet: View {
                             Text("时段表达式: HH:MM 或 wake / wake+Nh / wake-Nm")
                                 .font(.caption2).foregroundStyle(.tertiary)
                                 .padding(.leading, 70)
+                            if !overlapPairs.isEmpty {
+                                ForEach(overlapPairs) { pair in
+                                    Label(
+                                        "时段重叠:\(item.windows[pair.i].start)–\(item.windows[pair.i].end) 与 \(item.windows[pair.j].start)–\(item.windows[pair.j].end)",
+                                        systemImage: "exclamationmark.triangle.fill"
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .padding(.leading, 70)
+                                }
+                            }
                         }
                     }
 
@@ -163,6 +174,42 @@ struct SupplementFormSheet: View {
                 !$0.start.trimmingCharacters(in: .whitespaces).isEmpty
                     && !$0.end.trimmingCharacters(in: .whitespaces).isEmpty
             }
+            && overlapPairs.isEmpty
+    }
+
+    struct OverlapPair: Identifiable, Hashable {
+        let i: Int
+        let j: Int
+        var id: String { "\(i)-\(j)" }
+    }
+
+    /// 同项内 windows 两两 HH:MM 比较 (wake-相对的跳过) — 返回所有相交对。
+    private var overlapPairs: [OverlapPair] {
+        var out: [OverlapPair] = []
+        let n = item.windows.count
+        for i in 0..<n {
+            for j in (i + 1)..<n {
+                if Self.overlaps(item.windows[i], item.windows[j]) {
+                    out.append(OverlapPair(i: i, j: j))
+                }
+            }
+        }
+        return out
+    }
+
+    /// 两窗口 HH:MM 是否相交 (左闭右开;wake 相对/解析失败 跳过 → 视作不交)。
+    static func overlaps(_ a: SupplementWindow, _ b: SupplementWindow) -> Bool {
+        guard let s1 = parseHHMM(a.start), let e1 = parseHHMM(a.end),
+              let s2 = parseHHMM(b.start), let e2 = parseHHMM(b.end),
+              e1 > s1, e2 > s2 else { return false }
+        return s1 < e2 && s2 < e1
+    }
+
+    static func parseHHMM(_ s: String) -> Int? {
+        let parts = s.split(separator: ":")
+        guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]),
+              (0...23).contains(h), (0...59).contains(m) else { return nil }
+        return h * 60 + m
     }
 
     private func pausedUntilLabel(_ unix: Int64) -> String {

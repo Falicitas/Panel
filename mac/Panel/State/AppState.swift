@@ -275,10 +275,17 @@ final class AppState {
         }
     }
 
-    /// 切换某项今日"已吃"状态。
-    func toggleSupplementCheck(_ item: SupplementTodayItem) async {
+    /// 切换某项的某个 window 的今日"已吃"状态。
+    func toggleSupplementWindowCheck(_ item: SupplementTodayItem, windowIndex: Int) async {
+        guard windowIndex >= 0, windowIndex < item.windows.count else { return }
+        let nowDone = item.windows[windowIndex].doneToday
         do {
-            try await api.checkSupplement(id: item.id, date: nil, checked: !item.doneToday)
+            try await api.checkSupplement(
+                id: item.id,
+                date: nil,
+                windowIndex: windowIndex,
+                checked: !nowDone
+            )
             await reloadSupplements()
         } catch {
             self.lastError = error.localizedDescription

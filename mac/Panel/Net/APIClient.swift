@@ -151,12 +151,20 @@ actor APIClient: BackendClient {
         try await get("/api/supplements/today")
     }
 
-    func checkSupplement(id: Int64, date: String?, checked: Bool) async throws {
-        struct Body: Encodable { let date: String?; let checked: Bool }
+    func checkSupplement(id: Int64, date: String?, windowIndex: Int, checked: Bool) async throws {
+        struct Body: Encodable {
+            let date: String?
+            let windowIndex: Int
+            let checked: Bool
+            enum CodingKeys: String, CodingKey {
+                case date, checked
+                case windowIndex = "window_index"
+            }
+        }
         var req = URLRequest(url: try url("/api/supplements/\(id)/check"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try encoder.encode(Body(date: date, checked: checked))
+        req.httpBody = try encoder.encode(Body(date: date, windowIndex: windowIndex, checked: checked))
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError(message: "check supplement \(id) failed")

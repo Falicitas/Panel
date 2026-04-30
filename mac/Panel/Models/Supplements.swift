@@ -21,18 +21,20 @@ struct SupplementWindow: Codable, Hashable {
     var end: String
 }
 
-/// GET /api/supplements/today 的 windowStatus
+/// GET /api/supplements/today 的 windowStatus (per-window 粒度)
 struct SupplementWindowStatus: Codable, Hashable {
     let start: String
     let end: String
     let startHM: String     // 解析后 HH:MM
     let endHM: String
     let status: String      // "passed" | "active" | "upcoming" | "unknown"
+    let doneToday: Bool     // 该 window 当日是否已勾
 
     enum CodingKeys: String, CodingKey {
         case start, end, status
         case startHM = "start_hm"
         case endHM = "end_hm"
+        case doneToday = "done_today"
     }
 }
 
@@ -61,14 +63,16 @@ struct SupplementToday: Codable, Hashable {
     let date: String
     let items: [SupplementTodayItem]
     let activeCount: Int    // 当前正在窗口内的项数 (enabled & 未暂停 & has_active)
-    let doneCount: Int      // 当日已勾过的总数
     let totalActive: Int    // enabled & 未暂停 的总项数
+    let totalDoses: Int     // 所有 enabled & 未暂停 项的 window 数之和
+    let doneDoses: Int      // 上面里已勾过的 window 数
 
     enum CodingKeys: String, CodingKey {
         case date, items
         case activeCount = "active_count"
-        case doneCount = "done_count"
         case totalActive = "total_active"
+        case totalDoses = "total_doses"
+        case doneDoses = "done_doses"
     }
 }
 
