@@ -5,8 +5,8 @@ import os.log
 
 /// 全局语音输入服务的协调器。@Observable 单例,启动时由 PanelApp 拉起。
 ///
-/// step 2 state machine:idle / recording / noPermission / error
-/// step 3 加 transcribing、step 5 加 noKey。
+/// step 4 state machine:idle / recording / transcribing / noPermission / noKey / error
+/// step 5 加 60s 上限 / error flash 自恢复 / 重复 F12 边界。
 @Observable
 final class VoiceController {
     static let shared = VoiceController()
@@ -15,15 +15,15 @@ final class VoiceController {
     enum State: Equatable {
         case idle
         case recording
+        case transcribing
         case noPermission
+        case noKey
         case error
     }
 
     private(set) var state: State = .idle
-    /// step 3 验证用 — 上次录音文件 URL,菜单加按钮"在 Finder 显示"用。
     private(set) var lastRecordingURL: URL?
 
-    /// 菜单诊断用 — hotkey tap 是否已成功 install (失败常见原因:Input Monitoring 未授权)
     var isHotkeyActive: Bool { hotkey?.isActive ?? false }
 
     private var hotkey: HotkeyTap?
@@ -61,16 +61,19 @@ final class VoiceController {
     }
 
     func refresh() {
-        // hotkey retry 顶部 — 跟 state 解耦,用户开了 Input Monitoring 后无论 state 都尝试 install。
         if hotkey?.isActive == false {
-            os_log("refresh: hotkey 未 active, retry start", log: Self.log, type: .info)
+            os_log("refresh: hotkey 未 active, retry", log: Self.log, type: .info)
             hotkey?.start()
         }
-        // 录音中不打断 state
-        if state == .recording { return }
+        // 录音 / 转写中不打断
+        if state == .recording || state == .transcribing { return }
         let perms = Permissions.check()
         if !perms.blockingGranted {
             state = .noPermission
+            return
+        }
+        if !KeyStore.hasKey {
+            state = .noKey
             return
         }
         state = .idle
@@ -80,22 +83,52 @@ final class VoiceController {
         os_log("handleF12: state=%{public}@", log: Self.log, type: .info, String(describing: state))
         switch state {
         case .idle:
-            guard recorder.start() else {
-                os_log("recorder.start 失败 (mic 权限?)", log: Self.log, type: .error)
-                state = .error
-                return
-            }
-            state = .recording
+            beginRecording()
         case .recording:
-            let url = recorder.stop()
-            state = .idle
-            lastRecordingURL = url
-            if let url {
-                os_log("录音存到: %{public}@", log: Self.log, type: .info, url.path)
-            }
-            // step 4 才发去 transcribe;step 3 仅落文件供验证
-        case .noPermission, .error:
+            endRecordingAndTranscribe()
+        case .transcribing, .noKey, .noPermission, .error:
+            // step 5 加 flash 提示;暂时静默
             return
+        }
+    }
+
+    private func beginRecording() {
+        guard recorder.start() else {
+            os_log("recorder.start 失败", log: Self.log, type: .error)
+            state = .error
+            return
+        }
+        state = .recording
+    }
+
+    private func endRecordingAndTranscribe() {
+        guard let url = recorder.stop() else {
+            state = .error
+            return
+        }
+        lastRecordingURL = url
+        state = .transcribing
+        os_log("录音完: %{public}@,开始转写", log: Self.log, type: .info, url.path)
+        Task { await runTranscribe(url: url) }
+    }
+
+    private func runTranscribe(url: URL) async {
+        do {
+            let text = try await Transcriber.transcribe(audioFile: url)
+            try? FileManager.default.removeItem(at: url)
+            await MainActor.run {
+                if !text.isEmpty {
+                    os_log("转写结果 (%d chars): %{public}@", log: Self.log, type: .info, text.count, text)
+                    TextInjector.inject(text)
+                }
+                self.state = .idle
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            os_log("转写失败: %{public}@", log: Self.log, type: .error, String(describing: error))
+            await MainActor.run {
+                self.state = .error
+            }
         }
     }
 }

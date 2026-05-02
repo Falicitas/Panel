@@ -17,6 +17,10 @@ struct PanelApp: App {
         }
         .windowResizability(.contentMinSize)
 
+        Settings {
+            VoiceSettingsView()
+        }
+
         MenuBarExtra {
             MenuBarContent(controller: voice)
         } label: {
