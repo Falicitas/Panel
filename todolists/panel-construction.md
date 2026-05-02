@@ -533,6 +533,111 @@
 
 ---
 
+## Phase 10 — Todolist 迭代 (Phase 0-8 完成后用着加的)
+
+目的: phase 8 之后日常用 todolist 发现"使用成本 > 切其他 app"的不顺,这一组改动已经全部上线。这里做"已完成的复盘"+ 留给自己将来续调时的笔记用。
+
+- [x] **锚定 / 选定分离**
+  - 之前 sidebar 点列表 = setAnchor,看一眼别人就破坏主线
+  - 拆成 `selectedName` (右栏显示哪个) + `anchor` (focus 卡数据源),互不影响
+  - 工具栏专门"锚定"按钮 (pin / pin.fill, 暖橙)
+- [x] **WYSIWYG 编辑器 (MilkDown via WKWebView)**
+  - 替代原 TextEditor;`mac/editor-src/` 用 esbuild 打包到 `mac/Panel/Resources/editor/`
+  - 主题跟随系统 dark/light (CSS `@media (prefers-color-scheme: dark)`)
+  - 字号 +/- 按钮调 `webView.pageZoom`,UserDefaults 持久化
+  - 5s polling autosave (失焦事件触发不可靠)
+  - 切文件用 `replaceAll` macro 替代 destroy+recreate,消除 0.2s 闪烁
+  - micro ↔ todolist 切换合并 view 分支共用 editor 实例
+- [x] **聚焦卡升级**
+  - breadcrumb caption → title3, 任务文字 title3 → title, 行号 caption2 → body
+  - 行号包成 Button,暖橙下划线;click → jumpToFocus (切回锚定 todolist + scrollToText)
+  - breadcrumb 每级 60 字上限
+  - parser 加 `unescapeMarkdown` 剥 Typora 自动加的 `\~ \_` 等转义
+  - skip 标记跨 escape:hasSkipMarker 在 unescape 之后跑
+- [x] **复发 todo: morning / free 分类 + 拖拽 + 晨间进度计时**
+  - `recurring_todos` 加 `kind` 列 (morning / free, 默认 free)
+  - RecurringSheet 双 Section,各自 `.onMove` 拖拽,行内上下箭头切换分类
+  - 新表 `micro_progress (date, morning_start_at, morning_end_at)`
+  - PUT micro 时 recompute,morning 项首次勾时记 start, 全勾时记 end (一旦写入永不擦)
+  - FocusCard 在 micro 模式下显示 "晨间 K/N · 已用 mm:ss"
+- [x] **专注模式 (hide sidebar 同时收 content 列)**
+  - 系统 ⌃⌘S 触发 splitVisibility != .all
+  - MainLayout 把 content 列宽 min/ideal/max 全收为 0
+  - (`.detailOnly` 在 macOS 3-col NavigationSplitView 上没效果,得走列宽路线)
+- [x] **星级评估浮窗**
+  - DetailView 工具栏 ⭐ 按钮 toggle
+  - 浮窗 bottomTrailing 对齐,只读 MilkDown 渲染参考文本
+  - 位置 / 尺寸 / 字号在 `RatingReferencePanel.swift` 顶部 5 个常量,自调
+  - 只读模式 milkdown 收紧 padding (CSS `body.readonly` override)
+- [x] **6:00 为日界**
+  - 凌晨 0-6 点写 micro / 切 daily_state / 弹保健品通知 都仍算前一天
+  - `panel/dateutil` 包,`DayStartHour = 6` 常量,改一处即调
+  - 不动 grip / finance 月份 / backup 文件名 (calendar 语义就够)
+
+后续可加:
+- [ ] 微 todo (micro) 也能像 todolist 一样选历史天看
+- [ ] 锚定历史 (最近 anchor 过的 N 个,快捷重新锚定)
+- [ ] todolist 模板 (新建时套用)
+- [ ] 行号跳到 *渲染后* MilkDown block 的精确字符位置 (现在是 text match 近似)
+
+---
+
+## Phase 11 — 食物保健品迭代 (Phase 0-8 完成后用着加的)
+
+目的: phase 5 那一版只有名称 / 时段 / 备注,实际用起来不够。重排成 sidebar + 单一大版面,给每项加状态机,加三餐锚点。
+
+- [x] **2 列布局 (去掉二级列)**
+  - selectedTab == .supplements 时改用 NavigationSplitView 2 列 (sidebar + detail)
+  - SupplementsView 单一聚合视图替代原 ContentView + DetailView
+  - (用户原话: "「财务」「保健品」「记录」「bash」都不需要第二列,只有 todolist 需要" — 后 3 个 tab 留下次)
+- [x] **新字段: dose / enabled / paused_until**
+  - schema ALTER 兼容老数据 (dose='', enabled=1, paused_until=NULL)
+  - 编辑 form 加 dose (text) / enabled (toggle) / 暂停状态显示
+  - 行内快捷 actions: 暂停 1/7/14/30 天 menu, 启用 power toggle, 编辑 ✏️
+- [x] **per-window 独立勾选**
+  - records key 从 `"{id}"` 改 `"{id}:{idx}"`,老格式兼容 (idx=0)
+  - 一项 N 个 window → N 个 checkbox,各自独立 done 状态
+  - SupplementWindowStatus 加 `done_today`
+  - dose 统计也按 window 粒度 (`total_doses` / `done_doses`)
+  - monthly stats parser 取 id 前缀,新旧 key 都兼容
+- [x] **状态机 (per window)**
+  - 绿 ✓ done(无视过去/将来,持久化)
+  - 橙 ○ active 可点 toggle
+  - 红 ✗ passed 不可点 ("漏了")
+  - 灰 ⚪ upcoming 不可点 ("待开")
+  - 仅 active 窗口可点击,符合"在对应时间可以吃,不在则灰色不可点"
+- [x] **per-item 聚合卡 + 自己的小时间线**
+  - 每项一个 card: 名称 / dose / 状态 chip / actions / window grid / mini timeline
+  - 删之前的全局 TimelineStrip + 单独"现在该做" section (信息冗余)
+  - 整个 view `dynamicTypeSize(.accessibility2)` 字号放大一档
+- [x] **窗口重叠校验**
+  - 编辑 form 同项内 HH:MM 窗口两两判交
+  - 有重叠 → disabled save + 内联红色警告
+  - wake / 餐相对的因 form 内无 anchor 不解析,跳过
+- [x] **三餐锚点 (breakfast / lunch / dinner)**
+  - daily_state 加 3 列 `meal_at` (HH:MM 或空)
+  - ParseTimeExpr 重构 `Anchors` struct,支持 `breakfast±N` / `lunch±N` / `dinner±N`,跟 wake 同级
+  - POST /api/state/meal `{meal, time?, clear?}` 触发或清空
+  - 触发区间验证: 早餐 7-11, 午餐 12-15, 晚餐 16-23
+  - SupplementsView 顶置 MealsSection (3 张餐卡, 落区间内"现在记")
+- [x] **浮现机制 (引用未触发餐的 window 隐藏)**
+  - windowStatus 加 `requires_meal` 字段
+  - 引用未触发餐变量的 window → `requires_meal` 设值 → 前端隐藏 chip + 时间线段
+  - 触发后 window 自动浮现,不计入 dose 统计前
+- [x] **触发餐 / 设状态后立即扫通知**
+  - 之前 GenerateNotifications 走 60s ticker,触发 dinner 后引用 dinner 的 supplement 弹通知最多延迟 60s (用户原话"姜黄素过了好一阵都没有显示")
+  - handlePostMeal / handlePostTodayState 在 store 写入后同步调用一次,延迟 ≤ 3s
+  - 通知 source_ref unique,跟 ticker 不会重复写
+
+后续可加:
+- [ ] 月度日历热力图 (替代 progress bar:每天一格颜色)
+- [ ] macOS 原生系统通知 (`UNUserNotificationCenter`,通知 click → deeplink 回 panel 对应 row)
+- [ ] streak 数字 (连续完成天数) 在每行
+- [ ] 跟 finance 联动月成本 (一项 supplement 月费自动注入到 fixed_expenses)
+- [ ] finance / records / bash 也去掉二级列 (需要每个 tab 重新设计 unified view)
+
+---
+
 ## (取消) 搜索
 
 不做。Panel 用熟 1-2 周后再评估是否需要。原 Phase 7 内容废弃。
