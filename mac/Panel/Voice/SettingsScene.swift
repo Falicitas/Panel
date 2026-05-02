@@ -1,12 +1,24 @@
 import SwiftUI
 
 /// Cmd+, 触发的 SwiftUI Settings scene 内容。
-/// OpenRouter API key 输入 + 测试连接,保存到 UserDefaults。
+/// OpenRouter API key + 模型选择,保存到 UserDefaults。
 struct VoiceSettingsView: View {
     @State private var keyInput: String = KeyStore.get() ?? ""
-    @State private var modelInput: String = KeyStore.getModel()
+    @State private var modelChoice: String = Self.normalizedModelChoice()
     @State private var testStatus: TestStatus = .idle
     @State private var saved: Bool = false
+
+    /// 内置模型选项。后续如要更多,扩这里 (Transcriber 自动按 model 名选 endpoint)。
+    private static let modelOptions: [(label: String, id: String)] = [
+        ("Gemini 2.5 Pro (中文稳简体)",         "google/gemini-2.5-pro"),
+        ("OpenAI GPT-4o Transcribe (英文 4.1% WER)", "openai/gpt-4o-transcribe"),
+    ]
+
+    /// KeyStore 里的 model 如果不在 options 里 (比如老版本设过别的),兜底回 default。
+    private static func normalizedModelChoice() -> String {
+        let cur = KeyStore.getModel()
+        return modelOptions.contains(where: { $0.id == cur }) ? cur : KeyStore.defaultModel
+    }
 
     enum TestStatus: Equatable {
         case idle
@@ -24,13 +36,17 @@ struct VoiceSettingsView: View {
                         saved = false
                         testStatus = .idle
                     }
-                TextField("模型", text: $modelInput, prompt: Text(KeyStore.defaultModel))
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: modelInput) { _, _ in saved = false }
+                Picker("模型", selection: $modelChoice) {
+                    ForEach(Self.modelOptions, id: \.id) { opt in
+                        Text(opt.label).tag(opt.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .onChange(of: modelChoice) { _, _ in saved = false }
                 HStack {
                     Button("保存") {
                         KeyStore.set(keyInput)
-                        KeyStore.setModel(modelInput.isEmpty ? KeyStore.defaultModel : modelInput)
+                        KeyStore.setModel(modelChoice)
                         VoiceController.shared.refresh()
                         saved = true
                     }
@@ -56,16 +72,14 @@ struct VoiceSettingsView: View {
                 statusLine
             }
             Section("使用") {
-                Text("F12 在任意可编辑文本框开始录音,再按 F12 结束并转写,文字注入光标处。")
+                Text("F12 在任意可编辑文本框开始录音,再按 F12 结束并转写,文字注入光标处。最长 5 分钟自动结束。")
                     .font(.callout).foregroundStyle(.secondary)
                 Text("权限要求:输入监控 (F12) + 麦克风 (录音) + 辅助功能 (注入文字)。")
                     .font(.callout).foregroundStyle(.secondary)
-                Text("模型推荐 (Transcriber 自动选 endpoint):\n• google/gemini-2.5-pro (默认,中文稳简体)\n• google/gemini-2.5-flash (便宜快,中文偶有繁体)\n• openai/gpt-4o-transcribe (OpenAI 旗舰 STT,英文 WER 4.1%)\n• openai/gpt-4o-mini-transcribe (中文优化,便宜)\n• openai/whisper-large-v3 / openai/whisper-large-v3-turbo\n• openai/gpt-4o-audio-preview / openai/gpt-audio (chat 多模态,贵)")
-                    .font(.callout).foregroundStyle(.tertiary)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 380)
+        .frame(width: 520, height: 360)
     }
 
     @ViewBuilder

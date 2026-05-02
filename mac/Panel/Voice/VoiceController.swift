@@ -29,6 +29,12 @@ final class VoiceController {
     private var hotkey: HotkeyTap?
     private let recorder = Recorder()
     private var refreshTicker: Timer?
+    private var recordingTimer: Timer?
+
+    /// 录音上限 (秒);超过强制 stop 并 transcribe。
+    private let maxRecordingSec: TimeInterval = 300
+    /// error 自恢复时间 (秒) — 不让用户卡在 error 状态。
+    private let errorFlashSec: TimeInterval = 1.5
 
     private init() {}
 
@@ -96,14 +102,27 @@ final class VoiceController {
         guard recorder.start() else {
             os_log("recorder.start 失败", log: Self.log, type: .error)
             state = .error
+            scheduleErrorClear()
             return
         }
         state = .recording
+        // 5 分钟上限,到点强制停止并送转写。
+        recordingTimer?.invalidate()
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: maxRecordingSec, repeats: false) { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self, self.state == .recording else { return }
+                os_log("录音达 %.0fs 上限,强制 stop", log: Self.log, type: .info, self.maxRecordingSec)
+                self.endRecordingAndTranscribe()
+            }
+        }
     }
 
     private func endRecordingAndTranscribe() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
         guard let url = recorder.stop() else {
             state = .error
+            scheduleErrorClear()
             return
         }
         lastRecordingURL = url
@@ -128,6 +147,18 @@ final class VoiceController {
             os_log("转写失败: %{public}@", log: Self.log, type: .error, String(describing: error))
             await MainActor.run {
                 self.state = .error
+                self.scheduleErrorClear()
+            }
+        }
+    }
+
+    /// error 1.5s 后自动 refresh 回 idle (或 noKey/noPermission,根据当前条件)。
+    /// 防止用户卡在 ⚠ 状态没法继续。
+    private func scheduleErrorClear() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + errorFlashSec) { [weak self] in
+            guard let self else { return }
+            if self.state == .error {
+                self.refresh()
             }
         }
     }
