@@ -33,6 +33,17 @@ struct MainLayout: View {
                 }
             }
         }
+        // 切 tab 时重置 splitVisibility 为 .all。
+        // Bug: 在 supplements (2 列) 收了 sidebar 后切回 todolist (3 列),
+        // 新 NavigationSplitView 起手就接 .doubleColumn,sidebar 出生即隐藏 +
+        // macOS 没把自动 sidebar toggle 加到 toolbar,用户被卡死无法重显。
+        // 每次切 tab 强制 .all 起手,sidebar 永远默认可见 (用户可在新 tab 内
+        // 重新 ⌃⌘S 收起)。
+        .onChange(of: state.selectedTab) { _, _ in
+            if state.splitVisibility != .all {
+                state.splitVisibility = .all
+            }
+        }
     }
 }
 
