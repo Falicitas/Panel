@@ -14,10 +14,17 @@ enum TranscribeError: Error, LocalizedError {
     }
 }
 
-/// OpenRouter chat/completions 走 input_audio,模型 openai/gpt-4o-transcribe。
+/// OpenRouter chat/completions 走 input_audio。
+///
+/// 模型选择历史:
+/// - openai/gpt-4o-transcribe: ✗ OpenAI 后端在 chat/completions 里不认 input_audio
+///   (报 "Invalid value: 'input_audio'");那个模型只能走 audio/transcriptions
+///   endpoint,而 OpenRouter 不 proxy
+/// - openai/gpt-4o-audio-preview: 应该可以,但没测
+/// - google/gemini-2.5-flash: ✓ OpenRouter docs 明确举例,支持 m4a/wav/mp3 等
 enum Transcriber {
     static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-    static let model = "openai/gpt-4o-transcribe"
+    static let model = "google/gemini-2.5-flash"
     static let prompt = "Transcribe the audio."
     static let timeoutSec: TimeInterval = 30
 

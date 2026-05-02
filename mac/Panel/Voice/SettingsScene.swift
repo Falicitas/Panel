@@ -55,7 +55,7 @@ struct VoiceSettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text("权限要求:输入监控 (F12) + 麦克风 (录音) + 辅助功能 (注入文字)。")
                     .font(.callout).foregroundStyle(.secondary)
-                Text("模型: openai/gpt-4o-transcribe")
+                Text("模型: google/gemini-2.5-flash")
                     .font(.callout.monospacedDigit()).foregroundStyle(.tertiary)
             }
         }
