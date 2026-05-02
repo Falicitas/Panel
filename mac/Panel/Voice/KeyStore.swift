@@ -6,7 +6,8 @@ enum KeyStore {
     private static let keyForKey = "voice.openrouter_api_key"
     private static let keyForModel = "voice.openrouter_model"
 
-    static let defaultModel = "google/gemini-2.5-flash"
+    /// gemini-2.5-pro 实测中文不出繁体 (flash 仍有);贵约 4x 但单次 ~$0.0024,可接受。
+    static let defaultModel = "google/gemini-2.5-pro"
 
     // MARK: - API Key
 
