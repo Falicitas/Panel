@@ -4,6 +4,7 @@ import SwiftUI
 /// OpenRouter API key 输入 + 测试连接,保存到 UserDefaults。
 struct VoiceSettingsView: View {
     @State private var keyInput: String = KeyStore.get() ?? ""
+    @State private var modelInput: String = KeyStore.getModel()
     @State private var testStatus: TestStatus = .idle
     @State private var saved: Bool = false
 
@@ -23,14 +24,18 @@ struct VoiceSettingsView: View {
                         saved = false
                         testStatus = .idle
                     }
+                TextField("模型", text: $modelInput, prompt: Text(KeyStore.defaultModel))
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: modelInput) { _, _ in saved = false }
                 HStack {
                     Button("保存") {
                         KeyStore.set(keyInput)
+                        KeyStore.setModel(modelInput.isEmpty ? KeyStore.defaultModel : modelInput)
                         VoiceController.shared.refresh()
                         saved = true
                     }
                     .disabled(keyInput.isEmpty)
-                    Button("清除") {
+                    Button("清除 Key") {
                         KeyStore.delete()
                         keyInput = ""
                         VoiceController.shared.refresh()
@@ -55,8 +60,8 @@ struct VoiceSettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text("权限要求:输入监控 (F12) + 麦克风 (录音) + 辅助功能 (注入文字)。")
                     .font(.callout).foregroundStyle(.secondary)
-                Text("模型: google/gemini-2.5-flash")
-                    .font(.callout.monospacedDigit()).foregroundStyle(.tertiary)
+                Text("模型推荐:google/gemini-2.5-flash (默认,便宜快) / google/gemini-2.5-pro (准) / openai/gpt-4o-audio-preview")
+                    .font(.callout).foregroundStyle(.tertiary)
             }
         }
         .formStyle(.grouped)

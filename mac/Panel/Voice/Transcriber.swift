@@ -20,12 +20,15 @@ enum TranscribeError: Error, LocalizedError {
 /// - openai/gpt-4o-transcribe: ✗ OpenAI 后端在 chat/completions 里不认 input_audio
 ///   (报 "Invalid value: 'input_audio'");那个模型只能走 audio/transcriptions
 ///   endpoint,而 OpenRouter 不 proxy
-/// - openai/gpt-4o-audio-preview: 应该可以,但没测
-/// - google/gemini-2.5-flash: ✓ OpenRouter docs 明确举例,支持 m4a/wav/mp3 等
+/// - openai/gpt-4o-audio-preview: 应该可以,没测
+/// - google/gemini-2.5-flash: ✓ 默认。OpenRouter docs 明确举例,支持 m4a/wav/mp3
+/// - google/gemini-2.5-pro: 更准但贵,可在 Settings 自定义
+///
+/// 模型从 KeyStore.getModel() 读,Settings 可改。
 enum Transcriber {
     static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-    static let model = "google/gemini-2.5-flash"
-    static let prompt = "Transcribe the audio."
+    /// 加 "Simplified Chinese" 提示是因为 Gemini 对中文有时输出繁体。
+    static let prompt = "Transcribe the audio verbatim. For Chinese content, output Simplified Chinese (简体中文) only."
     static let timeoutSec: TimeInterval = 30
 
     static func transcribe(audioFile: URL) async throws -> String {
@@ -33,7 +36,7 @@ enum Transcriber {
         let data = try Data(contentsOf: audioFile)
         let b64 = data.base64EncodedString()
         let body: [String: Any] = [
-            "model": model,
+            "model": KeyStore.getModel(),
             "messages": [[
                 "role": "user",
                 "content": [
