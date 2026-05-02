@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// MenuBarExtra 的 label 视图 — 状态切换 SF Symbol。
-/// @Observable 自动观察 controller.state 变化触发刷新。
 struct MenuBarLabel: View {
     var controller: VoiceController
 
@@ -12,13 +10,13 @@ struct MenuBarLabel: View {
     private var iconName: String {
         switch controller.state {
         case .idle:         "mic"
+        case .recording:    "mic.fill"
         case .noPermission: "lock.shield"
         case .error:        "exclamationmark.triangle.fill"
         }
     }
 }
 
-/// MenuBarExtra 展开后的菜单内容。
 struct MenuBarContent: View {
     var controller: VoiceController
 
@@ -31,6 +29,7 @@ struct MenuBarContent: View {
             Text(perms.inputMonitoring ? "✓ 输入监控 (F12 收事件)"   : "✗ 输入监控 (F12 收事件)")
             Text(perms.microphone      ? "✓ 麦克风 (录音)"          : "✗ 麦克风 (录音)")
             Text(perms.accessibility   ? "✓ 辅助功能 (注入文字)"     : "✗ 辅助功能 (注入文字) — 不阻塞")
+            Text(controller.isHotkeyActive ? "✓ F12 hotkey 已 install" : "✗ F12 hotkey 未 install (重启 Panel)")
             Divider()
             Button("打开「输入监控」系统设置") {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
@@ -52,7 +51,8 @@ struct MenuBarContent: View {
 
     private var statusText: String {
         switch controller.state {
-        case .idle:         "就绪 (step 1 — F12 还没接,只展示菜单)"
+        case .idle:         "就绪 (step 2 — 按 F12 切换 recording 假状态)"
+        case .recording:    "假录音中 (step 2,没真录) — 再按 F12 回 idle"
         case .noPermission: "缺权限 — 看下方诊断"
         case .error:        "上次失败"
         }

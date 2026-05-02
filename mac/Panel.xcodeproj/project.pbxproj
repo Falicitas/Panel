@@ -44,6 +44,7 @@
 		CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */; };
 		D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */; };
 		D829A06EC28905CFCEF0F794 /* SupplementForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22D6102ADB89301B5F475EE /* SupplementForms.swift */; };
+		DA74EFA1D1701F6237FE3D5C /* HotkeyTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */; };
 		E37EF58CD36B02371C339F46 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC72BE1E58C5BDB3F8A456C /* AppState.swift */; };
 		EDD047A4C24549C7D1DBB979 /* RecurringSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */; };
 		EF787609ECD0E4BE733414F5 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB4D7055D1E71929BC92B3E /* APIClient.swift */; };
@@ -66,6 +67,7 @@
 		5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringSheet.swift; sourceTree = "<group>"; };
 		5F40BA67C98CFD3089A55AAA /* FinanceContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceContentView.swift; sourceTree = "<group>"; };
 		5FC72BE1E58C5BDB3F8A456C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyTap.swift; sourceTree = "<group>"; };
 		61935B607A9598142B233FF5 /* Bash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bash.swift; sourceTree = "<group>"; };
 		62A9C2F35D43C52C2B90561B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		65BDF0617EDF92971A4168A2 /* ListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListEntry.swift; sourceTree = "<group>"; };
@@ -182,6 +184,7 @@
 		CAF6372CD32114AA12124E01 /* Voice */ = {
 			isa = PBXGroup;
 			children = (
+				60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */,
 				E865FAD42860A4D230E43B90 /* MenuBarItem.swift */,
 				FC082A3656358B75E3D0C9A1 /* Permissions.swift */,
 				E1166585D8F0E17D1ED5D28B /* VoiceController.swift */,
@@ -313,6 +316,7 @@
 				307B0DE23C7B468B448D8541 /* FinanceForms.swift in Sources */,
 				2B70C5CEB7A1FBE2C3854A05 /* FocusCard.swift in Sources */,
 				3FB8F396A13890631998595A /* FocusResult.swift in Sources */,
+				DA74EFA1D1701F6237FE3D5C /* HotkeyTap.swift in Sources */,
 				5FFDE4D66D35B64D3C65A633 /* ListEntry.swift in Sources */,
 				6C0A912AC9E07E69812F6B6B /* MainLayout.swift in Sources */,
 				00486EFB3FBF97934CF3549D /* MenuBarItem.swift in Sources */,
