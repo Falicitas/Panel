@@ -213,8 +213,28 @@ balance = 初始值 + Σ(手动收入) − Σ(月末结算的所有支出)
 
 ## Git 约定 (monorepo)
 
-- conventional commits
-- scope **至少二级**,三级 (具体功能) 视情况加,不强求
+### Issue 分支工作流 (2026-05-02 起)
+
+每个独立的 feat / fix / style / refactor / docs 推进都走"分支 → 合并",不直接在 dev 上 commit。
+
+```bash
+# 1. 起 issue 分支 (N 单调递增,从 1 开始;之前的直接 commit 不追溯)
+git checkout dev
+git checkout -b issue-N
+
+# 2. 在 issue-N 上做完所有工作 (一个推进可多个 commit)
+git commit -m "feat(...): ..."
+# ...
+
+# 3. 完成后回 dev,non-fast-forward + 不立即 commit
+git checkout dev
+git merge --no-ff --no-commit issue-N
+# 等用户看完 diff 再 commit
+```
+
+### Conventional Commits
+
+- 至少二级 scope,三级 (具体功能) 视情况加,不强求
 - 格式: `<type>(<area>-<module>[-<feature>]): ...`
 - 例:
   - `feat(backend-保健品-提醒推送): ...`
