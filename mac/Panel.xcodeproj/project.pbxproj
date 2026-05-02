@@ -20,6 +20,7 @@
 		2419E9256CB7E9CA423D29CC /* FinanceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AEB088C6C7D53B17EBEDD6A /* FinanceDetailView.swift */; };
 		27D2A375A7B30146C7407436 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D754AC7CF099F8B68D14859D /* DetailView.swift */; };
 		2B70C5CEB7A1FBE2C3854A05 /* FocusCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */; };
+		2ED392B12F27B57113D20D4E /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784D8DC34515C61BEC0914F6 /* Recorder.swift */; };
 		307B0DE23C7B468B448D8541 /* FinanceForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */; };
 		34415C0BA9E22A6C195DC8C7 /* Records.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6F9936F17C66C82102D617D /* Records.swift */; };
 		364C94E5D4E89FA0E05B85C1 /* Finance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB340428613B213332CFB3E /* Finance.swift */; };
@@ -72,6 +73,7 @@
 		62A9C2F35D43C52C2B90561B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		65BDF0617EDF92971A4168A2 /* ListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListEntry.swift; sourceTree = "<group>"; };
 		6EB340428613B213332CFB3E /* Finance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finance.swift; sourceTree = "<group>"; };
+		784D8DC34515C61BEC0914F6 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
 		87F59C4D70D2A509B0F65C2F /* Supplements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supplements.swift; sourceTree = "<group>"; };
 		8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCard.swift; sourceTree = "<group>"; };
 		8D2848561D75BC5D180BEF25 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -187,6 +189,7 @@
 				60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */,
 				E865FAD42860A4D230E43B90 /* MenuBarItem.swift */,
 				FC082A3656358B75E3D0C9A1 /* Permissions.swift */,
+				784D8DC34515C61BEC0914F6 /* Recorder.swift */,
 				E1166585D8F0E17D1ED5D28B /* VoiceController.swift */,
 			);
 			path = Voice;
@@ -327,6 +330,7 @@
 				F1832D5AC7464601EEF34137 /* Permissions.swift in Sources */,
 				BD0AC0B4D2ECBB42811F4516 /* PrimarySidebarView.swift in Sources */,
 				4A56D791D4DB2788B95FF24E /* RatingReferencePanel.swift in Sources */,
+				2ED392B12F27B57113D20D4E /* Recorder.swift in Sources */,
 				34415C0BA9E22A6C195DC8C7 /* Records.swift in Sources */,
 				CD846C471FCA6315048FF62F /* RecordsContentView.swift in Sources */,
 				45DDC97885F099C1FEDB4232 /* RecordsDetailView.swift in Sources */,

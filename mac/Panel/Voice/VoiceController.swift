@@ -20,11 +20,14 @@ final class VoiceController {
     }
 
     private(set) var state: State = .idle
+    /// step 3 验证用 — 上次录音文件 URL,菜单加按钮"在 Finder 显示"用。
+    private(set) var lastRecordingURL: URL?
 
     /// 菜单诊断用 — hotkey tap 是否已成功 install (失败常见原因:Input Monitoring 未授权)
     var isHotkeyActive: Bool { hotkey?.isActive ?? false }
 
     private var hotkey: HotkeyTap?
+    private let recorder = Recorder()
     private var refreshTicker: Timer?
 
     private init() {}
@@ -77,10 +80,20 @@ final class VoiceController {
         os_log("handleF12: state=%{public}@", log: Self.log, type: .info, String(describing: state))
         switch state {
         case .idle:
-            // step 2:仅切换 state,不真录音 (step 3 加录音)
+            guard recorder.start() else {
+                os_log("recorder.start 失败 (mic 权限?)", log: Self.log, type: .error)
+                state = .error
+                return
+            }
             state = .recording
         case .recording:
+            let url = recorder.stop()
             state = .idle
+            lastRecordingURL = url
+            if let url {
+                os_log("录音存到: %{public}@", log: Self.log, type: .info, url.path)
+            }
+            // step 4 才发去 transcribe;step 3 仅落文件供验证
         case .noPermission, .error:
             return
         }

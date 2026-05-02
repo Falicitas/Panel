@@ -30,6 +30,14 @@ struct MenuBarContent: View {
             Text(perms.microphone      ? "✓ 麦克风 (录音)"          : "✗ 麦克风 (录音)")
             Text(perms.accessibility   ? "✓ 辅助功能 (注入文字)"     : "✗ 辅助功能 (注入文字) — 不阻塞")
             Text(controller.isHotkeyActive ? "✓ F12 hotkey 已 install" : "✗ F12 hotkey 未 install (重启 Panel)")
+            if let url = controller.lastRecordingURL {
+                Divider()
+                Text("上次录音").foregroundStyle(.tertiary)
+                Text(url.lastPathComponent).font(.caption.monospacedDigit())
+                Button("在 Finder 显示 / 用 QuickLook 听") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            }
             Divider()
             Button("打开「输入监控」系统设置") {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
@@ -51,10 +59,10 @@ struct MenuBarContent: View {
 
     private var statusText: String {
         switch controller.state {
-        case .idle:         "就绪 (step 2 — 按 F12 切换 recording 假状态)"
-        case .recording:    "假录音中 (step 2,没真录) — 再按 F12 回 idle"
+        case .idle:         "就绪 (step 3 — 按 F12 真录音落 m4a)"
+        case .recording:    "录音中 — 再按 F12 结束并存文件"
         case .noPermission: "缺权限 — 看下方诊断"
-        case .error:        "上次失败"
+        case .error:        "上次失败 (录音初始化?)"
         }
     }
 }
