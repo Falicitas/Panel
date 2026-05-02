@@ -17,6 +17,7 @@ struct MainLayout: View {
                     PrimarySidebarView(selected: $state.selectedTab)
                 } detail: {
                     SupplementsView()
+                        .modifier(SidebarToggle())
                 }
             } else {
                 NavigationSplitView(columnVisibility: $state.splitVisibility) {
@@ -30,18 +31,37 @@ struct MainLayout: View {
                         )
                 } detail: {
                     DetailColumn()
+                        .modifier(SidebarToggle())
                 }
             }
         }
-        // 切 tab 时重置 splitVisibility 为 .all。
-        // Bug: 在 supplements (2 列) 收了 sidebar 后切回 todolist (3 列),
-        // 新 NavigationSplitView 起手就接 .doubleColumn,sidebar 出生即隐藏 +
-        // macOS 没把自动 sidebar toggle 加到 toolbar,用户被卡死无法重显。
-        // 每次切 tab 强制 .all 起手,sidebar 永远默认可见 (用户可在新 tab 内
-        // 重新 ⌃⌘S 收起)。
+        // 切 tab 时如果 sidebar 处于 hidden,自动恢复 .all (兜底,避免卡死)。
         .onChange(of: state.selectedTab) { _, _ in
             if state.splitVisibility != .all {
                 state.splitVisibility = .all
+            }
+        }
+    }
+}
+
+/// 手动 sidebar toggle — 永远附加在 detail 列 toolbar 顶部 leading 位置。
+///
+/// 为什么不依赖 macOS 自动加的:
+/// 在 conditional NavigationSplitView (supplements 2 列 / 其他 3 列) 切换时,
+/// macOS 不会给重建的 NavigationSplitView 重新注册自动 sidebar toggle 到 toolbar,
+/// 用户从 supplements 切回 todolist 后会发现按钮永久消失,只能 ⌃⌘S 救。
+private struct SidebarToggle: ViewModifier {
+    @Environment(AppState.self) private var state
+
+    func body(content: Content) -> some View {
+        content.toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    state.splitVisibility = state.splitVisibility == .all ? .doubleColumn : .all
+                } label: {
+                    Image(systemName: "sidebar.leading")
+                }
+                .help("Toggle sidebar (⌃⌘S)")
             }
         }
     }
