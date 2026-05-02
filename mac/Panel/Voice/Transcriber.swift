@@ -14,49 +14,86 @@ enum TranscribeError: Error, LocalizedError {
     }
 }
 
-/// OpenRouter chat/completions 走 input_audio。
+/// 两条 endpoint:
+/// - 专用 STT (/api/v1/audio/transcriptions): openai/gpt-4o-transcribe / openai/whisper-* 等
+///   走这条,JSON body 含 input_audio (data + format),响应 { text }
+/// - 通用 chat/completions (/api/v1/chat/completions): gemini / gpt-4o-audio-preview 等
+///   走这条,messages 数组里嵌 input_audio,响应 choices[0].message.content
 ///
-/// 模型选择历史:
-/// - openai/gpt-4o-transcribe: ✗ OpenAI 后端在 chat/completions 里不认 input_audio
-///   (报 "Invalid value: 'input_audio'");那个模型只能走 audio/transcriptions
-///   endpoint,而 OpenRouter 不 proxy
-/// - openai/gpt-4o-audio-preview: 应该可以,没测
-/// - google/gemini-2.5-flash: ✓ 默认。OpenRouter docs 明确举例,支持 m4a/wav/mp3
-/// - google/gemini-2.5-pro: 更准但贵,可在 Settings 自定义
-///
-/// 模型从 KeyStore.getModel() 读,Settings 可改。
+/// 根据 model name 自动判断,用户在 Settings 改 model 不用关心 endpoint。
 enum Transcriber {
-    static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-    /// 加 "Simplified Chinese" 提示是因为 Gemini 对中文有时输出繁体。
-    static let prompt = "Transcribe the audio verbatim. For Chinese content, output Simplified Chinese (简体中文) only."
+    static let chatEndpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
+    static let sttEndpoint  = URL(string: "https://openrouter.ai/api/v1/audio/transcriptions")!
+    /// chat/completions 路径下用,加"简体中文"提示因为 Gemini Flash 偶有繁体倾向。
+    /// STT 专用模型不需要 prompt (它就是干这个的)。
+    static let chatPrompt = "Transcribe the audio verbatim. For Chinese content, output Simplified Chinese (简体中文) only."
     static let timeoutSec: TimeInterval = 120
 
     static func transcribe(audioFile: URL) async throws -> String {
         guard let key = KeyStore.get(), !key.isEmpty else { throw TranscribeError.noKey }
+        let model = KeyStore.getModel()
         let data = try Data(contentsOf: audioFile)
         let b64 = data.base64EncodedString()
+        if isSTTModel(model) {
+            return try await viaSTT(model: model, audioBase64: b64, key: key)
+        } else {
+            return try await viaChat(model: model, audioBase64: b64, key: key)
+        }
+    }
+
+    /// 模型名含 transcribe / whisper → 专用 STT endpoint。
+    private static func isSTTModel(_ model: String) -> Bool {
+        let m = model.lowercased()
+        return m.contains("transcribe") || m.contains("whisper")
+    }
+
+    // MARK: - STT 专用 endpoint
+
+    private static func viaSTT(model: String, audioBase64: String, key: String) async throws -> String {
         let body: [String: Any] = [
-            "model": KeyStore.getModel(),
-            "messages": [[
-                "role": "user",
-                "content": [
-                    ["type": "text", "text": prompt],
-                    ["type": "input_audio", "input_audio": ["data": b64, "format": "m4a"]]
-                ]
-            ]]
+            "model": model,
+            "input_audio": ["data": audioBase64, "format": "m4a"]
         ]
-        var req = URLRequest(url: endpoint, timeoutInterval: timeoutSec)
+        var req = URLRequest(url: sttEndpoint, timeoutInterval: timeoutSec)
         req.httpMethod = "POST"
         req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (respData, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse else {
-            throw TranscribeError.http(0, "no response")
-        }
+        guard let http = resp as? HTTPURLResponse else { throw TranscribeError.http(0, "no response") }
         if http.statusCode != 200 {
-            let text = String(data: respData, encoding: .utf8) ?? "<binary>"
-            throw TranscribeError.http(http.statusCode, text)
+            throw TranscribeError.http(http.statusCode, String(data: respData, encoding: .utf8) ?? "<binary>")
+        }
+        guard let json = try JSONSerialization.jsonObject(with: respData) as? [String: Any],
+              let text = json["text"] as? String
+        else {
+            throw TranscribeError.decode
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - 通用 chat/completions endpoint
+
+    private static func viaChat(model: String, audioBase64: String, key: String) async throws -> String {
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [[
+                "role": "user",
+                "content": [
+                    ["type": "text", "text": chatPrompt],
+                    ["type": "input_audio", "input_audio": ["data": audioBase64, "format": "m4a"]]
+                ]
+            ]]
+        ]
+        var req = URLRequest(url: chatEndpoint, timeoutInterval: timeoutSec)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (respData, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw TranscribeError.http(0, "no response") }
+        if http.statusCode != 200 {
+            throw TranscribeError.http(http.statusCode, String(data: respData, encoding: .utf8) ?? "<binary>")
         }
         guard let json = try JSONSerialization.jsonObject(with: respData) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
@@ -69,7 +106,8 @@ enum Transcriber {
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 仅验证 key 可调通 (Settings 测试连接按钮用)。
+    // MARK: - validateKey
+
     static func validateKey(_ key: String) async -> Bool {
         var req = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/auth/key")!, timeoutInterval: 10)
         req.httpMethod = "GET"

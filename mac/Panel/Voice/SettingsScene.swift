@@ -60,7 +60,7 @@ struct VoiceSettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text("权限要求:输入监控 (F12) + 麦克风 (录音) + 辅助功能 (注入文字)。")
                     .font(.callout).foregroundStyle(.secondary)
-                Text("模型推荐:\n• google/gemini-2.5-pro (默认,中文稳简体)\n• google/gemini-2.5-flash (便宜快,中文偶有繁体)\n• openai/gpt-4o-audio-preview (OpenAI 路线,中等价)\n• openai/gpt-audio (OpenAI 新款,贵约 5x)\n注:openai/gpt-4o-transcribe 不能走 chat/completions,无法用。")
+                Text("模型推荐 (Transcriber 自动选 endpoint):\n• google/gemini-2.5-pro (默认,中文稳简体)\n• google/gemini-2.5-flash (便宜快,中文偶有繁体)\n• openai/gpt-4o-transcribe (OpenAI 旗舰 STT,英文 WER 4.1%)\n• openai/gpt-4o-mini-transcribe (中文优化,便宜)\n• openai/whisper-large-v3 / openai/whisper-large-v3-turbo\n• openai/gpt-4o-audio-preview / openai/gpt-audio (chat 多模态,贵)")
                     .font(.callout).foregroundStyle(.tertiary)
             }
         }
