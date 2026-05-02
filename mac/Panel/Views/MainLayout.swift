@@ -6,62 +6,27 @@ struct MainLayout: View {
     var body: some View {
         @Bindable var state = state
         // 系统 hide sidebar (⌃⌘S) 把 splitVisibility 切到 .doubleColumn,我们读这个
-        // 派生 sidebarHidden,在 3 列模式下把 content 列宽一并收为 0。
+        // 派生 sidebarHidden,在 sidebar 隐藏时把 content 列宽一并收为 0,
+        // 视觉上把 .doubleColumn 等价为 .detailOnly,即一二级一起折叠。
         let sidebarHidden = state.splitVisibility != .all
+        // supplements 没有二级 todolist 列表,content 列宽永久收为 0;
+        // 但 NavigationSplitView 结构始终是 3 列,不重建,
+        // 这样系统原生的 hidesidebar 按钮跨 tab 切换不丢。
+        let isSupplements = state.selectedTab == .supplements
+        let collapseContent = sidebarHidden || isSupplements
         VStack(spacing: 0) {
             NotificationBar()
-            // supplements 走 2 列:不存在二级 todolists 目录,直接 sidebar + 大版面
-            // 其他 tab (todolist / finance / records / bash) 走 3 列
-            if state.selectedTab == .supplements {
-                NavigationSplitView(columnVisibility: $state.splitVisibility) {
-                    PrimarySidebarView(selected: $state.selectedTab)
-                } detail: {
-                    SupplementsView()
-                        .modifier(SidebarToggle())
-                }
-            } else {
-                NavigationSplitView(columnVisibility: $state.splitVisibility) {
-                    PrimarySidebarView(selected: $state.selectedTab)
-                } content: {
-                    ContentColumn()
-                        .navigationSplitViewColumnWidth(
-                            min: sidebarHidden ? 0 : 280,
-                            ideal: sidebarHidden ? 0 : 320,
-                            max: sidebarHidden ? 0 : 400
-                        )
-                } detail: {
-                    DetailColumn()
-                        .modifier(SidebarToggle())
-                }
-            }
-        }
-        // 切 tab 时如果 sidebar 处于 hidden,自动恢复 .all (兜底,避免卡死)。
-        .onChange(of: state.selectedTab) { _, _ in
-            if state.splitVisibility != .all {
-                state.splitVisibility = .all
-            }
-        }
-    }
-}
-
-/// 手动 sidebar toggle — 永远附加在 detail 列 toolbar 顶部 leading 位置。
-///
-/// 为什么不依赖 macOS 自动加的:
-/// 在 conditional NavigationSplitView (supplements 2 列 / 其他 3 列) 切换时,
-/// macOS 不会给重建的 NavigationSplitView 重新注册自动 sidebar toggle 到 toolbar,
-/// 用户从 supplements 切回 todolist 后会发现按钮永久消失,只能 ⌃⌘S 救。
-private struct SidebarToggle: ViewModifier {
-    @Environment(AppState.self) private var state
-
-    func body(content: Content) -> some View {
-        content.toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    state.splitVisibility = state.splitVisibility == .all ? .doubleColumn : .all
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                }
-                .help("Toggle sidebar (⌃⌘S)")
+            NavigationSplitView(columnVisibility: $state.splitVisibility) {
+                PrimarySidebarView(selected: $state.selectedTab)
+            } content: {
+                ContentColumn()
+                    .navigationSplitViewColumnWidth(
+                        min: collapseContent ? 0 : 280,
+                        ideal: collapseContent ? 0 : 320,
+                        max: collapseContent ? 0 : 400
+                    )
+            } detail: {
+                DetailColumn()
             }
         }
     }
@@ -73,7 +38,7 @@ private struct ContentColumn: View {
         switch state.selectedTab {
         case .todolist:    TodolistContentView()
         case .finance:     FinanceContentView()
-        case .supplements: EmptyView()  // 不会进到这里 (走 2 列分支)
+        case .supplements: Color.clear  // 列宽收 0;Color.clear 防 macOS 因为完全空内容把 toggle 一并丢
         case .records:     RecordsContentView()
         case .bash:        BashContentView()
         }
@@ -86,7 +51,7 @@ private struct DetailColumn: View {
         switch state.selectedTab {
         case .todolist:    DetailView()
         case .finance:     FinanceDetailView()
-        case .supplements: EmptyView()  // 不会进到这里
+        case .supplements: SupplementsView()
         case .records:     RecordsDetailView()
         case .bash:        BashDetailView()
         }
