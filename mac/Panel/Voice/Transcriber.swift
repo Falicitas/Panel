@@ -29,7 +29,7 @@ enum Transcriber {
     static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
     /// 加 "Simplified Chinese" 提示是因为 Gemini 对中文有时输出繁体。
     static let prompt = "Transcribe the audio verbatim. For Chinese content, output Simplified Chinese (简体中文) only."
-    static let timeoutSec: TimeInterval = 30
+    static let timeoutSec: TimeInterval = 120
 
     static func transcribe(audioFile: URL) async throws -> String {
         guard let key = KeyStore.get(), !key.isEmpty else { throw TranscribeError.noKey }
