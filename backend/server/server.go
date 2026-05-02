@@ -23,6 +23,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/todolists", s.handleListTodolists)
+	mux.HandleFunc("POST /api/todolists", s.handleCreateTodolist)
 	mux.HandleFunc("GET /api/todolists/{name}", s.handleGetTodolist)
 	mux.HandleFunc("PUT /api/todolists/{name}", s.handlePutTodolist)
 	mux.HandleFunc("GET /api/anchor", s.handleGetAnchor)

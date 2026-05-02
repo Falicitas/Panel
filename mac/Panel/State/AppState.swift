@@ -481,6 +481,32 @@ final class AppState {
         }
     }
 
+    /// 新建 todolist:dirty buffer 先存,后端创建空 .md,刷新列表 + 选中并锚定新文件。
+    func createTodolist(name: String) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let cur = detail, editorBuffer != cur.rawMD {
+            await saveDetail()
+        }
+        do {
+            let tl = try await api.createTodolist(name: trimmed)
+            let lists = try await api.listTodolists()
+            self.active = lists.active
+            self.done = lists.done
+            self.detail = tl
+            self.editorBuffer = tl.rawMD
+            self.selectedName = tl.name
+            self.contentMode = .todolist
+            // 自动锚定新建的 todolist
+            _ = try? await api.setAnchor(name: tl.name)
+            self.anchor = tl.name
+            self.focus = try? await api.getFocus()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     /// 切换右栏显示的 todolist。不影响 anchor / focus。
     /// 切换前若当前 editorBuffer 比 detail.rawMD 新,先保存,避免丢失。
     /// 副作用:把 contentMode 切回 .todolist (用户点 sidebar 项 = 离开 micro 模式)。
@@ -619,8 +645,12 @@ final class AppState {
             async let notif = api.listNotifications(all: false)
             async let daily = api.getTodayState()
             async let supplToday = api.getSupplementsToday()
-            let (m, mp, ns, ds, st) = try await (micro, microProg, notif, daily, supplToday)
+            async let listsResp = api.listTodolists()
+            let (m, mp, ns, ds, st, lists) = try await (micro, microProg, notif, daily, supplToday, listsResp)
             if st != self.supplementsToday { self.supplementsToday = st }
+            // sidebar 进度 + 外部新建/删除的 .md 实时反映 (3s)
+            if lists.active != self.active { self.active = lists.active }
+            if lists.done != self.done { self.done = lists.done }
             if m != self.microToday {
                 self.microToday = m
                 if microLoadedFor == m.name && microBuffer != m.rawMD {

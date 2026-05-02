@@ -7,6 +7,7 @@ protocol BackendClient: Sendable {
     func listTodolists() async throws -> TodolistListResponse
     func getTodolist(name: String) async throws -> Todolist
     func putTodolist(name: String, rawMD: String) async throws -> Todolist
+    func createTodolist(name: String) async throws -> Todolist
 
     // MARK: Anchor / Focus
     func getAnchor() async throws -> AnchorResponse

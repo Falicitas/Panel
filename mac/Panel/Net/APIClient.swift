@@ -58,6 +58,10 @@ actor APIClient: BackendClient {
         try await put("/api/todolists/\(encode(name))", body: ["raw_md": rawMD])
     }
 
+    func createTodolist(name: String) async throws -> Todolist {
+        try await post("/api/todolists", body: ["name": name])
+    }
+
     func getAnchor() async throws -> AnchorResponse {
         try await get("/api/anchor")
     }

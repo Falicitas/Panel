@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TodolistContentView: View {
     @Environment(AppState.self) private var state
+    @State private var creating = false
+    @State private var newName = ""
 
     var body: some View {
         @Bindable var bindable = state
@@ -29,6 +31,15 @@ struct TodolistContentView: View {
         .toolbar {
             ToolbarItem {
                 Button {
+                    newName = ""
+                    creating = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .help("新建 todolist")
+            }
+            ToolbarItem {
+                Button {
                     Task { await state.loadAll() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -36,6 +47,17 @@ struct TodolistContentView: View {
                 .help("刷新列表")
                 .disabled(state.isLoading)
             }
+        }
+        .alert("新建 todolist", isPresented: $creating) {
+            TextField("名称 (.md 自动补)", text: $newName)
+            Button("取消", role: .cancel) {}
+            Button("创建") {
+                let name = newName
+                Task { await state.createTodolist(name: name) }
+            }
+            .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("空文件,可在右栏直接编辑;创建后会自动锚定")
         }
     }
 
