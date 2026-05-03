@@ -95,16 +95,19 @@ private struct Header: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 320)
+                .font(.title3)
 
                 TextField("搜索 (名称 / 备注)", text: $search)
                     .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 360)
+                    .font(.title3)
 
                 Spacer()
 
                 Button(action: onAdd) {
                     Label("新增", systemImage: "plus")
+                        .font(.title3)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -126,13 +129,16 @@ private struct StatChip: View {
     let value: String
     let tint: Color
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(tint).frame(width: 6, height: 6)
-            Text(label).foregroundStyle(.secondary)
-            Text(value).monospacedDigit()
+        HStack(spacing: 8) {
+            Circle().fill(tint).frame(width: 8, height: 8)
+            Text(label)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.monospacedDigit())
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
         .background(.regularMaterial, in: Capsule())
     }
 }
@@ -164,9 +170,9 @@ private struct MealsSection: View {
                 Image(systemName: "fork.knife")
                     .foregroundStyle(.secondary)
                 Text("今日三餐 (锚点)")
-                    .font(.title2)
+                    .font(.headline)
                 Text("触发后,引用 breakfast/lunch/dinner 的保健品时段才会浮现")
-                    .font(.body)
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
@@ -217,21 +223,21 @@ private struct MealCard: View {
                     .foregroundStyle(recordedAt != nil ? Color.green : Color.anchorAccent)
                     .imageScale(.large)
                 Text(meta.label)
-                    .font(.title2.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                 Spacer()
                 if let at = recordedAt {
                     Text(at)
-                        .font(.title3.monospacedDigit())
+                        .font(.body.monospacedDigit())
                         .foregroundStyle(.green)
                 }
             }
             Text(meta.rangeLabel)
-                .font(.body.monospacedDigit())
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             HStack {
                 if let at = recordedAt {
                     Label("已记 \(at)", systemImage: "checkmark.circle.fill")
-                        .font(.body)
+                        .font(.caption)
                         .foregroundStyle(.green)
                     Spacer()
                     Button("清空") { onClear() }
@@ -247,7 +253,7 @@ private struct MealCard: View {
                     Spacer()
                     if !inRange {
                         Text("不在区间")
-                            .font(.body)
+                            .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -352,7 +358,7 @@ private struct ItemCard: View {
                     .foregroundStyle(item.type == "supplement" ? Color.accentColor : Color.green)
                     .imageScale(.large)
                 Text(item.name)
-                    .font(.title.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                 if !item.dose.isEmpty {
                     Text("· \(item.dose)")
                         .foregroundStyle(.secondary)
@@ -394,7 +400,7 @@ private struct ItemCard: View {
 
             if !item.notes.isEmpty {
                 Text(item.notes)
-                    .font(.body)
+                    .font(.callout)
                     .foregroundStyle(.tertiary)
                     .lineLimit(3)
             }
@@ -502,16 +508,16 @@ private struct WindowChip: View {
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: iconName)
-                    .font(.title2)
+                    .font(.title3)
                     .foregroundStyle(iconColor)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(timeLabel)
-                        .font(.title3.monospacedDigit())
+                        .font(.body.monospacedDigit())
                         .foregroundStyle(textColor)
                     Text(statusText)
-                        .font(.body)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -619,7 +625,7 @@ private struct ItemTimeline: View {
                 // tick labels 6/12/18/22
                 ForEach([6, 12, 18, 22], id: \.self) { hour in
                     Text(String(format: "%02d", hour))
-                        .font(.caption.monospacedDigit())
+                        .font(.caption2.monospacedDigit())
                         .foregroundStyle(.tertiary)
                         .offset(x: w * frac(hour * 60) - 8, y: 16)
                 }
@@ -673,9 +679,9 @@ private struct Chip: View {
     let color: Color
     var body: some View {
         Text(text)
-            .font(.body)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .font(.caption)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
             .background(color.opacity(0.18), in: Capsule())
             .foregroundStyle(color)
     }
