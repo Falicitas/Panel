@@ -2,76 +2,158 @@ import Foundation
 import UserNotifications
 import os.log
 
-/// 监听 supplements/today 数据, 在每个 window 的最后 5 分钟内若仍未完成,
-/// 通过 UNUserNotificationCenter 弹 macOS 系统通知 (Banner)。
+/// 监听 supplements/today 数据, 在每个 window 的 [end-15min, end) 区间内若仍未完成,
+/// 通过 UNUserNotificationCenter 弹 macOS 系统通知 (Banner) 并附两个 action:
+///   - "知道了" / 隐式 ✕  → dismiss (不再骚扰, 直到 doneToday 翻转)
+///   - "延后 30 分钟"      → snooze (window.end + 30·N min 处再弹一次, 可无限叠)
 ///
-/// 防重复: in-memory firedKeys (key = supplement:{id}:window:{idx}:date:{date}),
-/// 跨日按 today.date 自动清空。panel 重启会丢 firedKeys, 接受重启后罕见的单次重弹。
+/// done / undone 对称: 用户在 panel 勾完 → cancel 该 baseKey 全部 pending+delivered
+/// (含 snooze 链) + 移除 firedKey; 用户取消勾 → 下次 tick 看到 doneToday=false 且
+/// 已无 firedKey, 若仍在 lead range 会重新 fire (一次新的 lead 提醒, snooze 链不复活)。
 ///
-/// 权限 lazy 请求 (第一次 check 时), 用户拒绝则静默不弹。
+/// snooze 通知到时若 doneToday=true → willPresent 返 [] 不显示。
 @MainActor
-final class UrgentNotifier {
+final class UrgentNotifier: NSObject, @unchecked Sendable {
     static let shared = UrgentNotifier()
     private static let log = OSLog(subsystem: "com.kinesis.panel", category: "notify.urgent")
 
-    /// window 结束前多少秒触发"最后提醒"。
-    private let leadSeconds: TimeInterval = 5 * 60
+    private static let categoryID = "supplement.urgent"
+    private static let snoozeActionID = "snooze.30min"
+    private static let dismissActionID = "dismiss"
+
+    private let leadSeconds: TimeInterval = 15 * 60
+    private let snoozeSeconds: TimeInterval = 30 * 60
 
     private var firedKeys: Set<String> = []
     private var firedDate: String = ""
     private var permissionRequested = false
+    /// willPresent / snooze 回调要查 doneToday 状态, 这里缓存最近一次 check 的快照。
+    private var lastToday: SupplementToday?
 
-    private init() {}
+    private override init() {
+        super.init()
+    }
+
+    /// PanelApp 启动时调一次: 设 delegate + 注册通知 category 含 snooze/dismiss 两个 action。
+    func setUp() {
+        UNUserNotificationCenter.current().delegate = self
+        let snooze = UNNotificationAction(
+            identifier: Self.snoozeActionID,
+            title: "延后 30 分钟",
+            options: []
+        )
+        let dismiss = UNNotificationAction(
+            identifier: Self.dismissActionID,
+            title: "知道了",
+            options: [.destructive]
+        )
+        let category = UNNotificationCategory(
+            identifier: Self.categoryID,
+            actions: [snooze, dismiss],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
 
     /// AppState.tick 5s 调一次。
     func check(today: SupplementToday?) {
         ensurePermission()
         guard let today else { return }
+        lastToday = today
+
         if today.date != firedDate {
             firedDate = today.date
             firedKeys.removeAll()
+            cancelAllPending()
         }
+
         let now = Date()
         for item in today.items {
-            guard item.enabled, !item.paused else { continue }
             for (idx, win) in item.windows.enumerated() {
-                // 等待餐触发的 window — end 时刻不可计算, 跳过
+                let key = baseKey(itemID: item.id, windowIndex: idx, date: today.date)
+
+                // 用户已勾完 → cancel 该 baseKey 所有 pending+delivered (含 snooze 链)
+                // + 从 firedKeys 移除, 让取消勾选后能在 lead range 重新 fire 一次新的提醒。
+                if win.doneToday {
+                    if firedKeys.contains(key) {
+                        firedKeys.remove(key)
+                    }
+                    cancelPending(forBaseKey: key)
+                    continue
+                }
+
+                // 项被禁用 / 暂停 / 等待餐 / window 时间不可解析 → 不主动 fire (但也不动 firedKeys)
+                guard item.enabled, !item.paused else { continue }
                 guard win.requiresMeal.isEmpty else { continue }
-                // 已勾完 → 用户已经做了, 不必弹
-                guard !win.doneToday else { continue }
                 guard let endTime = parseTodayHM(win.endHM, base: now) else { continue }
+
                 let leadStart = endTime.addingTimeInterval(-leadSeconds)
-                // 不在 [end-5min, end) 区间内, 跳过
                 guard now >= leadStart, now < endTime else { continue }
-                let key = "supplement:\(item.id):window:\(idx):date:\(today.date)"
                 guard !firedKeys.contains(key) else { continue }
+
                 firedKeys.insert(key)
-                fire(key: key, item: item, win: win)
+                fire(key: key, item: item, win: win, endTime: endTime, snoozeCount: 0)
             }
         }
     }
+
+    // MARK: - private
 
     private func ensurePermission() {
         guard !permissionRequested else { return }
         permissionRequested = true
         Task {
             do {
-                let granted = try await UNUserNotificationCenter.current()
+                _ = try await UNUserNotificationCenter.current()
                     .requestAuthorization(options: [.alert, .sound])
-                os_log("system notif auth granted=%{public}@", log: Self.log, type: .info, String(describing: granted))
             } catch {
-                os_log("system notif auth error: %{public}@", log: Self.log, type: .error, String(describing: error))
+                os_log("auth err: %{public}@", log: Self.log, type: .error, String(describing: error))
             }
         }
     }
 
-    private func fire(key: String, item: SupplementTodayItem, win: SupplementWindowStatus) {
+    private func baseKey(itemID: Int64, windowIndex: Int, date: String) -> String {
+        "supplement:\(itemID):window:\(windowIndex):date:\(date)"
+    }
+
+    /// snoozeCount=0 立即 fire (trigger=nil); snoozeCount>0 按 endTime + N·30min schedule。
+    private func fire(
+        key: String,
+        item: SupplementTodayItem,
+        win: SupplementWindowStatus,
+        endTime: Date,
+        snoozeCount: Int
+    ) {
         let content = UNMutableNotificationContent()
         let label = item.type == "supplement" ? "保健品" : "食物"
-        content.title = "⏰ 还有 5 分钟: \(item.name)"
-        content.body = "\(label) 时段 \(win.startHM)–\(win.endHM) 即将结束,还没勾完成"
+        content.title = item.name
+        // body 跟 panel 内通知一致 (backend 已把 dinner+0m 等表达式解析为 HH:MM)
+        content.body = "\(label) 时段 \(win.startHM)–\(win.endHM)"
         content.sound = .default
-        let req = UNNotificationRequest(identifier: key, content: content, trigger: nil)
+        content.categoryIdentifier = Self.categoryID
+        content.userInfo = [
+            "baseKey": key,
+            "supplementID": item.id,
+            "windowIndex": findWindowIndex(in: item, matching: win),
+            "windowEndUnix": endTime.timeIntervalSince1970,
+            "snoozeCount": snoozeCount,
+        ]
+
+        let trigger: UNNotificationTrigger?
+        let identifier: String
+        if snoozeCount == 0 {
+            trigger = nil
+            identifier = key
+        } else {
+            // 第 N 次 snooze 后下次 fire = window.end + N·30min (用户语义: window 右区间 +30·N)
+            let nextFireAt = endTime.addingTimeInterval(Double(snoozeCount) * snoozeSeconds)
+            let interval = max(1, nextFireAt.timeIntervalSinceNow)
+            trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+            identifier = "\(key).snooze.\(snoozeCount)"
+        }
+
+        let req = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(req) { err in
             if let err {
                 os_log("notif add err: %{public}@", log: Self.log, type: .error, String(describing: err))
@@ -79,9 +161,105 @@ final class UrgentNotifier {
         }
     }
 
+    /// 在 item.windows 里找到 startHM/endHM 跟 win 一致的下标 — fire 调用方传的是 enumerate
+    /// 出来的 idx, 大多数情况就直接对应; 这里 defensive 兜一层避免 mac 端数据异步刷掉时错位。
+    private func findWindowIndex(in item: SupplementTodayItem, matching win: SupplementWindowStatus) -> Int {
+        item.windows.firstIndex(where: { $0.startHM == win.startHM && $0.endHM == win.endHM }) ?? 0
+    }
+
+    /// 找出 identifier == baseKey 或以 "{baseKey}.snooze." 开头的 pending+delivered, 一并移除。
+    private func cancelPending(forBaseKey baseKey: String) {
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { reqs in
+            let ids = reqs
+                .filter { $0.identifier == baseKey || $0.identifier.hasPrefix("\(baseKey).snooze.") }
+                .map(\.identifier)
+            if !ids.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: ids)
+            }
+        }
+        center.getDeliveredNotifications { notifs in
+            let ids = notifs
+                .map(\.request.identifier)
+                .filter { $0 == baseKey || $0.hasPrefix("\(baseKey).snooze.") }
+            if !ids.isEmpty {
+                center.removeDeliveredNotifications(withIdentifiers: ids)
+            }
+        }
+    }
+
+    private func cancelAllPending() {
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+    }
+
     private func parseTodayHM(_ hm: String, base: Date) -> Date? {
         let parts = hm.split(separator: ":")
         guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
         return Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: base)
+    }
+
+    fileprivate func isWindowDone(itemID: Int64, windowIndex: Int) -> Bool {
+        guard let today = lastToday else { return false }
+        guard let item = today.items.first(where: { $0.id == itemID }) else { return false }
+        guard windowIndex >= 0, windowIndex < item.windows.count else { return false }
+        return item.windows[windowIndex].doneToday
+    }
+
+    /// 用户在 mac 系统通知 banner 上点 "延后 30 分钟" 时调; 已 done 则不 schedule。
+    fileprivate func snoozeFromResponse(_ response: UNNotificationResponse) {
+        let info = response.notification.request.content.userInfo
+        guard let baseKey = info["baseKey"] as? String,
+              let itemID = info["supplementID"] as? Int64,
+              let windowIndex = info["windowIndex"] as? Int,
+              let endUnix = info["windowEndUnix"] as? TimeInterval,
+              let snoozeCount = info["snoozeCount"] as? Int
+        else { return }
+        if isWindowDone(itemID: itemID, windowIndex: windowIndex) { return }
+        guard let today = lastToday,
+              let item = today.items.first(where: { $0.id == itemID }),
+              windowIndex < item.windows.count
+        else { return }
+        let win = item.windows[windowIndex]
+        let endTime = Date(timeIntervalSince1970: endUnix)
+        fire(key: baseKey, item: item, win: win, endTime: endTime, snoozeCount: snoozeCount + 1)
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension UrgentNotifier: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // 即使 panel 在前台也要弹 banner; 但 snooze 通知到时若 doneToday=true 就不打扰。
+        let info = notification.request.content.userInfo
+        let id = info["supplementID"] as? Int64
+        let idx = info["windowIndex"] as? Int
+        Task { @MainActor in
+            if let id, let idx, self.isWindowDone(itemID: id, windowIndex: idx) {
+                completionHandler([])
+            } else {
+                completionHandler([.banner, .sound])
+            }
+        }
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let actionID = response.actionIdentifier
+        Task { @MainActor in
+            if actionID == Self.snoozeActionID {
+                self.snoozeFromResponse(response)
+            }
+            // dismiss / default action / 隐式 ✕ 都不做事 — 系统自然清通知
+            completionHandler()
+        }
     }
 }
