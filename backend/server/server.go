@@ -64,6 +64,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/supplements/{id}/check", s.handleCheckSupplement)
 	mux.HandleFunc("POST /api/supplements/{id}/pause", s.handlePauseSupplement)
 	mux.HandleFunc("POST /api/supplements/{id}/enable", s.handleEnableSupplement)
+	mux.HandleFunc("POST /api/supplements/{id}/snooze", s.handleSnoozeSupplement)
 	mux.HandleFunc("GET /api/state/today", s.handleGetTodayState)
 	mux.HandleFunc("POST /api/state/today", s.handlePostTodayState)
 	mux.HandleFunc("GET /api/state/settings", s.handleGetStateSettings)

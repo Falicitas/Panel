@@ -35,6 +35,12 @@ func parseSupplementKey(key string) (int64, int, bool) {
 
 const supplementModule = "supplement"
 
+// supplementSnoozeModule: records 表里 (module, date, key) 三元组,
+// key="{id}:{idx}", value_num = 已 snooze 次数 (整数)。effective end =
+// original end + value_num * 30min, 让 SupplementsView 的 window 范围 /
+// status / 时间轴 都自动延后, mac 系统通知的 lead range 也跟着延。
+const supplementSnoozeModule = "supplement_snooze"
+
 func (s *Server) handleListSupplements(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListSupplements()
 	if err != nil {
@@ -196,6 +202,47 @@ func (s *Server) handleEnableSupplement(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, items)
 }
 
+// POST /api/supplements/{id}/snooze
+// body: {"date": "YYYY-MM-DD?", "window_index": int}
+//   - 把 (id, idx, date) 的 snooze count 加 1
+//   - effective end = original end + count * 30min, GetSupplementsToday 会反映
+//   - 用户在 mac 系统通知点 "延后 30 分钟" 时调
+func (s *Server) handleSnoozeSupplement(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var p struct {
+		Date        string `json:"date"`
+		WindowIndex int    `json:"window_index"`
+	}
+	if err := decodeJSON(r, &p); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if p.Date == "" {
+		p.Date = dateutil.LogicalToday(time.Now())
+	}
+	key := fmt.Sprintf("%d:%d", id, p.WindowIndex)
+	cur := 0
+	recs, _ := s.store.ListRecords(supplementSnoozeModule, p.Date, p.Date)
+	for _, rec := range recs {
+		if rec.Key == key && rec.ValueNum != nil {
+			cur = int(*rec.ValueNum)
+			break
+		}
+	}
+	next := float64(cur + 1)
+	if _, err := s.store.UpsertRecord(store.Record{
+		Module: supplementSnoozeModule, Date: p.Date, Key: key, ValueNum: &next,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // supplementTodayResp / windowStatus 给前端 per-item 视图用。
 type windowStatus struct {
 	Start         string `json:"start"`          // 原表达式
@@ -261,6 +308,19 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 		}
 		doneSet[id][idx] = true
 	}
+	// 加载当日 snooze 计数: snoozeMap[id][idx] = N → effective end = original end + N*30min
+	snoozeRecs, _ := s.store.ListRecords(supplementSnoozeModule, today, today)
+	snoozeMap := map[int64]map[int]int{}
+	for _, rec := range snoozeRecs {
+		id, idx, ok := parseSupplementKey(rec.Key)
+		if !ok || rec.ValueNum == nil {
+			continue
+		}
+		if snoozeMap[id] == nil {
+			snoozeMap[id] = map[int]int{}
+		}
+		snoozeMap[id][idx] = int(*rec.ValueNum)
+	}
 
 	anchors := supplements.Anchors{
 		Wake:      state.WakeTime,
@@ -303,17 +363,24 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 			if miss := firstMealMiss(missS, missE); miss != "" {
 				ws.RequiresMeal = miss
 			}
+			// effective end = original end + snoozeCount * 30min
+			effectiveEndT := endT
+			if okE {
+				if cnt := snoozeMap[sp.ID][idx]; cnt > 0 {
+					effectiveEndT = endT.Add(time.Duration(cnt) * 30 * time.Minute)
+				}
+			}
 			if okS {
 				ws.StartHM = startT.Format("15:04")
 			}
 			if okE {
-				ws.EndHM = endT.Format("15:04")
+				ws.EndHM = effectiveEndT.Format("15:04")
 			}
 			if okS && okE {
 				switch {
 				case now.Before(startT):
 					ws.Status = "upcoming"
-				case now.Before(endT):
+				case now.Before(effectiveEndT):
 					ws.Status = "active"
 					if sp.Enabled && !paused {
 						item.HasActive = true

@@ -208,6 +208,8 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
     }
 
     /// 用户在 mac 系统通知 banner 上点 "延后 30 分钟" 时调; 已 done 则不 schedule。
+    /// 同时调 backend snooze API 持久化 count, SupplementsView 的 effective end
+    /// 自动反映 (= original + count·30min)。
     fileprivate func snoozeFromResponse(_ response: UNNotificationResponse) {
         let info = response.notification.request.content.userInfo
         guard let baseKey = info["baseKey"] as? String,
@@ -223,6 +225,17 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         else { return }
         let win = item.windows[windowIndex]
         let endTime = Date(timeIntervalSince1970: endUnix)
+
+        // 同步 backend snooze count → SupplementsView 的 effective end 跟着延 30·N min
+        let date = today.date
+        Task {
+            do {
+                try await APIClient.shared.snoozeSupplement(id: itemID, date: date, windowIndex: windowIndex)
+            } catch {
+                os_log("snooze api err: %{public}@", log: Self.log, type: .error, String(describing: error))
+            }
+        }
+
         fire(key: baseKey, item: item, win: win, endTime: endTime, snoozeCount: snoozeCount + 1)
     }
 }
