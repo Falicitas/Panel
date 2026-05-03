@@ -244,6 +244,25 @@ git merge --no-ff --no-commit issue-N
 - 跨层: `feat(both-记录): ...`
 - 主分支: `dev`
 
+### 数据保护 / 危险操作
+
+`todolists/` 是项目里变化最频繁的区域 — panel 自己 autosave normalize +
+用户随时写笔记, 跟 commit 节奏完全不同步。**任何危险操作 (尤其
+`reset --hard`) 之前必须优先保护它**, 否则一不小心就丢未提交笔记 (历
+史上踩过)。
+
+- **默认避免 `git reset --hard`**, 优先 `git revert` 或 fix-forward 撤改
+- 如果必须 `reset --hard`, 先 stash `todolists/` 再 reset 再 pop:
+  ```bash
+  git stash push -m "save todolists" -- todolists/
+  git reset --hard <commit>
+  git stash pop
+  ```
+- 单文件回退用 path 形式 `git checkout <commit> -- <path>`, 不动其他
+- `data/` `mac/build/` 已 gitignore, reset 不影响; `todolists/micro/`
+  也 gitignore (每日临时文件); 真正需要保护的是 tracked
+  `todolists/*.md`
+
 ## 文件夹布局
 
 ```
