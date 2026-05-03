@@ -125,6 +125,7 @@ func (s *Server) handleCheckSupplement(w http.ResponseWriter, r *http.Request) {
 		p.Date = dateutil.LogicalToday(time.Now())
 	}
 	key := fmt.Sprintf("%d:%d", id, p.WindowIndex)
+	ref := fmt.Sprintf("supplement:%d:window:%d:date:%s", id, p.WindowIndex, p.Date)
 	if p.Checked {
 		one := 1.0
 		_, err = s.store.UpsertRecord(store.Record{
@@ -132,11 +133,14 @@ func (s *Server) handleCheckSupplement(w http.ResponseWriter, r *http.Request) {
 		})
 		if err == nil {
 			// 完成 → 顺手 dismiss 对应通知 (ref 跟 supplements.GenerateNotifications 一致)
-			ref := fmt.Sprintf("supplement:%d:window:%d:date:%s", id, p.WindowIndex, p.Date)
 			_ = s.store.DismissNotificationByRef(ref, time.Now().Unix())
 		}
 	} else {
 		err = s.store.DeleteRecord(supplementModule, p.Date, key)
+		if err == nil {
+			// 取消勾选 → 通知回归 (undismiss 让原通知重新出现; 若从未生成则无操作)
+			_ = s.store.UndismissNotificationByRef(ref)
+		}
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

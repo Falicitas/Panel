@@ -676,5 +676,7 @@ final class AppState {
         } catch {
             // 静默,等下次
         }
+        // 紧急提醒: 每 tick 检查 supplement window 末 5 分钟未完成情况, 弹系统通知
+        UrgentNotifier.shared.check(today: self.supplementsToday)
     }
 }

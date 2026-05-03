@@ -54,6 +54,7 @@
 		EDD047A4C24549C7D1DBB979 /* RecurringSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */; };
 		EF787609ECD0E4BE733414F5 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB4D7055D1E71929BC92B3E /* APIClient.swift */; };
 		F1832D5AC7464601EEF34137 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC082A3656358B75E3D0C9A1 /* Permissions.swift */; };
+		F46C02CF0872C5DC865EFD4F /* UrgentNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE5A1A92DB4F3166F482702 /* UrgentNotifier.swift */; };
 		FBE8D2D08FE5E43E604B3674 /* BashDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EEE48D918C7332B0CCAD88F /* BashDetailView.swift */; };
 /* End PBXBuildFile section */
 
@@ -96,6 +97,7 @@
 		B6F9936F17C66C82102D617D /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		BF74459F6ADCA6D9056A7911 /* MainLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainLayout.swift; sourceTree = "<group>"; };
 		C1C3DA32EC86A724BA60EAD7 /* Todolist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Todolist.swift; sourceTree = "<group>"; };
+		CAE5A1A92DB4F3166F482702 /* UrgentNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UrgentNotifier.swift; sourceTree = "<group>"; };
 		D3062A0F8CB95C2386D0B4E2 /* SupplementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementsView.swift; sourceTree = "<group>"; };
 		D754AC7CF099F8B68D14859D /* DetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailView.swift; sourceTree = "<group>"; };
 		DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimarySidebarView.swift; sourceTree = "<group>"; };
@@ -236,6 +238,7 @@
 			children = (
 				5FC72BE1E58C5BDB3F8A456C /* AppState.swift */,
 				949D45B8D7790DE2C2ED50ED /* Tab.swift */,
+				CAE5A1A92DB4F3166F482702 /* UrgentNotifier.swift */,
 			);
 			path = State;
 			sourceTree = "<group>";
@@ -360,6 +363,7 @@
 				0F041F4C1A303E3928A73D91 /* Todolist.swift in Sources */,
 				824BA5C38C0946AEAC5941E4 /* TodolistContentView.swift in Sources */,
 				21924AA056E5D9A45D82252B /* Transcriber.swift in Sources */,
+				F46C02CF0872C5DC865EFD4F /* UrgentNotifier.swift in Sources */,
 				153DA7D67F1ADAC2D1CC6680 /* VoiceController.swift in Sources */,
 				C07107129F13625FCC585BD6 /* WakeMaskView.swift in Sources */,
 			);

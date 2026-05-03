@@ -365,6 +365,21 @@ func (s *Store) DismissNotificationByRef(ref string, atUnix int64) error {
 	return err
 }
 
+// UndismissNotificationByRef 把对应 source_ref 的通知 dismissed_at 复位为 NULL,
+// 让它重新出现在通知列表。用于"用户取消勾选 → 通知回归"。
+// ref 为空时静默跳过。
+func (s *Store) UndismissNotificationByRef(ref string) error {
+	if ref == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`UPDATE notifications SET dismissed_at=NULL
+		  WHERE source_ref=?`,
+		ref,
+	)
+	return err
+}
+
 // DismissStaleSupplementNotifications 把 source='supplement' 且 created_at < beforeUnix
 // 且未 dismissed 的通知一并 dismissed。返回受影响行数。
 // 用于 GenerateNotifications 入口,避免昨天的食物保健品提醒堆到今天。
