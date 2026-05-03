@@ -27,6 +27,9 @@ enum SpeechSegmenter {
     static let chunkSec: Double = 12.0
     /// chunk 前后各 1.5s overlap 让 STT 边界词不省略, 提高 fuzzy locate 命中率。
     static let chunkOverlapSec: Double = 1.5
+    /// 句子级 segment 合并: N 句合 1 段, 让段更长更连贯 (精听点 ▶ 听完整 N 句)。
+    /// 1 = 不合并, 2 = 两句合一段。后续可改 Settings 可配。
+    static let sentencesPerSegment: Int = 2
 
     enum Failure: Error, LocalizedError {
         case noKey
@@ -160,13 +163,16 @@ enum SpeechSegmenter {
 
         // === Phase 5: 拆句 ===
         let sentenceRanges = splitFullTextToSentenceRanges(fullText)
-        logger.info("phase 5: sentences=\(sentenceRanges.count)")
         guard !sentenceRanges.isEmpty else {
             throw Failure.noSentences
         }
 
+        // === Phase 5b: N 句合 1 段 ===
+        let merged = mergeSentenceGroups(sentenceRanges, perGroup: sentencesPerSegment)
+        logger.info("phase 5: sentences=\(sentenceRanges.count) merged=\(merged.count) (per group=\(sentencesPerSegment))")
+
         // === Phase 6: 字符 → 秒 → segment ===
-        return sentenceRanges.enumerated().map { idx, sr -> EnglishSegment in
+        return merged.enumerated().map { idx, sr -> EnglishSegment in
             let startSec = charPositionToSec(charPos: sr.startChar, chunks: chunkRanges)
             let endSec = charPositionToSec(charPos: sr.endChar, chunks: chunkRanges)
             return EnglishSegment(
@@ -176,6 +182,26 @@ enum SpeechSegmenter {
                 text: sr.text
             )
         }
+    }
+
+    /// 把相邻 N 句合成 1 段, 段的 startChar/endChar/text 取该组首尾。
+    /// perGroup ≤ 1 时不合并, 直接返回原 ranges。最后不足 N 句的尾段照样合并。
+    private static func mergeSentenceGroups(_ rs: [SentenceRange], perGroup: Int) -> [SentenceRange] {
+        guard perGroup > 1, rs.count > 1 else { return rs }
+        var out: [SentenceRange] = []
+        var i = 0
+        while i < rs.count {
+            let end = min(i + perGroup, rs.count)
+            let group = Array(rs[i..<end])
+            let merged = SentenceRange(
+                startChar: group.first!.startChar,
+                endChar: group.last!.endChar,
+                text: group.map(\.text).joined(separator: " ")
+            )
+            out.append(merged)
+            i = end
+        }
+        return out
     }
 
     // MARK: - 内部类型
@@ -273,13 +299,13 @@ enum SpeechSegmenter {
     ) -> (startChar: Int, endChar: Int, nextCursorTokenIdx: Int)? {
         guard !chunkTokens.isEmpty, cursorTokenIdx < fullNorm.tokens.count else { return nil }
 
-        let headWindow = min(6, chunkTokens.count)
-        let tailWindow = min(6, chunkTokens.count)
+        let headWindow = min(5, chunkTokens.count)
+        let tailWindow = min(5, chunkTokens.count)
 
-        // chunk 太短 → 整序列匹配
+        // chunk 太短 → 整序列 fuzzy 匹配
         if chunkTokens.count < 4 {
-            if let idx = findTokenSequence(needle: chunkTokens, hay: fullNorm.tokens, startIdx: cursorTokenIdx, maxLookahead: 60) {
-                let endTokIdx = idx + chunkTokens.count - 1
+            if let idx = findTokenSequenceFuzzy(needle: chunkTokens, hay: fullNorm.tokens, startIdx: cursorTokenIdx, maxLookahead: 60, maxMismatches: 1) {
+                let endTokIdx = min(fullNorm.tokens.count - 1, idx + chunkTokens.count - 1)
                 return (
                     startChar: fullNorm.origStarts[idx],
                     endChar: fullNorm.origEnds[endTokIdx],
@@ -292,14 +318,15 @@ enum SpeechSegmenter {
         let head = Array(chunkTokens.prefix(headWindow))
         let tail = Array(chunkTokens.suffix(tailWindow))
 
-        guard let headIdx = findTokenSequence(needle: head, hay: fullNorm.tokens, startIdx: cursorTokenIdx, maxLookahead: 60) else {
+        // head fuzzy: 允许 STT 边界漏/替词 (例: "the moon will look" vs full "the full moon will look")
+        guard let headIdx = findTokenSequenceFuzzy(needle: head, hay: fullNorm.tokens, startIdx: cursorTokenIdx, maxLookahead: 80, maxMismatches: 1) else {
             return nil
         }
 
-        // tail 期望位置 = headIdx + chunkTokens.count - tailWindow, 允许 ±5 token 偏差
+        // tail fuzzy 同样
         let tailExpected = headIdx + chunkTokens.count - tailWindow
-        let tailSearchStart = max(headIdx + headWindow, tailExpected - 5)
-        guard let tailIdx = findTokenSequence(needle: tail, hay: fullNorm.tokens, startIdx: tailSearchStart, maxLookahead: 12) else {
+        let tailSearchStart = max(headIdx + headWindow, tailExpected - 8)
+        guard let tailIdx = findTokenSequenceFuzzy(needle: tail, hay: fullNorm.tokens, startIdx: tailSearchStart, maxLookahead: 20, maxMismatches: 1) else {
             return nil
         }
 
@@ -307,18 +334,31 @@ enum SpeechSegmenter {
         let endTok = tailIdx + tailWindow - 1
         guard endTok < fullNorm.tokens.count else { return nil }
 
+        // cursor 推到 chunk head 末尾 (不到 tail), 因为 1.5s overlap 让 chunk N+1 head
+        // 在 chunk N tail 之前 1-2 token 出现; 推 cursor 太远会让 N+1 head 永远找不到。
+        // headIdx + headWindow 给 N+1 search 留足够 backtrack 空间, maxLookahead=60 兜底。
         return (
             startChar: fullNorm.origStarts[startTok],
             endChar: fullNorm.origEnds[endTok],
-            nextCursorTokenIdx: endTok + 1
+            nextCursorTokenIdx: headIdx + headWindow
         )
     }
 
-    /// 在 hay[startIdx..(startIdx+maxLookahead)] 内找 needle 完全匹配的位置, 返回起点 idx 或 nil。
-    private static func findTokenSequence(needle: [String], hay: [String], startIdx: Int, maxLookahead: Int) -> Int? {
+    /// 三段 fuzzy match:
+    ///   (1) 在 [startIdx, startIdx+maxLookahead] 内尝试 needle 完全匹配 → 直接返回
+    ///   (2) 同区间内允许 maxMismatches 个位置 token 不一致 (首 token 必须对) → 返回
+    ///   (3) 同区间内用 LCS (允许 insertion/deletion) 找窗口 [i, i+needle.count+2] 中
+    ///       跟 needle 的最长公共子序列 ≥ needle.count - maxMismatches → 返回
+    /// 解决 STT 在不同 chunk 识别同段 audio 时的漏词/替词差异
+    /// (例: chunk ASR "the moon will" vs full ASR "the full moon will")。
+    private static func findTokenSequenceFuzzy(
+        needle: [String], hay: [String], startIdx: Int, maxLookahead: Int, maxMismatches: Int
+    ) -> Int? {
         guard !needle.isEmpty else { return nil }
         let endIdx = min(hay.count - needle.count + 1, startIdx + maxLookahead)
-        if startIdx >= endIdx { return nil }
+        guard startIdx < endIdx else { return nil }
+
+        // (1) 完全匹配
         for i in startIdx..<endIdx {
             var matched = true
             for j in 0..<needle.count {
@@ -326,7 +366,56 @@ enum SpeechSegmenter {
             }
             if matched { return i }
         }
-        return nil
+        if maxMismatches <= 0 { return nil }
+
+        // (2) 位置对齐 fuzzy: 首 token 必须一致, 中间允许 maxMismatches 个不同
+        for i in startIdx..<endIdx {
+            if hay[i] != needle[0] { continue }
+            var mm = 0
+            for j in 1..<needle.count {
+                if hay[i + j] != needle[j] {
+                    mm += 1
+                    if mm > maxMismatches { break }
+                }
+            }
+            if mm <= maxMismatches { return i }
+        }
+
+        // (3) LCS fuzzy: 允许 needle 跟 hay 窗口长度差 (insertion/deletion)
+        let windowExtra = 2
+        let lcsEndIdx = min(hay.count, startIdx + maxLookahead + needle.count)
+        var bestLCSStart: Int? = nil
+        var bestLCSScore = needle.count - maxMismatches - 1  // 至少要超过这个
+        for i in startIdx..<min(endIdx + windowExtra, lcsEndIdx - 1) {
+            let windowEnd = min(hay.count, i + needle.count + windowExtra)
+            guard windowEnd > i else { continue }
+            let window = Array(hay[i..<windowEnd])
+            let lcs = computeLCS(needle, window)
+            if lcs > bestLCSScore {
+                bestLCSScore = lcs
+                bestLCSStart = i
+                if lcs == needle.count { break }  // 完美 LCS, 早退
+            }
+        }
+        return bestLCSStart
+    }
+
+    /// Longest Common Subsequence 长度 (DP, O(m*n))。m 和 n 通常 5-8, 矩阵 ~50 cells, 极快。
+    private static func computeLCS(_ a: [String], _ b: [String]) -> Int {
+        let m = a.count
+        let n = b.count
+        if m == 0 || n == 0 { return 0 }
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        for i in 1...m {
+            for j in 1...n {
+                if a[i - 1] == b[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1] + 1
+                } else {
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                }
+            }
+        }
+        return dp[m][n]
     }
 
     // MARK: - 字符位置 → 秒 (复用 C 方案的算法, chunkRange 来自 fuzzy locate)

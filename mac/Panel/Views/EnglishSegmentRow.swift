@@ -9,6 +9,10 @@ struct EnglishSegmentRow: View {
 
     @Environment(SegmentPlayer.self) private var player
 
+    /// 段播放时前后各扩 1s 听感缓冲, 抵消 ASR timestamp ±1s 偏差。
+    /// 第一段开头 clamp 到 0, 最后一段末尾 clamp 到 audio.durationMs (若已知)。
+    private static let playbackPaddingMs: Int = 1000
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             playButton
@@ -50,13 +54,19 @@ struct EnglishSegmentRow: View {
             return
         }
         let url = URL(fileURLWithPath: audio.localPath)
+        let pad = Self.playbackPaddingMs
+        let expandedStart = max(0, Int(segment.startMs) - pad)
+        let rawEnd = Int(segment.endMs) + pad
+        let expandedEnd = audio.durationMs > 0
+            ? min(Int(audio.durationMs), rawEnd)
+            : rawEnd  // durationMs 未知时 AVAudioPlayer 自动到末尾停
         do {
             try player.play(
                 url: url,
                 audioID: audio.id,
                 segIdx: segment.idx,
-                startMs: Int(segment.startMs),
-                endMs: Int(segment.endMs)
+                startMs: expandedStart,
+                endMs: expandedEnd
             )
         } catch {
             // 用户能看到 player 状态没变 (按钮不变 stop), 故意 silent
