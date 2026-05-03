@@ -17,6 +17,7 @@ struct PanelApp: App {
                     window.titlebarSeparatorStyle = .none
                 })
                 .task {
+                    UrgentNotifier.shared.setUp()
                     await state.loadAll()
                     voice.start()
                 }

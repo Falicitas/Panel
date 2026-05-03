@@ -185,6 +185,25 @@ actor APIClient: BackendClient {
         return try await post("/api/supplements/\(id)/enable", body: Body(enabled: enabled))
     }
 
+    func snoozeSupplement(id: Int64, date: String?, windowIndex: Int) async throws {
+        struct Body: Encodable {
+            let date: String?
+            let windowIndex: Int
+            enum CodingKeys: String, CodingKey {
+                case date
+                case windowIndex = "window_index"
+            }
+        }
+        var req = URLRequest(url: try url("/api/supplements/\(id)/snooze"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(Body(date: date, windowIndex: windowIndex))
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "snooze supplement \(id) failed")
+        }
+    }
+
     // MARK: - State
 
     func getTodayState() async throws -> DailyState { try await get("/api/state/today") }
