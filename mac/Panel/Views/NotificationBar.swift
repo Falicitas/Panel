@@ -6,7 +6,7 @@ struct NotificationBar: View {
 
     var body: some View {
         let count = state.notifications.count
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Group {
                 if count > 0 {
                     Image(systemName: "bell.badge.fill").foregroundStyle(Color.accentColor)
@@ -17,11 +17,11 @@ struct NotificationBar: View {
             .imageScale(.large)
             if let latest = state.notifications.first {
                 Text(latest.title + (latest.body.isEmpty ? "" : " · \(latest.body)"))
-                    .font(.body)
+                    .font(.title3)
                     .lineLimit(1)
             } else {
                 Text("无新通知 — 食物保健品到点提醒在此")
-                    .font(.body)
+                    .font(.title3)
                     .foregroundStyle(.tertiary)
             }
             Spacer()
@@ -31,13 +31,13 @@ struct NotificationBar: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text("\(count)")
-                            .font(.body.weight(.bold).monospacedDigit())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
+                            .font(.title3.weight(.bold).monospacedDigit())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 3)
                             .background(.red.opacity(0.85), in: Capsule())
                             .foregroundStyle(.white)
                         Image(systemName: "chevron.down")
-                            .font(.body)
+                            .font(.title3)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -48,8 +48,8 @@ struct NotificationBar: View {
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 40)
+        .padding(.horizontal, 16)
+        .frame(height: 48)
         .frame(maxWidth: .infinity)
         .background(barBackground)
         .overlay(alignment: .bottom) { Divider() }
@@ -73,12 +73,12 @@ private struct NotificationListPopover: View {
         VStack(spacing: 0) {
             HStack {
                 Text("通知 (\(state.notifications.count))")
-                    .font(.title2)
+                    .font(.title)
                 Spacer()
                 Button {
                     Task { await dismissAll() }
                 } label: {
-                    Text("全部清空").font(.body)
+                    Text("全部清空").font(.title3)
                 }
                 .buttonStyle(.borderless)
                 .disabled(state.notifications.isEmpty)
@@ -87,7 +87,7 @@ private struct NotificationListPopover: View {
             Divider()
             if state.notifications.isEmpty {
                 ContentUnavailableView("无新通知", systemImage: "bell.slash")
-                    .frame(width: 480, height: 240)
+                    .frame(width: 540, height: 280)
             } else {
                 List {
                     ForEach(state.notifications) { n in
@@ -100,8 +100,8 @@ private struct NotificationListPopover: View {
                 }
                 .listStyle(.inset)
                 .frame(
-                    width: 480,
-                    height: min(CGFloat(state.notifications.count) * 80 + 32, 540)
+                    width: 540,
+                    height: min(CGFloat(state.notifications.count) * 96 + 36, 600)
                 )
             }
         }
@@ -133,17 +133,17 @@ private struct NotifRow: View {
     let onJump: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: levelIcon)
                 .foregroundStyle(levelColor)
                 .imageScale(.large)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(n.title).font(.title3.weight(.medium))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(n.title).font(.title2.weight(.medium))
                 if !n.body.isEmpty {
-                    Text(n.body).font(.body).foregroundStyle(.secondary)
+                    Text(n.body).font(.title3).foregroundStyle(.secondary)
                 }
                 Text(formattedTime)
-                    .font(.callout.monospacedDigit())
+                    .font(.body.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
             Spacer(minLength: 4)
@@ -155,7 +155,7 @@ private struct NotifRow: View {
             .buttonStyle(.borderless)
             .help("dismiss")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture { onJump() }
     }

@@ -164,9 +164,9 @@ private struct MealsSection: View {
                 Image(systemName: "fork.knife")
                     .foregroundStyle(.secondary)
                 Text("今日三餐 (锚点)")
-                    .font(.headline)
+                    .font(.title2)
                 Text("触发后,引用 breakfast/lunch/dinner 的保健品时段才会浮现")
-                    .font(.caption)
+                    .font(.body)
                     .foregroundStyle(.tertiary)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
@@ -217,21 +217,21 @@ private struct MealCard: View {
                     .foregroundStyle(recordedAt != nil ? Color.green : Color.anchorAccent)
                     .imageScale(.large)
                 Text(meta.label)
-                    .font(.title3.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                 Spacer()
                 if let at = recordedAt {
                     Text(at)
-                        .font(.body.monospacedDigit())
+                        .font(.title3.monospacedDigit())
                         .foregroundStyle(.green)
                 }
             }
             Text(meta.rangeLabel)
-                .font(.caption.monospacedDigit())
+                .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
             HStack {
                 if let at = recordedAt {
                     Label("已记 \(at)", systemImage: "checkmark.circle.fill")
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(.green)
                     Spacer()
                     Button("清空") { onClear() }
@@ -247,7 +247,7 @@ private struct MealCard: View {
                     Spacer()
                     if !inRange {
                         Text("不在区间")
-                            .font(.caption)
+                            .font(.body)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -352,7 +352,7 @@ private struct ItemCard: View {
                     .foregroundStyle(item.type == "supplement" ? Color.accentColor : Color.green)
                     .imageScale(.large)
                 Text(item.name)
-                    .font(.title3.weight(.semibold))
+                    .font(.title.weight(.semibold))
                 if !item.dose.isEmpty {
                     Text("· \(item.dose)")
                         .foregroundStyle(.secondary)
@@ -394,7 +394,7 @@ private struct ItemCard: View {
 
             if !item.notes.isEmpty {
                 Text(item.notes)
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(.tertiary)
                     .lineLimit(3)
             }
@@ -502,16 +502,16 @@ private struct WindowChip: View {
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: iconName)
-                    .font(.title3)
+                    .font(.title2)
                     .foregroundStyle(iconColor)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(timeLabel)
-                        .font(.body.monospacedDigit())
+                        .font(.title3.monospacedDigit())
                         .foregroundStyle(textColor)
                     Text(statusText)
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -619,7 +619,7 @@ private struct ItemTimeline: View {
                 // tick labels 6/12/18/22
                 ForEach([6, 12, 18, 22], id: \.self) { hour in
                     Text(String(format: "%02d", hour))
-                        .font(.caption2.monospacedDigit())
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                         .offset(x: w * frac(hour * 60) - 8, y: 16)
                 }
@@ -673,9 +673,9 @@ private struct Chip: View {
     let color: Color
     var body: some View {
         Text(text)
-            .font(.caption)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .font(.body)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background(color.opacity(0.18), in: Capsule())
             .foregroundStyle(color)
     }
