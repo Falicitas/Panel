@@ -37,6 +37,8 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         INFOPLIST_KEY_NSMainStoryboardFile: ""
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Panel 用麦克风做 F12 全局语音输入 (走 OpenRouter 转写)"
+        CODE_SIGN_ENTITLEMENTS: Panel/Resources/Panel.entitlements
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
     dependencies:
