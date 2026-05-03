@@ -6,7 +6,7 @@ struct NotificationBar: View {
 
     var body: some View {
         let count = state.notifications.count
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Group {
                 if count > 0 {
                     Image(systemName: "bell.badge.fill").foregroundStyle(Color.accentColor)
@@ -14,13 +14,14 @@ struct NotificationBar: View {
                     Image(systemName: "bell").foregroundStyle(.tertiary)
                 }
             }
+            .imageScale(.large)
             if let latest = state.notifications.first {
                 Text(latest.title + (latest.body.isEmpty ? "" : " · \(latest.body)"))
-                    .font(.caption)
+                    .font(.body)
                     .lineLimit(1)
             } else {
                 Text("无新通知 — 食物保健品到点提醒在此")
-                    .font(.caption)
+                    .font(.body)
                     .foregroundStyle(.tertiary)
             }
             Spacer()
@@ -28,26 +29,27 @@ struct NotificationBar: View {
                 Button {
                     showPopover.toggle()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Text("\(count)")
-                            .font(.caption2.weight(.bold).monospacedDigit())
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
+                            .font(.body.weight(.bold).monospacedDigit())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
                             .background(.red.opacity(0.85), in: Capsule())
                             .foregroundStyle(.white)
                         Image(systemName: "chevron.down")
-                            .font(.caption2)
+                            .font(.body)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.borderless)
                 .popover(isPresented: $showPopover, arrowEdge: .top) {
-                    NotificationListPopover().environment(state)
+                    NotificationListPopover(dismissPopover: { showPopover = false })
+                        .environment(state)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 28)
+        .padding(.horizontal, 14)
+        .frame(height: 40)
         .frame(maxWidth: .infinity)
         .background(barBackground)
         .overlay(alignment: .bottom) { Divider() }
@@ -65,17 +67,18 @@ struct NotificationBar: View {
 
 private struct NotificationListPopover: View {
     @Environment(AppState.self) private var state
+    let dismissPopover: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("通知 (\(state.notifications.count))")
-                    .font(.headline)
+                    .font(.title2)
                 Spacer()
                 Button {
                     Task { await dismissAll() }
                 } label: {
-                    Text("全部清空").font(.caption)
+                    Text("全部清空").font(.body)
                 }
                 .buttonStyle(.borderless)
                 .disabled(state.notifications.isEmpty)
@@ -84,22 +87,37 @@ private struct NotificationListPopover: View {
             Divider()
             if state.notifications.isEmpty {
                 ContentUnavailableView("无新通知", systemImage: "bell.slash")
-                    .frame(width: 380, height: 200)
+                    .frame(width: 480, height: 240)
             } else {
                 List {
                     ForEach(state.notifications) { n in
-                        NotifRow(n: n) {
-                            Task { await state.dismiss(n) }
-                        }
+                        NotifRow(
+                            n: n,
+                            onDismiss: { Task { await state.dismiss(n) } },
+                            onJump: { handleJump(n) }
+                        )
                     }
                 }
                 .listStyle(.inset)
                 .frame(
-                    width: 380,
-                    height: min(CGFloat(state.notifications.count) * 56 + 20, 420)
+                    width: 480,
+                    height: min(CGFloat(state.notifications.count) * 80 + 32, 540)
                 )
             }
         }
+    }
+
+    private func handleJump(_ n: PanelNotification) {
+        guard n.source == "supplement", let id = parseSupplementID(n.sourceRef) else { return }
+        state.jumpToSupplement(id: id)
+        dismissPopover()
+    }
+
+    /// source_ref 形如 "supplement:{id}:window:{idx}:date:{date}"
+    private func parseSupplementID(_ ref: String) -> Int64? {
+        let parts = ref.split(separator: ":")
+        guard parts.count >= 2, parts[0] == "supplement", let id = Int64(parts[1]) else { return nil }
+        return id
     }
 
     private func dismissAll() async {
@@ -112,29 +130,34 @@ private struct NotificationListPopover: View {
 private struct NotifRow: View {
     let n: PanelNotification
     let onDismiss: () -> Void
+    let onJump: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: levelIcon)
                 .foregroundStyle(levelColor)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(n.title).font(.body.weight(.medium))
+                .imageScale(.large)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(n.title).font(.title3.weight(.medium))
                 if !n.body.isEmpty {
-                    Text(n.body).font(.caption).foregroundStyle(.secondary)
+                    Text(n.body).font(.body).foregroundStyle(.secondary)
                 }
                 Text(formattedTime)
-                    .font(.caption2.monospacedDigit())
+                    .font(.callout.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
-            Spacer()
+            Spacer(minLength: 4)
             Button(action: onDismiss) {
                 Image(systemName: "xmark.circle")
                     .foregroundStyle(.secondary)
+                    .imageScale(.large)
             }
             .buttonStyle(.borderless)
             .help("dismiss")
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture { onJump() }
     }
 
     private var levelIcon: String {

@@ -125,13 +125,22 @@ func (s *Server) handleCheckSupplement(w http.ResponseWriter, r *http.Request) {
 		p.Date = dateutil.LogicalToday(time.Now())
 	}
 	key := fmt.Sprintf("%d:%d", id, p.WindowIndex)
+	ref := fmt.Sprintf("supplement:%d:window:%d:date:%s", id, p.WindowIndex, p.Date)
 	if p.Checked {
 		one := 1.0
 		_, err = s.store.UpsertRecord(store.Record{
 			Module: supplementModule, Date: p.Date, Key: key, ValueNum: &one,
 		})
+		if err == nil {
+			// 完成 → 顺手 dismiss 对应通知 (ref 跟 supplements.GenerateNotifications 一致)
+			_ = s.store.DismissNotificationByRef(ref, time.Now().Unix())
+		}
 	} else {
 		err = s.store.DeleteRecord(supplementModule, p.Date, key)
+		if err == nil {
+			// 取消勾选 → 通知回归 (undismiss 让原通知重新出现; 若从未生成则无操作)
+			_ = s.store.UndismissNotificationByRef(ref)
+		}
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -276,7 +285,11 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 			Paused:      paused,
 			Windows:     []windowStatus{},
 		}
-		allDone := len(sp.Windows) > 0
+		// done_today 必须 (a) 至少 1 个 window 已浮现 (b) 全部已浮现 window 都勾过 (c) 没有等待餐触发的 window。
+		// 否则"今天还没触发任何餐 → 0 visible & 全部 done"会被误判为"今日已勾完"。
+		visibleCount := 0
+		doneVisible := 0
+		hasPending := false
 		for idx, win := range sp.Windows {
 			ws := windowStatus{
 				Start:     win.Start,
@@ -310,21 +323,25 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				}
 			}
 			item.Windows = append(item.Windows, ws)
-			// 未浮现的 window (餐未触发) 不计入 dose 统计 / allDone 判断
-			if ws.RequiresMeal != "" {
-				continue
-			}
-			if !ws.DoneToday {
-				allDone = false
-			}
+			// totalDoses/doneDoses 统计所有 enabled & 未暂停的 window (包括等待餐触发的),
+			// 反映 item 一日实际要做的总次数,而非"已浮现"的次数
 			if sp.Enabled && !paused {
 				resp.TotalDoses++
 				if ws.DoneToday {
 					resp.DoneDoses++
 				}
 			}
+			// 等待餐触发的 window 不计入 visibleCount / done_today (item 级) 判断
+			if ws.RequiresMeal != "" {
+				hasPending = true
+				continue
+			}
+			visibleCount++
+			if ws.DoneToday {
+				doneVisible++
+			}
 		}
-		item.DoneToday = allDone
+		item.DoneToday = visibleCount > 0 && doneVisible == visibleCount && !hasPending
 		resp.Items = append(resp.Items, item)
 
 		if sp.Enabled && !paused {

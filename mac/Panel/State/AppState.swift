@@ -43,6 +43,8 @@ final class AppState {
     var dailyState: DailyState?
     var stateSettings: StateSettings?
     var notifications: [PanelNotification] = []
+    /// 通知点击跳转 trigger: SupplementsView 监听此值,非 nil 时滚到对应 item id 并清空。
+    var pendingScrollSupplement: Int64?
     var grip: GripSummary?
     var supplementMonthly: SupplementMonthly?
     var recordsTab: RecordsTab = .grip
@@ -550,6 +552,17 @@ final class AppState {
         pendingScrollText = text
     }
 
+    /// 通知点击 → 切到 supplements tab + 让 SupplementsView 滚到对应 item id。
+    /// 不自动 dismiss 通知;用户决定何时清掉。
+    func jumpToSupplement(id: Int64) {
+        selectedTab = .supplements
+        // 同 id 重复点击需要先重置,否则 onChange 不触发
+        if pendingScrollSupplement == id {
+            pendingScrollSupplement = nil
+        }
+        pendingScrollSupplement = id
+    }
+
     /// 保存当前 detail。若 rawMD 不传,默认保存 editorBuffer 当前内容。
     func saveDetail(rawMD: String? = nil) async {
         guard let name = detail?.name else { return }
@@ -663,5 +676,7 @@ final class AppState {
         } catch {
             // 静默,等下次
         }
+        // 紧急提醒: 每 tick 检查 supplement window 末 5 分钟未完成情况, 弹系统通知
+        UrgentNotifier.shared.check(today: self.supplementsToday)
     }
 }

@@ -23,3 +23,9 @@ func LogicalDate(now time.Time) time.Time {
 	}
 	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 }
+
+// LogicalDayStartUnix 返回 now 所属逻辑当日的开始时刻 (Unix 秒)。
+// 用于"跨日清理"等需要 logical day 边界的调用方。
+func LogicalDayStartUnix(now time.Time) int64 {
+	return LogicalDate(now).Add(time.Duration(DayStartHour) * time.Hour).Unix()
+}

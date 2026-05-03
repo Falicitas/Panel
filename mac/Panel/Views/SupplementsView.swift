@@ -12,32 +12,46 @@ struct SupplementsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Header(filter: $filter, search: $search, today: state.supplementsToday, onAdd: { creating = true })
-                MealsSection(
-                    dailyState: state.dailyState,
-                    onTrigger: { meal in Task { await state.triggerMeal(meal) } },
-                    onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } }
-                )
-                AllListSection(
-                    today: state.supplementsToday,
-                    supplementsByID: supplementsByID,
-                    filter: filter,
-                    search: search,
-                    onToggleWindow: { item, idx in
-                        Task { await state.toggleSupplementWindowCheck(item, windowIndex: idx) }
-                    },
-                    onEdit: { sp in editing = sp },
-                    onPause: { sp, days in Task { await state.pauseSupplement(sp, days: days) } },
-                    onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } }
-                )
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: 20) {
+                    Header(filter: $filter, search: $search, today: state.supplementsToday, onAdd: { creating = true })
+                    MealsSection(
+                        dailyState: state.dailyState,
+                        onTrigger: { meal in Task { await state.triggerMeal(meal) } },
+                        onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } }
+                    )
+                    AllListSection(
+                        today: state.supplementsToday,
+                        supplementsByID: supplementsByID,
+                        filter: filter,
+                        search: search,
+                        onToggleWindow: { item, idx in
+                            Task { await state.toggleSupplementWindowCheck(item, windowIndex: idx) }
+                        },
+                        onEdit: { sp in editing = sp },
+                        onPause: { sp, days in Task { await state.pauseSupplement(sp, days: days) } },
+                        onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } }
+                    )
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .onChange(of: state.pendingScrollSupplement) { _, target in
+                    guard let target else { return }
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        proxy.scrollTo(target, anchor: .top)
+                    }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(800))
+                        if state.pendingScrollSupplement == target {
+                            state.pendingScrollSupplement = nil
+                        }
+                    }
+                }
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("食物 & 保健品")
-        .dynamicTypeSize(.accessibility2)  // 整体字号放大一档
+        .dynamicTypeSize(.accessibility5)  // 整体字号再放大一档 (用户反馈 .accessibility2 仍嫌小)
         .sheet(isPresented: $creating) {
             SupplementFormSheet(initial: .blank, isNew: true).environment(state)
         }
@@ -81,16 +95,19 @@ private struct Header: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 320)
+                .font(.title3)
 
                 TextField("搜索 (名称 / 备注)", text: $search)
                     .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 360)
+                    .font(.title3)
 
                 Spacer()
 
                 Button(action: onAdd) {
                     Label("新增", systemImage: "plus")
+                        .font(.title3)
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -112,13 +129,16 @@ private struct StatChip: View {
     let value: String
     let tint: Color
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(tint).frame(width: 6, height: 6)
-            Text(label).foregroundStyle(.secondary)
-            Text(value).monospacedDigit()
+        HStack(spacing: 8) {
+            Circle().fill(tint).frame(width: 8, height: 8)
+            Text(label)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.title3.monospacedDigit())
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
         .background(.regularMaterial, in: Capsule())
     }
 }
@@ -287,6 +307,7 @@ private struct AllListSection: View {
                             onPause: { days in onPause(sp, days) },
                             onEnable: { on in onEnable(sp, on) }
                         )
+                        .id(it.id)
                     }
                 }
             }
@@ -402,9 +423,19 @@ private struct ItemCard: View {
             Chip(text: "暂停至 " + dateLabel(until), color: .orange)
         } else if item.hasActive {
             Chip(text: "现在该做", color: .anchorAccent)
+        } else if !pendingMeals.isEmpty {
+            Chip(text: "等待 \(pendingMeals.joined(separator: " / "))", color: .orange)
         } else if item.doneToday {
             Chip(text: "今日已勾完", color: .green)
         }
+    }
+
+    /// 该 item 还在等待哪些餐被触发(如 ["早餐", "午餐"])。
+    /// 优先级高于 doneToday,避免还没吃饭就误显示"已完成"。
+    private var pendingMeals: [String] {
+        let labels: [String: String] = ["breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"]
+        let set = Set(item.windows.compactMap { $0.requiresMeal.isEmpty ? nil : $0.requiresMeal })
+        return set.sorted().compactMap { labels[$0] }
     }
 
     private var actions: some View {
