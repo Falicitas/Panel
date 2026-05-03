@@ -761,6 +761,11 @@ final class AppState {
         }
         // 紧急提醒: 订阅-消费模型, backend notification 是状态 source of truth;
         // mac 系统通知按 lead range fire / done / dismiss / snooze 联动 panel 通知栏。
-        UrgentNotifier.shared.check(today: self.supplementsToday, notifications: self.notifications)
+        // 两类 source 共用一套机制, baseKey 与 backend source_ref 完全一致。
+        UrgentNotifier.shared.check(
+            supplementsToday: self.supplementsToday,
+            englishToday: self.englishToday,
+            notifications: self.notifications
+        )
     }
 }
