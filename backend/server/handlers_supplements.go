@@ -276,7 +276,11 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 			Paused:      paused,
 			Windows:     []windowStatus{},
 		}
-		allDone := len(sp.Windows) > 0
+		// done_today 必须 (a) 至少 1 个 window 已浮现 (b) 全部已浮现 window 都勾过 (c) 没有等待餐触发的 window。
+		// 否则"今天还没触发任何餐 → 0 visible & 全部 done"会被误判为"今日已勾完"。
+		visibleCount := 0
+		doneVisible := 0
+		hasPending := false
 		for idx, win := range sp.Windows {
 			ws := windowStatus{
 				Start:     win.Start,
@@ -310,12 +314,14 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				}
 			}
 			item.Windows = append(item.Windows, ws)
-			// 未浮现的 window (餐未触发) 不计入 dose 统计 / allDone 判断
+			// 未浮现的 window (餐未触发) 不计入 dose 统计 / done_today 判断
 			if ws.RequiresMeal != "" {
+				hasPending = true
 				continue
 			}
-			if !ws.DoneToday {
-				allDone = false
+			visibleCount++
+			if ws.DoneToday {
+				doneVisible++
 			}
 			if sp.Enabled && !paused {
 				resp.TotalDoses++
@@ -324,7 +330,7 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				}
 			}
 		}
-		item.DoneToday = allDone
+		item.DoneToday = visibleCount > 0 && doneVisible == visibleCount && !hasPending
 		resp.Items = append(resp.Items, item)
 
 		if sp.Enabled && !paused {

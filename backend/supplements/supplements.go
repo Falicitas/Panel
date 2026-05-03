@@ -123,6 +123,8 @@ func IsWindowActive(w store.Window, anchors Anchors, now time.Time) bool {
 // 返回新生成的条数。
 func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 	today := dateutil.LogicalToday(now)
+	// 跨日清理: 昨天/更早的食物保健品通知自动 dismissed,避免堆到今天
+	_, _ = s.DismissStaleSupplementNotifications(dateutil.LogicalDayStartUnix(now), now.Unix())
 	state, err := s.GetDailyState(today)
 	if err != nil {
 		return 0, err

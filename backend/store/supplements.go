@@ -349,3 +349,20 @@ func (s *Store) DismissNotification(id int64, at int64) error {
 	_, err := s.db.Exec(`UPDATE notifications SET dismissed_at=? WHERE id=? AND dismissed_at IS NULL`, at, id)
 	return err
 }
+
+// DismissStaleSupplementNotifications 把 source='supplement' 且 created_at < beforeUnix
+// 且未 dismissed 的通知一并 dismissed。返回受影响行数。
+// 用于 GenerateNotifications 入口,避免昨天的食物保健品提醒堆到今天。
+func (s *Store) DismissStaleSupplementNotifications(beforeUnix, atUnix int64) (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE notifications
+		    SET dismissed_at=?
+		  WHERE source='supplement' AND dismissed_at IS NULL AND created_at < ?`,
+		atUnix, beforeUnix,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
