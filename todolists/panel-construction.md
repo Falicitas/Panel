@@ -1012,6 +1012,8 @@
 
 后续可加 (Phase 1 / 2 备忘):
 
+* [ ] **🔴 源问题修复 (issue-11 / Phase 1 优先)** — VOA Akamai CDN 当前下来的 mp3 全是 28MB 静音占位 (afinfo 看格式正常 1ch/44.1kHz/30min/128kbps, 但播放无声; STT API 也 400 reject)。可能方向: (a) downloads 完成后用 afinfo 探一下 audio energy / 调用 macOS audio API 抽样判断 (b) 换 fetcher 走非 CDN 路径 (官网页面 mp3 直链) (c) 加 fallback 源 (NPR / Sciam60)
+
 * [ ] Scientific American 60s 第二个源 (Phase 1)
 
 * [ ] 历史档案 sheet (重听 + 复习,Phase 1)
@@ -1019,6 +1021,10 @@
 * [ ] 子音频"自动标记"模式 (听完 N 次后,Phase 1)
 
 * [ ] 缓存清理 cron (未归档 14 天 / 半归档 30 天 / 已归档永久,Phase 1)
+
+* [ ] sentencesPerSegment / playbackPaddingMs / chunkSec 做成 Settings 可配 (Phase 1)
+
+* [ ] 长 audio (>25MB / >30 min) 整段 ASR 限制 → Phase 1 整段也分段拼 fullText
 
 * [ ] NPR Up First / The Indicator (podcast RSS,Phase 2)
 
