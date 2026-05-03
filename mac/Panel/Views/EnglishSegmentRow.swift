@@ -10,9 +10,10 @@ struct EnglishSegmentRow: View {
     @Environment(SegmentPlayer.self) private var player
     @Environment(AppState.self) private var state
 
-    /// 段播放时前后各扩 1s 听感缓冲, 抵消 ASR timestamp ±1s 偏差。
+    /// 段播放时前后各扩 N ms 听感缓冲, 抵消 ASR timestamp 偏差。
+    /// Groq 词级 timestamp 已经精确, 暂置 0 看裸精度; 若末尾常吞词再加回 200-500ms。
     /// 第一段开头 clamp 到 0, 最后一段末尾 clamp 到 audio.durationMs (若已知)。
-    private static let playbackPaddingMs: Int = 1000
+    private static let playbackPaddingMs: Int = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
