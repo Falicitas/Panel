@@ -266,6 +266,74 @@ actor APIClient: BackendClient {
         }
     }
 
+    // MARK: - English
+
+    func getEnglishToday() async throws -> EnglishToday {
+        try await get("/api/english/today")
+    }
+
+    func listEnglishAudios(archived: Bool) async throws -> [EnglishAudio] {
+        let path = archived ? "/api/english/audios?archived=true" : "/api/english/audios"
+        return try await get(path)
+    }
+
+    func getEnglishAudio(id: Int64) async throws -> EnglishAudioDetail {
+        try await get("/api/english/audios/\(id)")
+    }
+
+    func putEnglishSegments(audioID: Int64, segments: [EnglishSegment]) async throws {
+        var req = URLRequest(url: try url("/api/english/audios/\(audioID)/segments"))
+        req.httpMethod = "PUT"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(segments)
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "put english segments \(audioID) failed")
+        }
+    }
+
+    func checkEnglishSegment(audioID: Int64, segIdx: Int, checked: Bool, seconds: Double) async throws {
+        struct Body: Encodable {
+            let audioId: Int64
+            let segIdx: Int
+            let checked: Bool
+            let seconds: Double
+            enum CodingKeys: String, CodingKey {
+                case checked, seconds
+                case audioId = "audio_id"
+                case segIdx = "seg_idx"
+            }
+        }
+        var req = URLRequest(url: try url("/api/english/segments/check"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(Body(audioId: audioID, segIdx: segIdx, checked: checked, seconds: seconds))
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "check english segment failed")
+        }
+    }
+
+    func snoozeEnglishWindow(idx: Int, date: String?) async throws {
+        struct Body: Encodable { let date: String? }
+        var req = URLRequest(url: try url("/api/english/windows/\(idx)/snooze"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(Body(date: date))
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "snooze english window \(idx) failed")
+        }
+    }
+
+    func getEnglishSettings() async throws -> EnglishSettings {
+        try await get("/api/english/settings")
+    }
+
+    func putEnglishSettings(_ es: EnglishSettings) async throws -> EnglishSettings {
+        try await put("/api/english/settings", body: es)
+    }
+
     // MARK: - HTTP helpers
 
     private func encode(_ s: String) -> String {

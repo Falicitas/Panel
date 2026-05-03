@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Speech
 
 @main
 struct PanelApp: App {
@@ -10,6 +11,7 @@ struct PanelApp: App {
         WindowGroup {
             ContentView()
                 .environment(state)
+                .environment(SegmentPlayer.shared)
                 .frame(minWidth: 900, minHeight: 560)
                 .background(WindowAccessor { window in
                     // 去掉 titlebar 与下方 NotificationBar 之间那条 1-2px 分隔线。
@@ -18,7 +20,11 @@ struct PanelApp: App {
                 })
                 .task {
                     UrgentNotifier.shared.setUp()
+                    // 首次启动弹"语音识别"系统对话框 (用户允许 / 拒绝);
+                    // 拒绝时 EnglishState 后续 transcribe 会标 segments_status=failed,UI 提示
+                    SFSpeechRecognizer.requestAuthorization { _ in }
                     await state.loadAll()
+                    state.ensureSegmentsForCurrentAudio()
                     voice.start()
                 }
         }

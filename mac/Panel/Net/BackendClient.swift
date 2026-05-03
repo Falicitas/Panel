@@ -77,4 +77,14 @@ protocol BackendClient: Sendable {
     // MARK: Bash
     func execCommand(_ cmd: String, timeoutMs: Int?) async throws -> BashExecResult
     func listBashHistory(limit: Int) async throws -> [BashHistoryEntry]
+
+    // MARK: English
+    func getEnglishToday() async throws -> EnglishToday
+    func listEnglishAudios(archived: Bool) async throws -> [EnglishAudio]
+    func getEnglishAudio(id: Int64) async throws -> EnglishAudioDetail
+    func putEnglishSegments(audioID: Int64, segments: [EnglishSegment]) async throws
+    func checkEnglishSegment(audioID: Int64, segIdx: Int, checked: Bool, seconds: Double) async throws
+    func snoozeEnglishWindow(idx: Int, date: String?) async throws
+    func getEnglishSettings() async throws -> EnglishSettings
+    func putEnglishSettings(_ es: EnglishSettings) async throws -> EnglishSettings
 }
