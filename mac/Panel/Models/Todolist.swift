@@ -21,10 +21,11 @@ struct TodoItem: Codable, Hashable {
     let text: String
     let checked: Bool
     let skip: Bool
+    let focus: Bool
     let parentChain: [String]
 
     enum CodingKeys: String, CodingKey {
-        case level, text, checked, skip
+        case level, text, checked, skip, focus
         case lineNo = "line_no"
         case parentChain = "parent_chain"
     }

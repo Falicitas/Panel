@@ -14,5 +14,6 @@ type TodoItem struct {
 	Text        string   `json:"text"`
 	Checked     bool     `json:"checked"`
 	Skip        bool     `json:"skip"`
+	Focus       bool     `json:"focus"`
 	ParentChain []string `json:"parent_chain"`
 }

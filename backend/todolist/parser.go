@@ -11,6 +11,7 @@ var (
 	listRe       = regexp.MustCompile(`^(\s*)([-*+])\s+(.*)$`)
 	taskRe       = regexp.MustCompile(`^\[([ xX])\]\s*(.*)$`)
 	skipRe       = regexp.MustCompile(`\[\[\[skip\]\]\]`)
+	focusRe      = regexp.MustCompile(`\[\[\[focus\]\]\]`)
 	inlineCodeRe = regexp.MustCompile("`[^`]*`")
 	// GFM 可转义的 ASCII 标点 (CommonMark spec §6.1)
 	mdEscapeRe = regexp.MustCompile("\\\\([!\"#$%&'()*+,\\-./:;<=>?@\\[\\\\\\]^_`{|}~])")
@@ -27,6 +28,13 @@ func unescapeMarkdown(s string) string {
 func hasSkipMarker(taskText string) bool {
 	cleaned := inlineCodeRe.ReplaceAllString(taskText, "")
 	return skipRe.MatchString(cleaned)
+}
+
+// hasFocusMarker 同 hasSkipMarker, 检测 [[[focus]]]。
+// 用于聚焦卡显式锁定到某个 todoitem (越过 [[[skip]]] 优先级)。
+func hasFocusMarker(taskText string) bool {
+	cleaned := inlineCodeRe.ReplaceAllString(taskText, "")
+	return focusRe.MatchString(cleaned)
 }
 
 // Parse 解析 markdown 文本,提取所有 - [ ] / - [x] 任务项,
@@ -78,12 +86,14 @@ func Parse(content string) []TodoItem {
 				// skip 检测必须在 unescape 之后:Typora 等编辑器会自动给
 				// [ 加转义 (\[\[\[skip]]]),不剥转义则没有连续三个 [,skipRe 失配。
 				skip := hasSkipMarker(cleanText)
+				focus := hasFocusMarker(cleanText)
 				items = append(items, TodoItem{
 					LineNo:      i + 1,
 					Level:       len(listStack),
 					Text:        cleanText,
 					Checked:     checked,
 					Skip:        skip,
+					Focus:       focus,
 					ParentChain: parent,
 				})
 				listStack = append(listStack, frame{indent, cleanText})
