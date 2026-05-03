@@ -31,9 +31,13 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: NO
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: "-"
-        DEVELOPMENT_TEAM: ""
+        # 用本机 keychain 已有的 Developer ID Application 证书签名 — hash 稳定,
+        # 不再每次 rebuild 让 TCC (输入监控/辅助功能/麦克风) 重新拉黑。
+        # 注: Developer ID 通常用于分发, 这里给 Debug 用是为求 hash 稳定; 本地启动
+        # 没 quarantine attr, Gatekeeper 不挡。
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Developer ID Application: Tingzhang Cai (9MA3NPTKD4)"
+        DEVELOPMENT_TEAM: "9MA3NPTKD4"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         INFOPLIST_KEY_NSMainStoryboardFile: ""
