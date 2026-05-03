@@ -139,12 +139,13 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 		if n.Source != "supplement" {
 			continue
 		}
-		// source_ref 形如 "supplement:{id}:window:{idx}:date:{date}"
+		// source_ref 形如 "supplement:{id}:window:{idx}:date:{date}", split 后 6 段
+		// (date 字符串 "YYYY-MM-DD" 不含冒号)。
 		parts := strings.Split(n.SourceRef, ":")
-		if len(parts) != 7 || parts[0] != "supplement" || parts[2] != "window" || parts[4] != "date" {
+		if len(parts) != 6 || parts[0] != "supplement" || parts[2] != "window" || parts[4] != "date" {
 			continue
 		}
-		if parts[6] != today {
+		if parts[5] != today {
 			continue // 不是今天的, 跨日清理那块管
 		}
 		spID, err := strconv.ParseInt(parts[1], 10, 64)
