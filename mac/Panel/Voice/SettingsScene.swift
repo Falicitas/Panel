@@ -7,6 +7,8 @@ struct VoiceSettingsView: View {
     @State private var modelChoice: String = Self.normalizedModelChoice()
     @State private var testStatus: TestStatus = .idle
     @State private var saved: Bool = false
+    @State private var groqInput: String = KeyStore.getGroq() ?? ""
+    @State private var groqSaved: Bool = false
 
     /// 内置模型选项。后续如要更多,扩这里 (Transcriber 自动按 model 名选 endpoint)。
     private static let modelOptions: [(label: String, id: String)] = [
@@ -71,6 +73,26 @@ struct VoiceSettingsView: View {
                 }
                 statusLine
             }
+            Section("Groq (英文精听 ASR)") {
+                SecureField("API Key", text: $groqInput, prompt: Text("gsk_..."))
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: groqInput) { _, _ in groqSaved = false }
+                HStack {
+                    Button("保存") {
+                        KeyStore.setGroq(groqInput)
+                        groqSaved = true
+                    }
+                    .disabled(groqInput.isEmpty)
+                    Spacer()
+                    if groqSaved {
+                        Label("已保存", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.callout)
+                    }
+                }
+                Text("英文 audio 用 Groq Whisper Large V3 直连拿词级 timestamp (OpenRouter STT 不返时间戳)。 https://console.groq.com 注册免费, free tier rate limit 7200 audio-sec/hour 足够日用。")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Section("使用") {
                 Text("F12 在任意可编辑文本框开始录音,再按 F12 结束并转写,文字注入光标处。最长 5 分钟自动结束。")
                     .font(.callout).foregroundStyle(.secondary)
@@ -79,7 +101,7 @@ struct VoiceSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 360)
+        .frame(width: 520, height: 520)
     }
 
     @ViewBuilder
