@@ -940,13 +940,13 @@
 
 执行约定: **逐 milestone 推进,每 M 完成后停下等用户确认再开始下一 M**。
 
-* [ ] 🌟🌟🌟🌟 2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。4️⃣超过10点后，todolist蒙版不让推进度。验证什么：完成 phase 13；走得通：完成；走不通：没完成。第一轮：在 cc 推进中，无可验证内容。继续推进。
+* [x] 🌟🌟🌟🌟 2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。4️⃣超过10点后，todolist蒙版不让推进度。验证什么：完成 phase 13；走得通：完成；走不通：没完成。第一轮：在 cc 推进中，无可验证内容。继续推进。第二轮：M0-M7 全完成，端到端联调通过 (fire / snooze / 跨阈值 dismiss)。VOA mp3 静音问题留 Phase 1。
 
 完整 plan: `~/.claude/plans/linked-petting-emerson.md`
 
 * [x] **M0** — 同步 panel-construction.md 加 Phase 13 占位 (本节)
 
-* [ ] **M1** — 后端 schema + store 层 + 单测
+* [x] **M1** — 后端 schema + store 层 + 单测
 
   * 三张新表 (english\_audios / english\_segments / english\_settings)
 
@@ -954,7 +954,7 @@
 
   * 表驱动单测覆盖事务 / 聚合 / upsert
 
-* [ ] **M2** — VOA fetcher + 6h cron
+* [x] **M2** — VOA fetcher + 6h cron
 
   * `backend/english/voa_fetcher.go` 解析 RSS + 下载 mp3 到 `~/panel/data/english/`
 
@@ -962,7 +962,7 @@
 
   * `main.go` 起 6h ticker,启动时调一次
 
-* [ ] **M3** — 后端 API + 通知 generator + 60s ticker 接入
+* [x] **M3** — 后端 API + 通知 generator + 60s ticker 接入
 
   * 9 个 endpoint: today / audios / audios/{id} / segments PUT / check / snooze / settings GET PUT / refresh
 
@@ -970,7 +970,7 @@
 
   * 现有 supplements ticker (main.go:78) 末尾追加一行
 
-* [ ] **M4** — mac 入口 + Models + APIClient + 空 EnglishView
+* [x] **M4** — mac 入口 + Models + APIClient + 空 EnglishView
 
   * Tab.swift 加 case english (icon `headphones`, label `英文`)
 
@@ -980,7 +980,7 @@
 
   * 占位 view 显示当前 audio 标题 + segments 数
 
-* [ ] **M5** — mac AudioPlayer + ASR + Segment 显示
+* [x] **M5** — mac AudioPlayer + ASR + Segment 显示 (Plan B: 整段 ASR + 切片时间锚 + LCS fuzzy locate)
 
   * AVAudioPlayer 区间播放 (不切实际文件,start\_ms+duration timer 停)
 
@@ -990,7 +990,7 @@
 
   * SegmentRow + AudioCard 渲染
 
-* [ ] **M6** — 勾选 + records 写入 + today 累计 + 归档
+* [x] **M6** — 勾选 + records 写入 + today 累计 + 归档
 
   * records 复用 (module=english\_seg key={aid}:{idx} value=秒数 / module=english\_snooze)
 
@@ -1000,7 +1000,7 @@
 
   * 顶部 HeaderStats: "今日 X.X / 10 分钟" + 进度条 + 各窗口 chip
 
-* [ ] **M7** — UrgentNotifier 扩源 + 端到端联调
+* [x] **M7** — UrgentNotifier 扩源 + 端到端联调
 
   * 抽 protocol UrgentSource,supplements / english 各实现一次
 
