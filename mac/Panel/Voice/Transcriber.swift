@@ -32,6 +32,9 @@ struct TranscribedWord: Sendable {
 enum Transcriber {
     static let chatEndpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
     static let sttEndpoint  = URL(string: "https://openrouter.ai/api/v1/audio/transcriptions")!
+    /// Groq Whisper Large V3 直连 endpoint (兼容 OpenAI Whisper API), 词级 timestamp 真实有效。
+    /// OpenRouter 的 STT API 把 timestamp_granularities 字段 strip 掉了, 必须直连 Groq 才能拿。
+    static let groqSTTEndpoint = URL(string: "https://api.groq.com/openai/v1/audio/transcriptions")!
     /// chat/completions 路径下用,加"简体中文"提示因为 Gemini Flash 偶有繁体倾向。
     /// STT 专用模型不需要 prompt (它就是干这个的)。
     static let chatPrompt = "Transcribe the audio verbatim. For Chinese content, output Simplified Chinese (简体中文) only."
@@ -182,6 +185,80 @@ enum Transcriber {
             throw TranscribeError.decode
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Groq 直连 (英文精听 ASR, 词级 timestamp)
+
+    /// 直连 Groq Whisper Large V3, multipart/form-data, response_format=verbose_json + word timestamps。
+    /// 走这条而非 OpenRouter 因为 OpenRouter STT 把 timestamp_granularities 字段 strip 掉了 (实证)。
+    /// Groq 100% 兼容 OpenAI Whisper API spec, 30x+ 实时速度, ~$0.018/11min。
+    /// 上限: 单文件 ≤ 25MB (~30min @128kbps mp3)。
+    static func transcribeViaGroq(audioFile: URL) async throws -> (text: String, words: [TranscribedWord]) {
+        guard let key = KeyStore.getGroq(), !key.isEmpty else { throw TranscribeError.noKey }
+        let audioData = try Data(contentsOf: audioFile)
+        let boundary = "----panel-\(UUID().uuidString)"
+        let format = formatHint(forFile: audioFile)
+        let filename = "audio.\(format)"
+        let mime = mimeForFormat(format)
+
+        var body = Data()
+        func appendField(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append(value.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        appendField("model", "whisper-large-v3")
+        appendField("response_format", "verbose_json")
+        appendField("timestamp_granularities[]", "word")
+        appendField("language", "en")
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mime)\r\n\r\n".data(using: .utf8)!)
+        body.append(audioData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var req = URLRequest(url: groqSTTEndpoint, timeoutInterval: timeoutSec)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+
+        let (respData, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw TranscribeError.http(0, "no response") }
+        let snippet = String(data: respData, encoding: .utf8)?.prefix(300).description ?? "<non-utf8>"
+        sttLogger.info("Groq STT http=\(http.statusCode) bytes=\(respData.count) body[0..300]=\(snippet, privacy: .public)")
+        if http.statusCode != 200 {
+            throw TranscribeError.http(http.statusCode, String(data: respData, encoding: .utf8) ?? "<binary>")
+        }
+        guard let json = try JSONSerialization.jsonObject(with: respData) as? [String: Any] else {
+            throw TranscribeError.decode
+        }
+        let text = (json["text"] as? String) ?? ""
+        let wordsRaw = (json["words"] as? [[String: Any]]) ?? []
+        let words: [TranscribedWord] = wordsRaw.compactMap { w in
+            guard let t = w["word"] as? String,
+                  let s = readDouble(w["start"]),
+                  let e = readDouble(w["end"])
+            else { return nil }
+            return TranscribedWord(text: t, startSec: s, endSec: e)
+        }
+        return (text: text.trimmingCharacters(in: .whitespacesAndNewlines), words: words)
+    }
+
+    private static func mimeForFormat(_ f: String) -> String {
+        switch f {
+        case "mp3":  return "audio/mpeg"
+        case "m4a":  return "audio/mp4"
+        case "mp4":  return "audio/mp4"
+        case "wav":  return "audio/wav"
+        case "webm": return "audio/webm"
+        case "flac": return "audio/flac"
+        case "ogg":  return "audio/ogg"
+        default:     return "application/octet-stream"
+        }
     }
 
     // MARK: - validateKey
