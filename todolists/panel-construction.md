@@ -1012,7 +1012,9 @@
 
 后续可加 (Phase 1 / 2 备忘):
 
-* [ ] **🔴 源问题修复 (issue-11 / Phase 1 优先)** — VOA Akamai CDN 当前下来的 mp3 全是 28MB 静音占位 (afinfo 看格式正常 1ch/44.1kHz/30min/128kbps, 但播放无声; STT API 也 400 reject)。可能方向: (a) downloads 完成后用 afinfo 探一下 audio energy / 调用 macOS audio API 抽样判断 (b) 换 fetcher 走非 CDN 路径 (官网页面 mp3 直链) (c) 加 fallback 源 (NPR / Sciam60)
+* [x] **issue-11 — STT 切到 Groq Whisper Large V3 直连**: 之前 OpenRouter STT API 把 timestamp_granularities/response_format strip 掉, 拿不到词级 timestamp → chunk + fuzzy locate 折腾几轮都不及格 (NPR Indicator 11min located 6-23/55, 段塌缩); Apple Speech 切片版 NPR intro music 段也识别失败。最终切 Groq 直连 (https://api.groq.com/openai/v1/audio/transcriptions, 100% OpenAI Whisper API 兼容), 1670 词级 timestamp, 18.5s 完成 (30x+ 实时), 0 zero-dur, 段长度 5-15s 主流, 文本质量 SOTA (人名 / 标点 / 拼写都准)。代价: 单文件 ≤ 25MB (≤30min), $0.018/11min 极便宜, 需 user 配 GROQ_API_KEY。
+
+* [ ] **🔴 源问题修复 (Phase 1)** — VOA Akamai CDN 当前下来的 mp3 全是 28MB 静音占位 (-90dB 数字静音, afinfo 看格式正常但播放无声)。NPR podcast feed (Up First / Indicator / Short Wave) RSS 可用且 mp3 真有声, 可作 fetcher MVP 替换 VOA。可能方向: (a) audio energy 探测自动 reject 静音 mp3 (b) 换 fetcher 主源到 NPR Indicator (~9min, B2-C1 经济新闻) (c) VOA 仅作 fallback
 
 * [ ] Scientific American 60s 第二个源 (Phase 1)
 
