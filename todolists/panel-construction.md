@@ -809,6 +809,8 @@
 
 * [ ] finance / records / bash 也去掉二级列 (需要每个 tab 重新设计 unified view)
 
+* [ ] 🌟🌟🌟🌟 验证什么：推进食物保健品功能至结束。走得通：结束；走不通：没结束
+
 ***
 
 ## Phase 12 — 全局语音输入 (Voice Dictation via OpenRouter)
@@ -816,38 +818,42 @@
 目的: 替代 macOS 原生 Dictation (Phase 11 末尾确认不达标)。F12 第一次触发录音,第二次 F12 结束 → 整段送 OpenRouter → 文字注入当前光标处 (任意可编辑文本框: iTerm2 / Claude Code / 浏览器 / 备忘录 / panel 自己)。常驻菜单栏,panel 启动即开。
 
 约定:
-- **不要流式 STT**。F12 开始,F12 结束,然后整段录音才发给模型。
-- 麦克风走系统默认输入 (Studio Display 内置 mic),panel 内不选设备。
-- F12 是用户的空键,不带任何修饰键,callback 返回 nil 吞掉事件。
-- 失败不弹窗,只用菜单栏图标短暂闪烁 + error 1.5s 自恢复。
 
-* [x] **HotkeyTap — CGEventTap 拦 F12**
+* **不要流式 STT**。F12 开始,F12 结束,然后整段录音才发给模型。
+
+* 麦克风走系统默认输入 (Studio Display 内置 mic),panel 内不选设备。
+
+* F12 是用户的空键,不带任何修饰键,callback 返回 nil 吞掉事件。
+
+* 失败不弹窗,只用菜单栏图标短暂闪烁 + error 1.5s 自恢复。
+
+- [x] **HotkeyTap — CGEventTap 拦 F12**
   * keyCode 111,`.cgSessionEventTap` + `.defaultTap`,callback 返 nil 吞事件
 
   * tap disabled (timeout / userInput) 时 callback 自动 re-enable
 
   * 需要 **Input Monitoring** 权限 (不是 Accessibility — macOS 历史遗留区分,踩过)
 
-* [x] **Recorder — AVAudioRecorder m4a/AAC 16kHz mono**
+- [x] **Recorder — AVAudioRecorder m4a/AAC 16kHz mono**
   * `kAudioFormatMPEG4AAC` / 16000Hz / 1 channel / quality .medium
 
   * 落 `NSTemporaryDirectory()/panel-voice-{ts}.m4a`,转写完删
 
-* [x] **Transcriber — 双 endpoint 按 model 自动选**
+- [x] **Transcriber — 双 endpoint 按 model 自动选**
   * model 含 "transcribe" / "whisper" → `POST /api/v1/audio/transcriptions` (STT 专用,响应 `{text}`)
 
-  * 否则 → `POST /api/v1/chat/completions` (messages 嵌 input_audio,响应 `choices[0].message.content`)
+  * 否则 → `POST /api/v1/chat/completions` (messages 嵌 input\_audio,响应 `choices[0].message.content`)
 
   * `validateKey` 走 `/api/v1/auth/key` 给设置页测试用,30s timeout (transcribe 主路径 120s)
 
-* [x] **TextInjector — CGEventKeyboardSetUnicodeString**
+- [x] **TextInjector — CGEventKeyboardSetUnicodeString**
   * 5 字符一块,块间 `usleep(8000)` 避 iTerm2 截断
 
   * `.cgSessionEventTap` post,只发 keyDown (SetUnicodeString 路径 keyUp 不必要)
 
   * 需要 **Accessibility** 权限 (注入到其他 App);ad-hoc 签名常误报 false,实际 inject 仍 work,不阻塞 state
 
-* [x] **VoiceController — state machine + 5min 上限**
+- [x] **VoiceController — state machine + 5min 上限**
   * `idle / recording / transcribing / noKey / noPermission / error`
 
   * 录音 5 分钟自动 stop + transcribe (Timer)
@@ -858,47 +864,60 @@
 
   * 5s ticker + `didBecomeActive` 通知,权限变化自动 refresh
 
-* [x] **MenuBarExtra — 6 状态图标 + 诊断菜单**
-  * label 跟 state 切 SF Symbol (mic / mic.fill / arrow.triangle.2.circlepath / lock.shield / key.slash / ⚠)
+- [x] **MenuBarExtra — 6 状态图标 + 诊断菜单**
+  * label 跟 state 切 SF Symbol (mic / mic.fill / arrow\.triangle.2.circlepath / lock.shield / key.slash / ⚠)
 
   * 菜单展开:状态文字 + 5 行权限诊断 (输入监控 / 麦克风 / 辅助功能 / Hotkey install / Key) + "上次录音 + 在 Finder 显示" + 直跳「输入监控」/「辅助功能」系统设置按钮 + 打开设置 Cmd+,
 
-* [x] **KeyStore — UserDefaults 明文存 (不走 Keychain)**
+- [x] **KeyStore — UserDefaults 明文存 (不走 Keychain)**
   * `voice.openrouter_api_key` + `voice.openrouter_model`
 
   * 用 Keychain 会每次触发"允许 Panel 访问钥匙串"对话框,极烦,改用 UserDefaults 明文 (用户原话:"本意就是明文")
 
-* [x] **SettingsScene — Cmd+, Settings scene**
+- [x] **SettingsScene — Cmd+, Settings scene**
   * SecureField key + Picker 模型 (Gemini 2.5 Pro / GPT-4o Transcribe 两个内置 preset)
 
   * 测试连接按钮调 `/api/v1/auth/key` 验证 200
 
-* [x] **权限链路 (精简版)**
+- [x] **权限链路 (精简版)**
   * 启动主动 request Mic + Input Monitoring (native 简短对话框,首次弹一次)
 
   * **不主动 prompt Accessibility** — 引导对话框跟 ad-hoc trust 漂移会形成"每次重 build 引导弹窗"循环,用户自己去系统设置开
 
   * 阻塞条件只看 Mic + Input Monitoring;Accessibility 缺只在菜单显示 ✗ 不阻塞 (错过的话注入 silent fail)
 
-* [x] **dev tooling**
+- [x] **dev tooling**
   * `mac/rebuild.sh` 一键 xcodebuild + pkill + open
 
   * `mac/setup-cert.sh` 一次性创建本地 self-signed code signing cert + Manual sign,根治 ad-hoc 签名 hash 漂移导致的 TCC trust 反复失效
 
 后续可加:
-- [ ] **Gemini Pro 长录音"只出几个字"根因调研** — 短录音 OK,长录音输出被截。chat/completions + input_audio 在通用模型上做 verbatim transcribe 可能不可靠;考虑长录音自动 fallback STT 路径
-- [ ] **更多 model preset** (whisper-large-v3 / whisper-turbo / gpt-audio 等)
-- [ ] **转写历史 N 次回看 + 重新注入**
-- [ ] **自定义快捷键** (现在硬编码 F12)
-- [ ] **streaming 转写选项** (用户当前明确不要,但可选)
+
+* [ ] **Gemini Pro 长录音"只出几个字"根因调研** — 短录音 OK,长录音输出被截。chat/completions + input\_audio 在通用模型上做 verbatim transcribe 可能不可靠;考虑长录音自动 fallback STT 路径
+
+* [ ] **更多 model preset** (whisper-large-v3 / whisper-turbo / gpt-audio 等)
+
+* [ ] **转写历史 N 次回看 + 重新注入**
+
+* [ ] **自定义快捷键** (现在硬编码 F12)
+
+* [ ] **streaming 转写选项** (用户当前明确不要,但可选)
 
 教训:
-- **CGEventTap 真权限是 Input Monitoring**,不是 Accessibility (NSEvent global monitor 才用 Accessibility) — 一开始走错权限耗了 1 小时
-- **OpenRouter chat/completions 和 STT 是两条 endpoint** — gpt-4o-transcribe 只能走 STT,gemini / gpt-4o-audio-preview 只能走 chat
-- **ad-hoc 签名 hash 漂移让 TCC 反复失效** — `setup-cert.sh` + Manual sign 根治
-- **chat/completions 端点强制 reasoning** — `reasoning.enabled=false` 会 400 ("Reasoning is mandatory")
-- **panel autosave + git reset --hard 双坑** — reset --hard 覆盖 working tree,panel 内存被磁盘 reload 后用户笔记丢失。**今后所有撤改用 git revert,绝不再 reset --hard**
-- **盲改要不得** — 转写出错先看 log raw error,不要猜原因 patch
+
+* **CGEventTap 真权限是 Input Monitoring**,不是 Accessibility (NSEvent global monitor 才用 Accessibility) — 一开始走错权限耗了 1 小时
+
+* **OpenRouter chat/completions 和 STT 是两条 endpoint** — gpt-4o-transcribe 只能走 STT,gemini / gpt-4o-audio-preview 只能走 chat
+
+* **ad-hoc 签名 hash 漂移让 TCC 反复失效** — `setup-cert.sh` + Manual sign 根治
+
+* **chat/completions 端点强制 reasoning** — `reasoning.enabled=false` 会 400 ("Reasoning is mandatory")
+
+* **panel autosave + git reset --hard 双坑** — reset --hard 覆盖 working tree,panel 内存被磁盘 reload 后用户笔记丢失。**今后所有撤改用 git revert,绝不再 reset --hard**
+
+* **盲改要不得** — 转写出错先看 log raw error,不要猜原因 patch
+
+* [x] 🌟🌟🌟🌟 这个基本结束了。以 gpt-4o-transcribe 作为模型即可。gemini 那个不太行。
 
 ***
 
