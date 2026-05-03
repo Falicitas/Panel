@@ -4,6 +4,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case todolist
     case finance
     case supplements
+    case english
     case records
     case bash
 
@@ -14,6 +15,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .todolist:    "Todolist"
         case .finance:     "财务"
         case .supplements: "保健品"
+        case .english:     "英文"
         case .records:     "记录"
         case .bash:        "Bash"
         }
@@ -24,6 +26,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         case .todolist:    "checklist"
         case .finance:     "creditcard"
         case .supplements: "pills"
+        case .english:     "headphones"
         case .records:     "chart.bar"
         case .bash:        "terminal"
         }
@@ -31,13 +34,13 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     var isEnabled: Bool {
         switch self {
-        case .todolist, .finance, .supplements, .records, .bash: true
+        case .todolist, .finance, .supplements, .english, .records, .bash: true
         }
     }
 
     var comingSoonHint: String {
         switch self {
-        case .todolist, .finance, .supplements, .records, .bash: ""
+        case .todolist, .finance, .supplements, .english, .records, .bash: ""
         }
     }
 }

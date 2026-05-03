@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum TranscribeError: Error, LocalizedError {
     case noKey
@@ -12,6 +13,13 @@ enum TranscribeError: Error, LocalizedError {
         case .decode: return "解析响应失败"
         }
     }
+}
+
+/// whisper verbose_json 返回的 word-level 时间戳条目。
+struct TranscribedWord: Sendable {
+    let text: String
+    let startSec: Double
+    let endSec: Double
 }
 
 /// 两条 endpoint:
@@ -39,6 +47,76 @@ enum Transcriber {
         } else {
             return try await viaChat(model: model, audioBase64: b64, key: key)
         }
+    }
+
+    private static let sttLogger = Logger(subsystem: "com.kinesis.panel", category: "speech")
+
+    /// OpenRouter STT 转写音频, 优先返回 word-level timestamps。
+    /// 用 model = openai/gpt-4o-transcribe (F12 已验证可用)。
+    /// 试探性带上 response_format / timestamp_granularities — 透传则有 words, 不透传则空。
+    /// 返回 (text, words);words 可能为空,调用方需要 fallback。
+    /// 注意: OpenRouter STT 只接 JSON + base64 (multipart 会被当 JSON 解析报错), 故走 F12 同款 JSON 路径。
+    static func transcribeWithWordTimestamps(audioFile: URL) async throws -> (text: String, words: [TranscribedWord]) {
+        guard let key = KeyStore.get(), !key.isEmpty else { throw TranscribeError.noKey }
+        let audioData = try Data(contentsOf: audioFile)
+        let b64 = audioData.base64EncodedString()
+        // format 必须跟实际 audio 编码匹配, 否则 OpenAI 解码失败返 400。
+        // 写死 "m4a" 时, 整段 mp3 (例如 manual-1.mp3) 会被 server 拒。
+        let format = formatHint(forFile: audioFile)
+        let body: [String: Any] = [
+            "model": "openai/gpt-4o-transcribe",
+            "input_audio": ["data": b64, "format": format],
+            "response_format": "verbose_json",
+            "timestamp_granularities": ["word"]
+        ]
+        var req = URLRequest(url: sttEndpoint, timeoutInterval: timeoutSec)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (respData, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw TranscribeError.http(0, "no response") }
+        let snippet = String(data: respData, encoding: .utf8)?.prefix(300).description ?? "<non-utf8>"
+        sttLogger.info("STT http=\(http.statusCode) body[0..300]=\(snippet, privacy: .public)")
+        if http.statusCode != 200 {
+            throw TranscribeError.http(http.statusCode, String(data: respData, encoding: .utf8) ?? "<binary>")
+        }
+        guard let json = try JSONSerialization.jsonObject(with: respData) as? [String: Any] else {
+            throw TranscribeError.decode
+        }
+        let text = (json["text"] as? String) ?? ""
+        let wordsRaw = (json["words"] as? [[String: Any]]) ?? []
+        let words: [TranscribedWord] = wordsRaw.compactMap { w in
+            guard let t = w["word"] as? String,
+                  let s = readDouble(w["start"]),
+                  let e = readDouble(w["end"])
+            else { return nil }
+            return TranscribedWord(text: t, startSec: s, endSec: e)
+        }
+        return (text: text.trimmingCharacters(in: .whitespacesAndNewlines), words: words)
+    }
+
+    /// 从文件扩展名推断 OpenAI/OpenRouter STT 接受的 format hint。
+    /// 已知支持: mp3, mp4, m4a, wav, webm, flac, ogg。未识别 fallback 到 mp3。
+    private static func formatHint(forFile url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "mp3":  return "mp3"
+        case "m4a":  return "m4a"
+        case "mp4":  return "mp4"
+        case "wav":  return "wav"
+        case "webm": return "webm"
+        case "flac": return "flac"
+        case "ogg":  return "ogg"
+        default:     return "mp3"
+        }
+    }
+
+    private static func readDouble(_ any: Any?) -> Double? {
+        if let d = any as? Double { return d }
+        if let n = any as? NSNumber { return n.doubleValue }
+        if let i = any as? Int { return Double(i) }
+        return nil
     }
 
     /// 模型名含 transcribe / whisper → 专用 STT endpoint。

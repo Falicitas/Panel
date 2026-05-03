@@ -141,6 +141,45 @@ func (s *Store) migrate() error {
 			created_at INTEGER NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_bash_history_created ON bash_history(created_at DESC);
+		CREATE TABLE IF NOT EXISTS english_audios (
+			id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+			source                 TEXT NOT NULL,
+			source_ref             TEXT NOT NULL,
+			title                  TEXT NOT NULL,
+			description            TEXT NOT NULL DEFAULT '',
+			published_at           INTEGER NOT NULL,
+			duration_ms            INTEGER NOT NULL DEFAULT 0,
+			audio_url              TEXT NOT NULL,
+			local_path             TEXT,
+			transcript             TEXT NOT NULL DEFAULT '',
+			segments_status        TEXT NOT NULL DEFAULT 'pending',
+			segments_failed_reason TEXT NOT NULL DEFAULT '',
+			fetched_at             INTEGER NOT NULL,
+			last_played_at         INTEGER,
+			archived_at            INTEGER
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_english_audios_src_ref
+		  ON english_audios(source, source_ref);
+		CREATE INDEX IF NOT EXISTS idx_english_audios_pub
+		  ON english_audios(published_at DESC);
+		CREATE TABLE IF NOT EXISTS english_segments (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			audio_id  INTEGER NOT NULL,
+			idx       INTEGER NOT NULL,
+			start_ms  INTEGER NOT NULL,
+			end_ms    INTEGER NOT NULL,
+			text      TEXT NOT NULL DEFAULT ''
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_english_segments_audio_idx
+		  ON english_segments(audio_id, idx);
+		CREATE TABLE IF NOT EXISTS english_settings (
+			id            INTEGER PRIMARY KEY CHECK (id = 1),
+			windows_json  TEXT NOT NULL DEFAULT '[]',
+			threshold_min INTEGER NOT NULL DEFAULT 10,
+			enabled       INTEGER NOT NULL DEFAULT 1
+		);
+		INSERT OR IGNORE INTO english_settings (id, windows_json)
+		  VALUES (1, '[{"start":"07:30","end":"09:00"},{"start":"21:00","end":"22:30"}]');
 	`)
 	if err != nil {
 		return err

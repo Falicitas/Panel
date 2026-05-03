@@ -47,6 +47,10 @@ final class AppState {
     var pendingScrollSupplement: Int64?
     var grip: GripSummary?
     var supplementMonthly: SupplementMonthly?
+    /// 英文练习 - 主响应 (含 currentAudio + segments + windows + 累计)
+    var englishToday: EnglishToday?
+    /// 英文练习 - settings (windows / threshold)
+    var englishSettings: EnglishSettings?
     var recordsTab: RecordsTab = .grip
     var bashTranscript: [BashHistoryEntry] = []
     var bashHistory: [BashHistoryEntry] = []
@@ -129,10 +133,15 @@ final class AppState {
             async let notifResp = api.listNotifications(all: false)
             async let gripResp = api.getGripToday()
             async let suppMonthResp = api.getSupplementsMonth(month: nil)
+            async let engTodayResp = api.getEnglishToday()
+            async let engSettingsResp = api.getEnglishSettings()
             let (l, a, f, m, mp, r) = try await (lists, anchorResp, focusResp, microResp, microProgResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
             let (sp, st, ds, ss, ns) = try await (supplResp, supplTodayResp, dailyResp, stateSetResp, notifResp)
             let (gp, sm) = try await (gripResp, suppMonthResp)
+            // english 用 try? 让旧 backend 缺 endpoint 时 fallback nil, 不阻断其他模块加载
+            let engT = try? await engTodayResp
+            let engS = try? await engSettingsResp
             self.active = l.active
             self.done = l.done
             self.anchor = a.name
@@ -153,6 +162,8 @@ final class AppState {
             self.notifications = ns
             self.grip = gp
             self.supplementMonthly = sm
+            self.englishToday = engT
+            self.englishSettings = engS
             self.selectedName = a.name
             if let name = a.name {
                 self.detail = try await api.getTodolist(name: name)
@@ -386,6 +397,72 @@ final class AppState {
     func reloadNotifications() async {
         do {
             self.notifications = try await api.listNotifications(all: false)
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    // MARK: - English
+
+    /// 同时只跑 1 个 audio 的 ASR; 防 tick / 启动重复触发同一 audio。
+    private var asrInProgressIDs: Set<Int64> = []
+    /// 本 session 内 ASR 失败的 audio.id, 不再自动重试 (避免烧钱循环)。
+    /// 用户重启 panel 才会清空。重启后若 backend 仍是 pending 且未 fail, 会重试。
+    private var asrFailedIDs: Set<Int64> = []
+
+    func reloadEnglishToday() async {
+        do {
+            self.englishToday = try await api.getEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 当前 audio 若 status=pending 且 local 文件存在 + 本 session 没失败过, 后台启动转写,
+    /// 完成后 PUT segments 回 backend + 刷新 today。失败把 audio.id 加进 asrFailedIDs,
+    /// tick 后续不再重试 (防止无限失败循环烧钱)。
+    func ensureSegmentsForCurrentAudio() {
+        guard let today = englishToday,
+              let audio = today.currentAudio,
+              audio.segmentsStatus == "pending",
+              !audio.localPath.isEmpty,
+              !asrInProgressIDs.contains(audio.id),
+              !asrFailedIDs.contains(audio.id) else { return }
+        asrInProgressIDs.insert(audio.id)
+        Task {
+            await transcribeAndUpload(audio)
+            asrInProgressIDs.remove(audio.id)
+        }
+    }
+
+    private func transcribeAndUpload(_ audio: EnglishAudio) async {
+        let url = URL(fileURLWithPath: audio.localPath)
+        do {
+            let segs = try await SpeechSegmenter.transcribe(url: url)
+            try await api.putEnglishSegments(audioID: audio.id, segments: segs)
+            await reloadEnglishToday()
+        } catch {
+            asrFailedIDs.insert(audio.id)  // 本 session 不再重试
+            self.lastError = "ASR 失败: \(error.localizedDescription)"
+        }
+    }
+
+    /// 切换某 segment 的勾选状态。
+    /// 勾上 → POST checked=true, seconds = (endMs - startMs) / 1000 (>= 1s 防 0)
+    /// 取消 → POST checked=false (后端 DeleteRecord)
+    /// 后端会自动: 重算 window minutes / dismiss-undismiss notif / maybeArchive。
+    func toggleEnglishSegment(audioID: Int64, segment: EnglishSegment, currentlyDone: Bool) async {
+        let secs = max(1.0, Double(segment.endMs - segment.startMs) / 1000.0)
+        do {
+            try await api.checkEnglishSegment(
+                audioID: audioID,
+                segIdx: segment.idx,
+                checked: !currentlyDone,
+                seconds: secs
+            )
+            await reloadEnglishToday()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -659,8 +736,14 @@ final class AppState {
             async let daily = api.getTodayState()
             async let supplToday = api.getSupplementsToday()
             async let listsResp = api.listTodolists()
+            async let engToday = api.getEnglishToday()
             let (m, mp, ns, ds, st, lists) = try await (micro, microProg, notif, daily, supplToday, listsResp)
+            let engT = try? await engToday
             if st != self.supplementsToday { self.supplementsToday = st }
+            if let engT, engT != self.englishToday { self.englishToday = engT }
+            // tick 也尝试触发 ASR — 用户首次启动后切到英文 tab 才看到 audio,
+            // 此时 ensureSegmentsForCurrentAudio 把它推上 ASR 队列
+            ensureSegmentsForCurrentAudio()
             // sidebar 进度 + 外部新建/删除的 .md 实时反映 (3s)
             if lists.active != self.active { self.active = lists.active }
             if lists.done != self.done { self.done = lists.done }
@@ -678,6 +761,11 @@ final class AppState {
         }
         // 紧急提醒: 订阅-消费模型, backend notification 是状态 source of truth;
         // mac 系统通知按 lead range fire / done / dismiss / snooze 联动 panel 通知栏。
-        UrgentNotifier.shared.check(today: self.supplementsToday, notifications: self.notifications)
+        // 两类 source 共用一套机制, baseKey 与 backend source_ref 完全一致。
+        UrgentNotifier.shared.check(
+            supplementsToday: self.supplementsToday,
+            englishToday: self.englishToday,
+            notifications: self.notifications
+        )
     }
 }

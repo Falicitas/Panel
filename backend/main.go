@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"panel/english"
 	"panel/micro"
 	"panel/msgsource"
 	"panel/server"
@@ -74,9 +75,10 @@ func main() {
 	// 数据库每日备份: 启动 + 每 6h 扫一次,缺当日备份则 VACUUM INTO,保留 7 份
 	go runBackupLoop(ctx, st, backupsDir)
 
-	// 食物保健品通知生成器: 每 60s 扫一次,active window 写 notification (幂等)
+	// 食物保健品 + 英文练习通知生成器: 每 60s 扫一次, active window 写 notification (幂等)
 	go func() {
 		_, _ = supplements.GenerateNotifications(st, time.Now())
+		_, _ = english.GenerateNotifications(st, time.Now())
 		tick := time.NewTicker(60 * time.Second)
 		defer tick.Stop()
 		for {
@@ -89,9 +91,17 @@ func main() {
 				} else if n > 0 {
 					log.Printf("supplement notif gen: %d new", n)
 				}
+				if n, err := english.GenerateNotifications(st, t); err != nil {
+					log.Printf("english notif gen: %v", err)
+				} else if n > 0 {
+					log.Printf("english notif gen: %d new", n)
+				}
 			}
 		}
 	}()
+
+	// 英文练习音频源抓取: 启动 + 每 6h 扫一次,新条目下载到 ~/panel/data/english/{id}.mp3
+	go runEnglishFetchLoop(ctx, st, filepath.Join(dataDir, "english"))
 
 	srv := server.New(repo, st, microRepo)
 	httpSrv := &http.Server{
@@ -116,6 +126,32 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
+}
+
+func runEnglishFetchLoop(ctx context.Context, st *store.Store, englishDir string) {
+	if err := os.MkdirAll(englishDir, 0o755); err != nil {
+		log.Printf("english mkdir %s: %v", englishDir, err)
+		return
+	}
+	fetchers := []english.Fetcher{english.NewVOAFetcher()}
+	runOnce := func() {
+		runCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		if err := english.RunFetchAll(runCtx, st, fetchers, englishDir, time.Second, 5); err != nil {
+			log.Printf("english fetch run: %v", err)
+		}
+	}
+	runOnce()
+	tick := time.NewTicker(6 * time.Hour)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			runOnce()
+		}
+	}
 }
 
 func runBackupLoop(ctx context.Context, st *store.Store, dir string) {

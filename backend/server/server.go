@@ -77,6 +77,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/records/supplements/month", s.handleGetSupplementsMonth)
 	mux.HandleFunc("POST /api/exec", s.handlePostExec)
 	mux.HandleFunc("GET /api/exec/history", s.handleListBashHistory)
+	mux.HandleFunc("GET /api/english/today", s.handleEnglishToday)
+	mux.HandleFunc("GET /api/english/audios", s.handleListEnglishAudios)
+	mux.HandleFunc("GET /api/english/audios/{id}", s.handleGetEnglishAudio)
+	mux.HandleFunc("GET /api/english/audios/{id}/file", s.handleGetEnglishAudioFile)
+	mux.HandleFunc("PUT /api/english/audios/{id}/segments", s.handlePutEnglishSegments)
+	mux.HandleFunc("POST /api/english/segments/check", s.handleCheckEnglishSegment)
+	mux.HandleFunc("POST /api/english/windows/{idx}/snooze", s.handleSnoozeEnglishWindow)
+	mux.HandleFunc("GET /api/english/settings", s.handleGetEnglishSettings)
+	mux.HandleFunc("PUT /api/english/settings", s.handlePutEnglishSettings)
 	return logMiddleware(mux)
 }
 

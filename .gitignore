@@ -12,6 +12,11 @@ data/
 *.db-journal
 *.log
 
+# 项目根目录的临时测试音频 (放 data/english/ 才入正式流程)
+/*.mp3
+/*.m4a
+/*.wav
+
 # macOS
 .DS_Store
 

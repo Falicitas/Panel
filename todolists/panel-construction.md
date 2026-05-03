@@ -809,12 +809,12 @@
 
 * [ ] finance / records / bash 也去掉二级列 (需要每个 tab 重新设计 unified view)
 
-* [ ] 🌟🌟🌟🌟 验证什么：推进食物保健品功能至结束。走得通：结束；走不通：没结束。第一轮：修正了一些看到的 bug。先让 cc 修正好字体、通知、统计的问题后，通知到 mac 上。第二轮：修正好了，大概。先让他完成 todolist 的 focus，然后解决签名漂移问题。\[\[\[focus]]]。第三轮：focus 和签名漂移都解决了。目前要解决的还有版面上的一些问题。不过都解决了后，姑且可以认为保健品做完了。然后改财务去吧。有三个可弄的。1️⃣提醒通知改为结束15分钟前。可以dismiss，或者延后30分钟（同样在结束15分钟前再次提醒），可以无限延。所以可能会导致时间轴重叠，这个没事，允许重叠。2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。第四轮：目前仅把
+* [x] 🌟🌟🌟🌟 验证什么：推进食物保健品功能至结束。走得通：结束；走不通：没结束。第一轮：修正了一些看到的 bug。先让 cc 修正好字体、通知、统计的问题后，通知到 mac 上。第二轮：修正好了，大概。先让他完成 todolist 的 focus，然后解决签名漂移问题。\[\[\[focus]]]。第三轮：focus 和签名漂移都解决了。目前要解决的还有版面上的一些问题。不过都解决了后，姑且可以认为保健品做完了。然后改财务去吧。有三个可弄的。1️⃣提醒通知改为结束15分钟前。可以dismiss，或者延后30分钟（同样在结束15分钟前再次提醒），可以无限延。所以可能会导致时间轴重叠，这个没事，允许重叠。2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。4️⃣超过10点后，todolist蒙版不让推进度。第四轮：目前仅修正了顶上交界处的 border，那个保健品的黑边 gap 暂时修正不了。第五轮：1️⃣快收尾了。已经收尾。开始第二个板块。后面的板块迁到下面。
 
-* [x] 🌟🌟🌟🌟 todolist 新增一个字段（之前有个 \[\[\[skip]]]）。优先级当然还是锚定的文档才出现在聚焦卡片上。目前我的痛点是，有时候要专注完成的 todoitem
+- [x] 🌟🌟🌟🌟 todolist 新增一个字段（之前有个 \[\[\[skip]]]）。优先级当然还是锚定的文档才出现在聚焦卡片上。目前我的痛点是，有时候要专注完成的 todoitem
   &#x20;在很后面，我不可能给前面都打上 \[\[\[skip]]]。所以在前面的基础上，加一个，这个可以让我专注后面的todoitem。
 
-* [x] <br />
+- [x] <br />
 
 ***
 
@@ -923,6 +923,114 @@
 * **盲改要不得** — 转写出错先看 log raw error,不要猜原因 patch
 
 * [x] 🌟🌟🌟🌟 这个基本结束了。以 gpt-4o-transcribe 作为模型即可。gemini 那个不太行。
+
+***
+
+## Phase 13 — 英文练习 (精听)
+
+目的: 增加英文练习板块。核心功能精听 — 拉取美国英文音频源,ASR 拆成句子级子音频,用户勾选子音频累计时长,任一时段窗口达 10 分钟即整日"完成",全部勾完归入历史档案可重听。
+
+核心决策:
+
+* 音频源 = 多源混合,MVP 选 VOA Learning English (Phase 1 再叠 Scientific American 60s)
+
+* 句子拆分 = Apple Speech Framework (mac 端 ASR,无嵌入二进制 / 模型)
+
+* 通知 = 多个时段窗口,任一窗口达 10 min 阈值即整日完成,沿用 supplements 的 15min lead + snooze + dismiss
+
+执行约定: **逐 milestone 推进,每 M 完成后停下等用户确认再开始下一 M**。
+
+* [x] 🌟🌟🌟🌟 2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。4️⃣超过10点后，todolist蒙版不让推进度。验证什么：完成 phase 13；走得通：完成；走不通：没完成。第一轮：在 cc 推进中，无可验证内容。继续推进。第二轮：M0-M7 全完成，端到端联调通过 (fire / snooze / 跨阈值 dismiss)。VOA mp3 静音问题留 Phase 1。
+
+完整 plan: `~/.claude/plans/linked-petting-emerson.md`
+
+* [x] **M0** — 同步 panel-construction.md 加 Phase 13 占位 (本节)
+
+* [x] **M1** — 后端 schema + store 层 + 单测
+
+  * 三张新表 (english\_audios / english\_segments / english\_settings)
+
+  * `backend/store/english.go` CRUD + ComputeWindowMinutes
+
+  * 表驱动单测覆盖事务 / 聚合 / upsert
+
+* [x] **M2** — VOA fetcher + 6h cron
+
+  * `backend/english/voa_fetcher.go` 解析 RSS + 下载 mp3 到 `~/panel/data/english/`
+
+  * 1 req/sec 限速 + If-Modified-Since + SSRF 防护 (host ∈ \*.voanews.com)
+
+  * `main.go` 起 6h ticker,启动时调一次
+
+* [x] **M3** — 后端 API + 通知 generator + 60s ticker 接入
+
+  * 9 个 endpoint: today / audios / audios/{id} / segments PUT / check / snooze / settings GET PUT / refresh
+
+  * `english.GenerateNotifications` 套 supplements 模板,source="english", source\_ref="english:window:{idx}:date:{d}"
+
+  * 现有 supplements ticker (main.go:78) 末尾追加一行
+
+* [x] **M4** — mac 入口 + Models + APIClient + 空 EnglishView
+
+  * Tab.swift 加 case english (icon `headphones`, label `英文`)
+
+  * MainLayout switch 接入
+
+  * APIClient/BackendClient 加 9 method
+
+  * 占位 view 显示当前 audio 标题 + segments 数
+
+* [x] **M5** — mac AudioPlayer + ASR + Segment 显示 (Plan B: 整段 ASR + 切片时间锚 + LCS fuzzy locate)
+
+  * AVAudioPlayer 区间播放 (不切实际文件,start\_ms+duration timer 停)
+
+  * SFSpeechRecognizer + 句子边界算法 (标点 / 静音 gap > 0.6s / 强切 ≥12 词 + 缩写合并 pass)
+
+  * Info.plist NSSpeechRecognitionUsageDescription
+
+  * SegmentRow + AudioCard 渲染
+
+* [x] **M6** — 勾选 + records 写入 + today 累计 + 归档
+
+  * records 复用 (module=english\_seg key={aid}:{idx} value=秒数 / module=english\_snooze)
+
+  * 勾达阈值 → DismissNotificationByRef;取消勾跌破 → UndismissNotificationByRef
+
+  * 全勾 → archived\_at = now,自动切下一 audio
+
+  * 顶部 HeaderStats: "今日 X.X / 10 分钟" + 进度条 + 各窗口 chip
+
+* [x] **M7** — UrgentNotifier 扩源 + 端到端联调
+
+  * 抽 protocol UrgentSource,supplements / english 各实现一次
+
+  * `expireUnfinishedEnglishNotifications` (类比 supplements)
+
+  * 端到端验证: lead 弹 banner → snooze → 重弹 → 勾够阈值 banner+panel 通知双消失
+
+  * commit + merge 到 dev
+
+后续可加 (Phase 1 / 2 备忘):
+
+* [ ] **🔴 源问题修复 (issue-11 / Phase 1 优先)** — VOA Akamai CDN 当前下来的 mp3 全是 28MB 静音占位 (afinfo 看格式正常 1ch/44.1kHz/30min/128kbps, 但播放无声; STT API 也 400 reject)。可能方向: (a) downloads 完成后用 afinfo 探一下 audio energy / 调用 macOS audio API 抽样判断 (b) 换 fetcher 走非 CDN 路径 (官网页面 mp3 直链) (c) 加 fallback 源 (NPR / Sciam60)
+
+* [ ] Scientific American 60s 第二个源 (Phase 1)
+
+* [ ] 历史档案 sheet (重听 + 复习,Phase 1)
+
+* [ ] 子音频"自动标记"模式 (听完 N 次后,Phase 1)
+
+* [ ] 缓存清理 cron (未归档 14 天 / 半归档 30 天 / 已归档永久,Phase 1)
+
+* [ ] sentencesPerSegment / playbackPaddingMs / chunkSec 做成 Settings 可配 (Phase 1)
+
+* [ ] 长 audio (>25MB / >30 min) 整段 ASR 限制 → Phase 1 整段也分段拼 fullText
+
+* [ ] NPR Up First / The Indicator (podcast RSS,Phase 2)
+
+* [ ] TED-Ed (用源 transcript,跳过 ASR,Phase 2)
+
+* [ ] 听写 / 复习模式 (Phase 2)
 
 ***
 

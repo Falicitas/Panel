@@ -12,8 +12,9 @@ struct MainLayout: View {
         // supplements 没有二级 todolist 列表,content 列宽永久收为 0;
         // 但 NavigationSplitView 结构始终是 3 列,不重建,
         // 这样系统原生的 hidesidebar 按钮跨 tab 切换不丢。
-        let isSupplements = state.selectedTab == .supplements
-        let collapseContent = sidebarHidden || isSupplements
+        // supplements / english 都没有二级 list,content 列宽永久收为 0
+        let collapseTabs: Set<AppTab> = [.supplements, .english]
+        let collapseContent = sidebarHidden || collapseTabs.contains(state.selectedTab)
         VStack(spacing: 0) {
             NotificationBar()
             NavigationSplitView(columnVisibility: $state.splitVisibility) {
@@ -39,6 +40,7 @@ private struct ContentColumn: View {
         case .todolist:    TodolistContentView()
         case .finance:     FinanceContentView()
         case .supplements: Color.clear  // 列宽收 0;Color.clear 防 macOS 因为完全空内容把 toggle 一并丢
+        case .english:     Color.clear
         case .records:     RecordsContentView()
         case .bash:        BashContentView()
         }
@@ -52,6 +54,7 @@ private struct DetailColumn: View {
         case .todolist:    DetailView()
         case .finance:     FinanceDetailView()
         case .supplements: SupplementsView()
+        case .english:     EnglishView()
         case .records:     RecordsDetailView()
         case .bash:        BashDetailView()
         }

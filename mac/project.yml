@@ -42,6 +42,7 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         INFOPLIST_KEY_NSMainStoryboardFile: ""
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Panel 用麦克风做 F12 全局语音输入 (走 OpenRouter 转写)"
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Panel 用本机语音识别把英文音频拆成句子级片段, 用于精听练习"
         CODE_SIGN_ENTITLEMENTS: Panel/Resources/Panel.entitlements
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
