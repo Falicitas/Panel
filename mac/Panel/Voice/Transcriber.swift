@@ -60,9 +60,12 @@ enum Transcriber {
         guard let key = KeyStore.get(), !key.isEmpty else { throw TranscribeError.noKey }
         let audioData = try Data(contentsOf: audioFile)
         let b64 = audioData.base64EncodedString()
+        // format 必须跟实际 audio 编码匹配, 否则 OpenAI 解码失败返 400。
+        // 写死 "m4a" 时, 整段 mp3 (例如 manual-1.mp3) 会被 server 拒。
+        let format = formatHint(forFile: audioFile)
         let body: [String: Any] = [
             "model": "openai/gpt-4o-transcribe",
-            "input_audio": ["data": b64, "format": "m4a"],
+            "input_audio": ["data": b64, "format": format],
             "response_format": "verbose_json",
             "timestamp_granularities": ["word"]
         ]
@@ -92,6 +95,21 @@ enum Transcriber {
             return TranscribedWord(text: t, startSec: s, endSec: e)
         }
         return (text: text.trimmingCharacters(in: .whitespacesAndNewlines), words: words)
+    }
+
+    /// 从文件扩展名推断 OpenAI/OpenRouter STT 接受的 format hint。
+    /// 已知支持: mp3, mp4, m4a, wav, webm, flac, ogg。未识别 fallback 到 mp3。
+    private static func formatHint(forFile url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "mp3":  return "mp3"
+        case "m4a":  return "m4a"
+        case "mp4":  return "mp4"
+        case "wav":  return "wav"
+        case "webm": return "webm"
+        case "flac": return "flac"
+        case "ogg":  return "ogg"
+        default:     return "mp3"
+        }
     }
 
     private static func readDouble(_ any: Any?) -> Double? {
