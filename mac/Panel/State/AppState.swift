@@ -449,6 +449,26 @@ final class AppState {
         }
     }
 
+    /// 切换某 segment 的勾选状态。
+    /// 勾上 → POST checked=true, seconds = (endMs - startMs) / 1000 (>= 1s 防 0)
+    /// 取消 → POST checked=false (后端 DeleteRecord)
+    /// 后端会自动: 重算 window minutes / dismiss-undismiss notif / maybeArchive。
+    func toggleEnglishSegment(audioID: Int64, segment: EnglishSegment, currentlyDone: Bool) async {
+        let secs = max(1.0, Double(segment.endMs - segment.startMs) / 1000.0)
+        do {
+            try await api.checkEnglishSegment(
+                audioID: audioID,
+                segIdx: segment.idx,
+                checked: !currentlyDone,
+                seconds: secs
+            )
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     // MARK: - Records
 
     func saveGrip(date: String, left: Double, right: Double, note: String = "") async {

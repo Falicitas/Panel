@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// 单条 segment 行: ▶/■ 按钮 + 序号 + 文本 + ☐ checkbox。
-/// M5 接区间播放 (▶);M6 才接 ☐ 勾选。
+/// 单条 segment 行: ▶/■ 按钮 + 序号 + 文本 + ☐/☑ checkbox。
+/// 勾选后 POST /api/english/segments/check, backend 写 records 并自动归档。
 struct EnglishSegmentRow: View {
     let audio: EnglishAudio
     let segment: EnglishSegment
     let isDone: Bool
 
     @Environment(SegmentPlayer.self) private var player
+    @Environment(AppState.self) private var state
 
     /// 段播放时前后各扩 1s 听感缓冲, 抵消 ASR timestamp ±1s 偏差。
     /// 第一段开头 clamp 到 0, 最后一段末尾 clamp 到 audio.durationMs (若已知)。
@@ -24,13 +25,29 @@ struct EnglishSegmentRow: View {
                 .font(.body)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
-            Image(systemName: isDone ? "checkmark.square.fill" : "square")
-                .font(.system(size: 16))
-                .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
-                .help("M6 才能勾选")
+            checkBox
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var checkBox: some View {
+        Button {
+            Task {
+                await state.toggleEnglishSegment(
+                    audioID: audio.id,
+                    segment: segment,
+                    currentlyDone: isDone
+                )
+            }
+        } label: {
+            Image(systemName: isDone ? "checkmark.square.fill" : "square")
+                .font(.system(size: 16))
+                .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(isDone ? "取消勾选" : "标记完成")
     }
 
     @ViewBuilder
