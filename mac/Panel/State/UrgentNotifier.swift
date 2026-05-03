@@ -141,6 +141,11 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         content.body = "\(label) 时段 \(win.startHM)–\(win.endHM)"
         content.sound = .default
         content.categoryIdentifier = Self.categoryID
+        // .timeSensitive: 突破 Focus 模式 + 系统更愿意持久显示, 比 .active 更显眼。
+        // 真正"常驻直到操作"需要用户在 系统设置 → 通知 → Panel.app → 提醒样式 选
+        // "提醒" (Alert), Apple 不允许 app 代码强制 alert style。
+        content.interruptionLevel = .timeSensitive
+        content.relevanceScore = 1.0
         content.userInfo = [
             "baseKey": key,
             "supplementID": item.id,
