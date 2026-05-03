@@ -130,6 +130,11 @@ func (s *Server) handleCheckSupplement(w http.ResponseWriter, r *http.Request) {
 		_, err = s.store.UpsertRecord(store.Record{
 			Module: supplementModule, Date: p.Date, Key: key, ValueNum: &one,
 		})
+		if err == nil {
+			// 完成 → 顺手 dismiss 对应通知 (ref 跟 supplements.GenerateNotifications 一致)
+			ref := fmt.Sprintf("supplement:%d:window:%d:date:%s", id, p.WindowIndex, p.Date)
+			_ = s.store.DismissNotificationByRef(ref, time.Now().Unix())
+		}
 	} else {
 		err = s.store.DeleteRecord(supplementModule, p.Date, key)
 	}
@@ -314,7 +319,15 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				}
 			}
 			item.Windows = append(item.Windows, ws)
-			// 未浮现的 window (餐未触发) 不计入 dose 统计 / done_today 判断
+			// totalDoses/doneDoses 统计所有 enabled & 未暂停的 window (包括等待餐触发的),
+			// 反映 item 一日实际要做的总次数,而非"已浮现"的次数
+			if sp.Enabled && !paused {
+				resp.TotalDoses++
+				if ws.DoneToday {
+					resp.DoneDoses++
+				}
+			}
+			// 等待餐触发的 window 不计入 visibleCount / done_today (item 级) 判断
 			if ws.RequiresMeal != "" {
 				hasPending = true
 				continue
@@ -322,12 +335,6 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 			visibleCount++
 			if ws.DoneToday {
 				doneVisible++
-			}
-			if sp.Enabled && !paused {
-				resp.TotalDoses++
-				if ws.DoneToday {
-					resp.DoneDoses++
-				}
 			}
 		}
 		item.DoneToday = visibleCount > 0 && doneVisible == visibleCount && !hasPending

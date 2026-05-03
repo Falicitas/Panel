@@ -350,6 +350,21 @@ func (s *Store) DismissNotification(id int64, at int64) error {
 	return err
 }
 
+// DismissNotificationByRef 按 source_ref 把对应未 dismissed 的通知标 dismissed。
+// 用于"用户在 UI 完成某 window → 自动清掉对应通知"。
+// ref 为空时静默跳过 (避免误清所有 source_ref IS NULL 的通知)。
+func (s *Store) DismissNotificationByRef(ref string, atUnix int64) error {
+	if ref == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`UPDATE notifications SET dismissed_at=?
+		  WHERE source_ref=? AND dismissed_at IS NULL`,
+		atUnix, ref,
+	)
+	return err
+}
+
 // DismissStaleSupplementNotifications 把 source='supplement' 且 created_at < beforeUnix
 // 且未 dismissed 的通知一并 dismissed。返回受影响行数。
 // 用于 GenerateNotifications 入口,避免昨天的食物保健品提醒堆到今天。
