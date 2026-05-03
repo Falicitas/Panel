@@ -676,7 +676,8 @@ final class AppState {
         } catch {
             // 静默,等下次
         }
-        // 紧急提醒: 每 tick 检查 supplement window 末 5 分钟未完成情况, 弹系统通知
-        UrgentNotifier.shared.check(today: self.supplementsToday)
+        // 紧急提醒: 订阅-消费模型, backend notification 是状态 source of truth;
+        // mac 系统通知按 lead range fire / done / dismiss / snooze 联动 panel 通知栏。
+        UrgentNotifier.shared.check(today: self.supplementsToday, notifications: self.notifications)
     }
 }

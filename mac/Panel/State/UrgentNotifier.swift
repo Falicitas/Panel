@@ -27,8 +27,9 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
     private var firedKeys: Set<String> = []
     private var firedDate: String = ""
     private var permissionRequested = false
-    /// willPresent / snooze 回调要查 doneToday 状态, 这里缓存最近一次 check 的快照。
+    /// willPresent / snooze / dismiss 回调要查 doneToday 状态 + notification ref, 缓存最近 check 快照。
     private var lastToday: SupplementToday?
+    private var lastNotifications: [PanelNotification] = []
 
     private override init() {
         super.init()
@@ -56,11 +57,13 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
-    /// AppState.tick 5s 调一次。
-    func check(today: SupplementToday?) {
+    /// AppState.tick 5s 调一次。订阅-消费模型: backend notification.dismissed_at
+    /// 是 reminder 状态的 source of truth, 任何端 dismiss / done 都会反映到这里。
+    func check(today: SupplementToday?, notifications: [PanelNotification]) {
         ensurePermission()
         guard let today else { return }
         lastToday = today
+        lastNotifications = notifications
 
         if today.date != firedDate {
             firedDate = today.date
@@ -72,10 +75,12 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         for item in today.items {
             for (idx, win) in item.windows.enumerated() {
                 let key = baseKey(itemID: item.id, windowIndex: idx, date: today.date)
+                let ref = key  // backend source_ref 跟 mac baseKey 同一格式
+                let notif = notifications.first(where: { $0.sourceRef == ref })
 
-                // 用户已勾完 → cancel 该 baseKey 所有 pending+delivered (含 snooze 链)
-                // + 从 firedKeys 移除, 让取消勾选后能在 lead range 重新 fire 一次新的提醒。
-                if win.doneToday {
+                // 已 done OR backend 通知已 dismissed → 双向消费, mac 也要 cancel
+                let consumed = win.doneToday || (notif?.dismissedAt != nil)
+                if consumed {
                     if firedKeys.contains(key) {
                         firedKeys.remove(key)
                     }
@@ -83,17 +88,19 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
                     continue
                 }
 
-                // 项被禁用 / 暂停 / 等待餐 / window 时间不可解析 → 不主动 fire (但也不动 firedKeys)
+                // 项被禁用 / 暂停 / 等待餐 / window 时间不可解析 → 不主动 fire (但不动 firedKeys)
                 guard item.enabled, !item.paused else { continue }
                 guard win.requiresMeal.isEmpty else { continue }
-                guard let endTime = parseTodayHM(win.endHM, base: now) else { continue }
+                // backend 还没 generate 这条 notif (window 没 active 或被 stale 清) → 不自作主张 fire
+                guard let notif else { continue }
 
+                guard let endTime = parseTodayHM(win.endHM, base: now) else { continue }
                 let leadStart = endTime.addingTimeInterval(-leadSeconds)
                 guard now >= leadStart, now < endTime else { continue }
                 guard !firedKeys.contains(key) else { continue }
 
                 firedKeys.insert(key)
-                fire(key: key, item: item, win: win, endTime: endTime, snoozeCount: 0)
+                fire(key: key, item: item, win: win, endTime: endTime, snoozeCount: 0, notificationID: notif.id)
             }
         }
     }
@@ -118,12 +125,14 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
     }
 
     /// snoozeCount=0 立即 fire (trigger=nil); snoozeCount>0 按 endTime + N·30min schedule。
+    /// notificationID 是 backend notification.id, dismiss action 调 backend dismiss API 用。
     private func fire(
         key: String,
         item: SupplementTodayItem,
         win: SupplementWindowStatus,
         endTime: Date,
-        snoozeCount: Int
+        snoozeCount: Int,
+        notificationID: Int64
     ) {
         let content = UNMutableNotificationContent()
         let label = item.type == "supplement" ? "保健品" : "食物"
@@ -138,6 +147,7 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
             "windowIndex": findWindowIndex(in: item, matching: win),
             "windowEndUnix": endTime.timeIntervalSince1970,
             "snoozeCount": snoozeCount,
+            "notificationID": notificationID,
         ]
 
         let trigger: UNNotificationTrigger?
@@ -216,7 +226,8 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
               let itemID = info["supplementID"] as? Int64,
               let windowIndex = info["windowIndex"] as? Int,
               let endUnix = info["windowEndUnix"] as? TimeInterval,
-              let snoozeCount = info["snoozeCount"] as? Int
+              let snoozeCount = info["snoozeCount"] as? Int,
+              let notificationID = info["notificationID"] as? Int64
         else { return }
         if isWindowDone(itemID: itemID, windowIndex: windowIndex) { return }
         guard let today = lastToday,
@@ -226,7 +237,6 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         let win = item.windows[windowIndex]
         let endTime = Date(timeIntervalSince1970: endUnix)
 
-        // 同步 backend snooze count → SupplementsView 的 effective end 跟着延 30·N min
         let date = today.date
         Task {
             do {
@@ -236,7 +246,21 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
             }
         }
 
-        fire(key: baseKey, item: item, win: win, endTime: endTime, snoozeCount: snoozeCount + 1)
+        fire(key: baseKey, item: item, win: win, endTime: endTime, snoozeCount: snoozeCount + 1, notificationID: notificationID)
+    }
+
+    /// 用户在 mac banner 点 "知道了" 或隐式 ✕ 时调; 同步调 backend dismiss API,
+    /// panel 内通知栏对应一条也消失 (订阅-消费双向)。
+    fileprivate func dismissFromResponse(_ response: UNNotificationResponse) {
+        let info = response.notification.request.content.userInfo
+        guard let notificationID = info["notificationID"] as? Int64 else { return }
+        Task {
+            do {
+                try await APIClient.shared.dismissNotification(id: notificationID)
+            } catch {
+                os_log("dismiss api err: %{public}@", log: Self.log, type: .error, String(describing: error))
+            }
+        }
     }
 }
 
@@ -268,10 +292,15 @@ extension UrgentNotifier: UNUserNotificationCenterDelegate {
     ) {
         let actionID = response.actionIdentifier
         Task { @MainActor in
-            if actionID == Self.snoozeActionID {
+            switch actionID {
+            case Self.snoozeActionID:
                 self.snoozeFromResponse(response)
+            case Self.dismissActionID, UNNotificationDismissActionIdentifier:
+                // 显式 "知道了" 或隐式 ✕ 都同步 backend dismiss
+                self.dismissFromResponse(response)
+            default:
+                break  // default action (点击 banner 本身) 不做事
             }
-            // dismiss / default action / 隐式 ✕ 都不做事 — 系统自然清通知
             completionHandler()
         }
     }
