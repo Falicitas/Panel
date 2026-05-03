@@ -23,8 +23,11 @@ enum SpeechSegmenter {
 
     private static let logger = Logger(subsystem: "com.kinesis.panel", category: "speech")
 
-    /// 每段 12s — 小段保证段内字符比例估算误差 < 1s, 同时 chunk 数量可控。
+    /// 主区间 12s — 用于 chunkRange 的 offsetSec/durSec 和字符比例。
     static let chunkSec: Double = 12.0
+    /// 前后各加 1.5s overlap — 让 STT 在边界附近的词有充足上下文不至于"保守省略"。
+    /// 拿到 ~15s 文本后, 按比例 + 词边界裁回主区间对应的核心文本。
+    static let chunkOverlapSec: Double = 1.5
 
     enum Failure: Error, LocalizedError {
         case noKey
@@ -70,19 +73,33 @@ enum SpeechSegmenter {
         var chunkIdx = 0
 
         while offset < totalSec {
-            let chunkActualSec = min(chunkSec, totalSec - offset)
+            let coreStart = offset
+            let coreEnd = min(offset + chunkSec, totalSec)
+            let coreDur = coreEnd - coreStart
+            let isFirst = chunkIdx == 0
+            let isLast = coreEnd >= totalSec
+            // export 实际跨度 = core ± overlap (clamp 边界)
+            let exportStart = isFirst ? coreStart : max(0, coreStart - chunkOverlapSec)
+            let exportEnd = isLast ? coreEnd : min(totalSec, coreEnd + chunkOverlapSec)
+            let exportDur = exportEnd - exportStart
+            let leadingFrac = exportDur > 0 ? (coreStart - exportStart) / exportDur : 0
+            let trailingFrac = exportDur > 0 ? (exportEnd - coreEnd) / exportDur : 0
+
             let chunkURL = URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent("panel-asr-\(UUID().uuidString).m4a")
             do {
-                try await exportChunk(asset: asset, startSec: offset, durationSec: chunkActualSec, to: chunkURL)
+                try await exportChunk(asset: asset, startSec: exportStart, durationSec: exportDur, to: chunkURL)
                 let bytes = (try? FileManager.default.attributesOfItem(atPath: chunkURL.path)[.size] as? Int) ?? 0
                 let result = try await Transcriber.transcribeWithWordTimestamps(audioFile: chunkURL)
                 successChunks += 1
-                let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    chunkTexts.append(ChunkText(text: trimmed, offsetSec: offset, durSec: chunkActualSec))
+                let raw = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                // overlap 让 STT 边界词不省略, 但不裁剪 — 接受跨段少量词重复 (比缺失好)。
+                // 后续可加 fuzzy 拼接去重, 当前优先文本完整性。
+                _ = leadingFrac; _ = trailingFrac  // silence unused warnings
+                if !raw.isEmpty {
+                    chunkTexts.append(ChunkText(text: raw, offsetSec: coreStart, durSec: coreDur))
                 }
-                logger.info("chunk \(chunkIdx + 1)/\(totalChunks): off=\(offset, format: .fixed(precision: 1))s bytes=\(bytes) chars=\(trimmed.count)")
+                logger.info("chunk \(chunkIdx + 1)/\(totalChunks): core=[\(coreStart, format: .fixed(precision: 1)),\(coreEnd, format: .fixed(precision: 1))]s export=\(exportDur, format: .fixed(precision: 1))s bytes=\(bytes) chars=\(raw.count)")
             } catch {
                 lastErr = "\(error.localizedDescription)"
                 logger.warning("chunk \(chunkIdx + 1)/\(totalChunks) failed: \(error.localizedDescription, privacy: .public)")
@@ -226,6 +243,49 @@ enum SpeechSegmenter {
     }
 
     /// 用 UTF-16 code unit 计数 (跟 NSString.length / NSRegularExpression 一致)。
+    // MARK: - 裁剪到核心区间 (overlap 文本去除)
+
+    /// 输入 raw text (包含前后 overlap), 按 leadingFrac/trailingFrac 比例裁掉前后,
+    /// 并对齐到词边界 (最近的空格), 避免在词中间切。
+    /// leadingFrac=0 (第一段) → 不裁前;trailingFrac=0 (最后一段) → 不裁后。
+    private static func trimToCorePortion(_ text: String, leadingFrac: Double, trailingFrac: Double) -> String {
+        let nsText = text as NSString
+        let totalLen = nsText.length
+        if totalLen == 0 { return "" }
+
+        let rawLeading = Int((Double(totalLen) * max(0, leadingFrac)).rounded(.down))
+        let rawTrailing = Int((Double(totalLen) * max(0, trailingFrac)).rounded(.down))
+        var alignedStart = min(rawLeading, totalLen)
+        var alignedEnd = max(0, totalLen - rawTrailing)
+
+        // 词边界 align: 前界往后挪到下一个空格之后, 跳过空格
+        if leadingFrac > 0 && alignedStart < alignedEnd {
+            while alignedStart < alignedEnd && !isASCIISpace(nsText.character(at: alignedStart)) {
+                alignedStart += 1
+            }
+            while alignedStart < alignedEnd && isASCIISpace(nsText.character(at: alignedStart)) {
+                alignedStart += 1
+            }
+        }
+        // 后界往前挪到上一个空格之前
+        if trailingFrac > 0 && alignedStart < alignedEnd {
+            while alignedEnd > alignedStart && !isASCIISpace(nsText.character(at: alignedEnd - 1)) {
+                alignedEnd -= 1
+            }
+            while alignedEnd > alignedStart && isASCIISpace(nsText.character(at: alignedEnd - 1)) {
+                alignedEnd -= 1
+            }
+        }
+
+        guard alignedStart < alignedEnd else { return "" }
+        return nsText.substring(with: NSRange(location: alignedStart, length: alignedEnd - alignedStart))
+    }
+
+    private static func isASCIISpace(_ ch: unichar) -> Bool {
+        // 0x20 space, 0x09 tab, 0x0A LF, 0x0D CR, 0xA0 NBSP
+        return ch == 0x20 || ch == 0x09 || ch == 0x0A || ch == 0x0D || ch == 0xA0
+    }
+
     private static func leadingWhitespaceUTF16Length(_ s: String) -> Int {
         var count = 0
         for scalar in s.unicodeScalars {

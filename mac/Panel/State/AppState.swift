@@ -407,6 +407,9 @@ final class AppState {
 
     /// 同时只跑 1 个 audio 的 ASR; 防 tick / 启动重复触发同一 audio。
     private var asrInProgressIDs: Set<Int64> = []
+    /// 本 session 内 ASR 失败的 audio.id, 不再自动重试 (避免烧钱循环)。
+    /// 用户重启 panel 才会清空。重启后若 backend 仍是 pending 且未 fail, 会重试。
+    private var asrFailedIDs: Set<Int64> = []
 
     func reloadEnglishToday() async {
         do {
@@ -417,16 +420,16 @@ final class AppState {
         }
     }
 
-    /// 当前 audio 若 status=pending 且 local 文件存在,后台启动 Apple Speech 转写,
-    /// 完成后 PUT segments 回 backend + 刷新 today。失败标 status=failed 给 UI 提示。
-    /// SpeechSegmenter.transcribe 自己用 Speech framework 的内部线程,
-    /// 不阻塞 MainActor — 故 Task { ... } (隐式 MainActor) 即可。
+    /// 当前 audio 若 status=pending 且 local 文件存在 + 本 session 没失败过, 后台启动转写,
+    /// 完成后 PUT segments 回 backend + 刷新 today。失败把 audio.id 加进 asrFailedIDs,
+    /// tick 后续不再重试 (防止无限失败循环烧钱)。
     func ensureSegmentsForCurrentAudio() {
         guard let today = englishToday,
               let audio = today.currentAudio,
               audio.segmentsStatus == "pending",
               !audio.localPath.isEmpty,
-              !asrInProgressIDs.contains(audio.id) else { return }
+              !asrInProgressIDs.contains(audio.id),
+              !asrFailedIDs.contains(audio.id) else { return }
         asrInProgressIDs.insert(audio.id)
         Task {
             await transcribeAndUpload(audio)
@@ -441,9 +444,8 @@ final class AppState {
             try await api.putEnglishSegments(audioID: audio.id, segments: segs)
             await reloadEnglishToday()
         } catch {
-            await MainActor.run {
-                self.lastError = "ASR 失败: \(error.localizedDescription)"
-            }
+            asrFailedIDs.insert(audio.id)  // 本 session 不再重试
+            self.lastError = "ASR 失败: \(error.localizedDescription)"
         }
     }
 
