@@ -162,7 +162,17 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			if sp.Type == "supplement" {
 				label = "保健品"
 			}
-			body := fmt.Sprintf("%s 时段 %s–%s", label, w.Start, w.End)
+			// 表达式 (dinner+0m 等) 解析成具体 HH:MM, panel 内通知 + mac 系统通知
+			// 都读这个 body, 不再向用户暴露原始 anchor 表达式
+			startStr := w.Start
+			endStr := w.End
+			if t, ok, _ := ParseTimeExpr(w.Start, anchors, now); ok {
+				startStr = t.Format("15:04")
+			}
+			if t, ok, _ := ParseTimeExpr(w.End, anchors, now); ok {
+				endStr = t.Format("15:04")
+			}
+			body := fmt.Sprintf("%s 时段 %s–%s", label, startStr, endStr)
 			n := store.Notification{
 				Source:    "supplement",
 				SourceRef: ref,
