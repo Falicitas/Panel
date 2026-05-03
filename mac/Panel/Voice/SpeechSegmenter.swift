@@ -1,40 +1,34 @@
 import AVFoundation
 import Foundation
 import os
-import Speech
 
 /// 把本地音频文件转写为句子级 EnglishSegment 数组。
 ///
-/// 实现:
-///   - Apple Speech Framework 的 `SFSpeechURLRecognitionRequest` 有 **1 分钟硬限制**
-///     (任何长于 60s 的输入直接返回 "No speech detected")。
-///   - 故先用 `AVAssetExportSession` 把整段切成 ≤50s/段 (.m4a),串行 ASR,
-///     合并 word timestamps (每段 timestamp + offset)。
-///   - 再走句子边界算法 + 缩写合并 pass。
+/// 实现 (M5 v4): 复用 F12 的 OpenRouter pipeline + 段内字符比例线性估算 timestamp。
+///   - OpenRouter STT 不透传 verbose_json + timestamp_granularities, word timestamps 拿不到。
+///   - 改用 **小段策略**: 切片 12s/段 (.m4a, AVMutableComposition + AVAssetExportSession),
+///     每段 ASR 拿全文 → 段内按 [.!?] 拆句 → 按字符数比例线性估算 [startMs, endMs)。
+///     12s 段内通常 1-3 句, 估算误差 < 1s, 段播放体验可接受。
+///   - 缺点: API 调用次数 ~ 4x (50s→12s), 4 分钟音频 = ~20 段 ≈ $0.05 ($0.0013/段)。
+///   - 改进: Phase 1 直连 OpenAI API + whisper-1 verbose_json 拿真 word timestamps。
 ///
-/// 优先 on-device (隐私 + 离线)。on-device 需用户系统已下载 en-US 增强听写模型
-/// (System Settings → Siri 与 Spotlight → 听写)。
-///
-/// 在 Console.app 看进度:`log stream --predicate 'subsystem == "com.kinesis.panel" AND category == "speech"'`
+/// Console.app 看进度:
+///   `log stream --predicate 'subsystem == "com.kinesis.panel" AND category == "speech"'`
 enum SpeechSegmenter {
 
     private static let logger = Logger(subsystem: "com.kinesis.panel", category: "speech")
 
-    /// 每段 ASR 最长时长 (留 10s 余地避免触 60s 限制)。
-    static let chunkSec: Double = 50.0
+    /// 每段 12s — 小段保证段内字符比例估算误差 < 1s。
+    static let chunkSec: Double = 12.0
 
     enum Failure: Error, LocalizedError {
-        case notAuthorized
-        case recognizerUnavailable
-        case noOnDeviceModel
+        case noKey
         case audioLoadFailed(String)
         case allChunksFailed(String)
 
         var errorDescription: String? {
             switch self {
-            case .notAuthorized: "needs_speech_authorization"
-            case .recognizerUnavailable: "recognizer_unavailable"
-            case .noOnDeviceModel: "needs_on_device_model"
+            case .noKey: "未设置 OpenRouter key (在 Settings 配)"
             case .audioLoadFailed(let s): "audio_load_failed: \(s)"
             case .allChunksFailed(let s): "all_chunks_failed: \(s)"
             }
@@ -43,26 +37,17 @@ enum SpeechSegmenter {
 
     /// 转写本地音频文件 → 句子级 EnglishSegment 数组 (id/audioID 都为 0,由调用方填回)。
     static func transcribe(url: URL) async throws -> [EnglishSegment] {
-        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
-            logger.error("not authorized")
-            throw Failure.notAuthorized
+        guard let key = KeyStore.get(), !key.isEmpty else {
+            logger.error("no OpenRouter key configured")
+            throw Failure.noKey
         }
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
-              recognizer.isAvailable else {
-            logger.error("recognizer unavailable")
-            throw Failure.recognizerUnavailable
-        }
-        guard recognizer.supportsOnDeviceRecognition else {
-            logger.error("on-device model not available")
-            throw Failure.noOnDeviceModel
-        }
+        _ = key
 
         let asset = AVURLAsset(url: url)
         let totalSec: Double
         do {
             totalSec = try await asset.load(.duration).seconds
         } catch {
-            logger.error("load duration failed: \(error.localizedDescription)")
             throw Failure.audioLoadFailed(error.localizedDescription)
         }
         guard totalSec.isFinite, totalSec > 0 else {
@@ -70,10 +55,10 @@ enum SpeechSegmenter {
         }
 
         let totalChunks = Int(ceil(totalSec / chunkSec))
-        logger.info("transcribe start: \(url.lastPathComponent, privacy: .public), totalSec=\(totalSec), chunks=\(totalChunks)")
+        logger.info("transcribe start: \(url.lastPathComponent, privacy: .public) totalSec=\(totalSec, format: .fixed(precision: 1)) chunks=\(totalChunks) chunkSec=\(chunkSec, format: .fixed(precision: 1))")
 
-        var allWords: [TimedWord] = []
-        var lastErr: String = ""
+        var allSentences: [Sentence] = []
+        var lastErr = ""
         var successChunks = 0
         var offset: Double = 0
         var chunkIdx = 0
@@ -84,16 +69,14 @@ enum SpeechSegmenter {
                 .appendingPathComponent("panel-asr-\(UUID().uuidString).m4a")
             do {
                 try await exportChunk(asset: asset, startSec: offset, durationSec: chunkActualSec, to: chunkURL)
-                let chunkWords = try await transcribeOneChunk(url: chunkURL, recognizer: recognizer)
+                let bytes = (try? FileManager.default.attributesOfItem(atPath: chunkURL.path)[.size] as? Int) ?? 0
+                let result = try await Transcriber.transcribeWithWordTimestamps(audioFile: chunkURL)
                 successChunks += 1
-                logger.info("chunk \(chunkIdx + 1)/\(totalChunks): off=\(offset, format: .fixed(precision: 1))s dur=\(chunkActualSec, format: .fixed(precision: 1))s words=\(chunkWords.count)")
-                for w in chunkWords {
-                    allWords.append(TimedWord(
-                        text: w.substring,
-                        timestamp: w.timestamp + offset,
-                        duration: w.duration
-                    ))
-                }
+                let chunkSentences = splitTextToSentences(
+                    result.text, chunkOffsetSec: offset, chunkDurSec: chunkActualSec
+                )
+                logger.info("chunk \(chunkIdx + 1)/\(totalChunks): off=\(offset, format: .fixed(precision: 1))s bytes=\(bytes) chars=\(result.text.count) sentences=\(chunkSentences.count)")
+                allSentences.append(contentsOf: chunkSentences)
             } catch {
                 lastErr = "\(error.localizedDescription)"
                 logger.warning("chunk \(chunkIdx + 1)/\(totalChunks) failed: \(error.localizedDescription, privacy: .public)")
@@ -103,48 +86,109 @@ enum SpeechSegmenter {
             chunkIdx += 1
         }
 
-        logger.info("transcribe done: \(successChunks)/\(totalChunks) chunks ok, words=\(allWords.count)")
+        logger.info("transcribe done: \(successChunks)/\(totalChunks) chunks ok, \(allSentences.count) sentences total")
 
-        if allWords.isEmpty {
-            throw Failure.allChunksFailed(lastErr.isEmpty ? "no transcription" : lastErr)
+        if allSentences.isEmpty {
+            throw Failure.allChunksFailed(lastErr.isEmpty ? "no sentences" : lastErr)
         }
 
-        let raw = splitToSentences(allWords)
-        let merged = mergeAbbreviationSplits(raw)
-        return merged.enumerated().map { idx, group -> EnglishSegment in
-            let first = group.first!
-            let last = group.last!
-            let text = group.map(\.text).joined(separator: " ")
-            return EnglishSegment(
+        return allSentences.enumerated().map { idx, s -> EnglishSegment in
+            EnglishSegment(
                 id: 0, audioID: 0, idx: idx,
-                startMs: Int64(first.timestamp * 1000),
-                endMs: Int64((last.timestamp + last.duration) * 1000),
-                text: text
+                startMs: Int64(s.startSec * 1000),
+                endMs: Int64(s.endSec * 1000),
+                text: s.text
             )
         }
     }
 
-    // MARK: - 内部类型 / 切片 / ASR 单段
+    // MARK: - 内部类型
 
-    private struct TimedWord {
+    private struct Sentence {
         let text: String
-        let timestamp: Double  // 秒,整段音频内的绝对位置
-        let duration: Double
+        let startSec: Double
+        let endSec: Double
     }
 
-    /// 用 AVAssetExportSession 把 [startSec, startSec+durationSec) 段导出为 .m4a。
+    /// 段内拆句 + 字符数比例估算 timestamp。
+    /// chunkDurSec 段总秒数, chunkOffsetSec 段在整段音频中的起点秒。
+    /// 12s 段内通常 1-3 句, 误差 < 1s。
+    private static func splitTextToSentences(
+        _ text: String, chunkOffsetSec: Double, chunkDurSec: Double
+    ) -> [Sentence] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let parts = splitOnSentenceTerminators(trimmed)
+        guard !parts.isEmpty else { return [] }
+        let totalChars = parts.reduce(0) { $0 + $1.count }
+        guard totalChars > 0 else { return [] }
+        var charsBefore = 0
+        var out: [Sentence] = []
+        for p in parts {
+            let startFrac = Double(charsBefore) / Double(totalChars)
+            charsBefore += p.count
+            let endFrac = Double(charsBefore) / Double(totalChars)
+            out.append(Sentence(
+                text: p,
+                startSec: chunkOffsetSec + startFrac * chunkDurSec,
+                endSec: chunkOffsetSec + endFrac * chunkDurSec
+            ))
+        }
+        return out
+    }
+
+    /// 在 [.!?] 后跟空白处切句子, 保留标点。无标点时返回 [text] 整段。
+    private static func splitOnSentenceTerminators(_ text: String) -> [String] {
+        let pattern = "(?<=[.!?])\\s+"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return [text]
+        }
+        let nsText = text as NSString
+        var lastIdx = 0
+        var out: [String] = []
+        regex.enumerateMatches(in: text, options: [], range: NSRange(location: 0, length: nsText.length)) { match, _, _ in
+            guard let m = match else { return }
+            let endOfSentence = m.range.location
+            let s = nsText.substring(with: NSRange(location: lastIdx, length: endOfSentence - lastIdx))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty { out.append(s) }
+            lastIdx = m.range.location + m.range.length
+        }
+        if lastIdx < nsText.length {
+            let last = nsText.substring(from: lastIdx).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !last.isEmpty { out.append(last) }
+        }
+        return out.isEmpty ? [text] : out
+    }
+
+    // MARK: - 切片 (.m4a)
+
+    /// 切片走 AVMutableComposition (不用 exporter.timeRange — 后者对 mp3 输入会产出
+    /// 看似 m4a 但实质静音的文件, 让 STT 模型 hallucinate "The quick brown fox" 等训练样本)。
     private static func exportChunk(
         asset: AVURLAsset, startSec: Double, durationSec: Double, to outputURL: URL
     ) async throws {
-        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+        let sourceTracks = try await asset.loadTracks(withMediaType: .audio)
+        guard let sourceTrack = sourceTracks.first else {
+            throw Failure.audioLoadFailed("no audio track in source")
+        }
+        let composition = AVMutableComposition()
+        guard let compoTrack = composition.addMutableTrack(
+            withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            throw Failure.audioLoadFailed("create composition track failed")
+        }
+        let range = CMTimeRange(
+            start: CMTime(seconds: startSec, preferredTimescale: 1000),
+            duration: CMTime(seconds: durationSec, preferredTimescale: 1000)
+        )
+        try compoTrack.insertTimeRange(range, of: sourceTrack, at: .zero)
+
+        guard let exporter = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
             throw Failure.audioLoadFailed("create AVAssetExportSession failed")
         }
         exporter.outputFileType = .m4a
         exporter.outputURL = outputURL
-        exporter.timeRange = CMTimeRange(
-            start: CMTime(seconds: startSec, preferredTimescale: 1000),
-            duration: CMTime(seconds: durationSec, preferredTimescale: 1000)
-        )
         await withCheckedContinuation { cont in
             exporter.exportAsynchronously {
                 cont.resume()
@@ -156,73 +200,4 @@ enum SpeechSegmenter {
         }
     }
 
-    private static func transcribeOneChunk(url: URL, recognizer: SFSpeechRecognizer) async throws -> [SFTranscriptionSegment] {
-        let request = SFSpeechURLRecognitionRequest(url: url)
-        request.requiresOnDeviceRecognition = true
-        request.shouldReportPartialResults = false
-        return try await withCheckedThrowingContinuation { cont in
-            var resumed = false
-            recognizer.recognitionTask(with: request) { result, error in
-                guard !resumed else { return }
-                if let error {
-                    resumed = true
-                    cont.resume(throwing: error)
-                    return
-                }
-                guard let result, result.isFinal else { return }
-                resumed = true
-                cont.resume(returning: result.bestTranscription.segments)
-            }
-        }
-    }
-
-    // MARK: - 句子边界算法
-
-    /// 切句规则: 上词以 .!? 结尾 OR 下词与当前词的 gap > 0.6s OR 累计 ≥12 词且 gap > 0.3s 强切。
-    private static func splitToSentences(_ words: [TimedWord]) -> [[TimedWord]] {
-        var out: [[TimedWord]] = []
-        var cur: [TimedWord] = []
-        for (i, w) in words.enumerated() {
-            cur.append(w)
-            let isLast = i == words.count - 1
-            let endsWithPunct = w.text.last.map { ".!?".contains($0) } ?? false
-            let nextGap: Double
-            if isLast {
-                nextGap = 0
-            } else {
-                let next = words[i + 1]
-                nextGap = next.timestamp - (w.timestamp + w.duration)
-            }
-            let strongCut = cur.count >= 12 && nextGap > 0.3
-            if isLast || endsWithPunct || nextGap > 0.6 || strongCut {
-                out.append(cur)
-                cur = []
-            }
-        }
-        if !cur.isEmpty { out.append(cur) }
-        return out
-    }
-
-    /// 合并缩写跨切 (U.S. / Dr. + 下句首词小写) — 防止误切句子。
-    private static func mergeAbbreviationSplits(_ groups: [[TimedWord]]) -> [[TimedWord]] {
-        var out: [[TimedWord]] = []
-        for g in groups {
-            if let prev = out.last, let prevLast = prev.last,
-               looksLikeAbbreviation(prevLast.text),
-               let firstWord = g.first, let firstChar = firstWord.text.first,
-               firstChar.isLowercase {
-                out.removeLast()
-                out.append(prev + g)
-            } else {
-                out.append(g)
-            }
-        }
-        return out
-    }
-
-    private static func looksLikeAbbreviation(_ s: String) -> Bool {
-        guard s.hasSuffix("."), s.count <= 4 else { return false }
-        let body = s.dropLast()
-        return body.allSatisfy { $0.isUppercase || $0 == "." || $0.isLetter }
-    }
 }
