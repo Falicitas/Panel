@@ -16,10 +16,158 @@
     }
     /* Crepe 默认 frame 主题已包 ProseMirror 编辑器样式;这里保留页面级容器样式即可 */
     .milkdown { background: transparent !important; }
+
+    /* cmd+F 找文本时的高亮样式, 同时适配 light / dark mode. */
+    .panel-find-mark {
+      background-color: rgba(255, 220, 80, 0.45);
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 1px;
+      box-shadow: 0 0 0 1px rgba(180, 140, 0, 0.5);
+    }
+    .panel-find-mark.panel-find-active {
+      background-color: rgba(255, 140, 0, 0.85);
+      color: #000;
+      box-shadow: 0 0 0 1.5px rgba(220, 90, 0, 1);
+    }
+    @media (prefers-color-scheme: dark) {
+      .panel-find-mark {
+        background-color: rgba(255, 220, 80, 0.30);
+        color: #fff;
+        box-shadow: 0 0 0 1px rgba(255, 220, 80, 0.7);
+      }
+      .panel-find-mark.panel-find-active {
+        background-color: rgba(255, 165, 0, 0.95);
+        color: #000;
+        box-shadow: 0 0 0 1.5px rgba(255, 215, 0, 1);
+      }
+    }
   </style>
 </head>
 <body>
   <div id="editor"></div>
   <script src="bundle.js"></script>
+  <script>
+  (function () {
+    // 在 #editor 内 DOM TreeWalker 找文本, 用 <span class="panel-find-mark"> 包起来。
+    // active mark 加 .panel-find-active + scrollIntoView。
+    // findClear 把所有 mark unwrap 还原。
+    // 注意: ProseMirror 编辑会 destroy DOM 重建, find marks 在 user 编辑后会丢;
+    // 调用方应在 readonly 模式下使用, 或允许丢失但 user 输入时再调用 findAll 重新高亮。
+    let activeIdx = -1;
+
+    function clear() {
+      const root = document.getElementById('editor');
+      if (!root) return;
+      const marks = root.querySelectorAll('.panel-find-mark');
+      marks.forEach(m => {
+        const parent = m.parentNode;
+        if (!parent) return;
+        while (m.firstChild) parent.insertBefore(m.firstChild, m);
+        parent.removeChild(m);
+        parent.normalize && parent.normalize();
+      });
+      activeIdx = -1;
+    }
+
+    function highlightAll(query) {
+      clear();
+      if (!query) return [];
+      const root = document.getElementById('editor');
+      if (!root) return [];
+      const lq = query.toLowerCase();
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) => {
+          const p = node.parentNode;
+          if (!p) return NodeFilter.FILTER_REJECT;
+          if (p.classList && p.classList.contains('panel-find-mark')) return NodeFilter.FILTER_REJECT;
+          const tag = (p.tagName || '').toLowerCase();
+          if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      const targets = [];
+      let n;
+      while ((n = walker.nextNode())) {
+        if (n.nodeValue && n.nodeValue.toLowerCase().includes(lq)) {
+          targets.push(n);
+        }
+      }
+      const marks = [];
+      for (const node of targets) {
+        const text = node.nodeValue;
+        const lower = text.toLowerCase();
+        const frag = document.createDocumentFragment();
+        let idx = 0;
+        while (idx < text.length) {
+          const found = lower.indexOf(lq, idx);
+          if (found < 0) {
+            frag.appendChild(document.createTextNode(text.slice(idx)));
+            break;
+          }
+          if (found > idx) {
+            frag.appendChild(document.createTextNode(text.slice(idx, found)));
+          }
+          const mark = document.createElement('span');
+          mark.className = 'panel-find-mark';
+          mark.textContent = text.slice(found, found + lq.length);
+          frag.appendChild(mark);
+          marks.push(mark);
+          idx = found + lq.length;
+        }
+        node.parentNode.replaceChild(frag, node);
+      }
+      return marks;
+    }
+
+    function setActive(marks, idx) {
+      marks.forEach(m => m.classList.remove('panel-find-active'));
+      if (idx < 0 || idx >= marks.length) return;
+      marks[idx].classList.add('panel-find-active');
+      marks[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function getMarks() {
+      const root = document.getElementById('editor');
+      if (!root) return [];
+      return Array.from(root.querySelectorAll('.panel-find-mark'));
+    }
+
+    window.panelEditor = window.panelEditor || {};
+
+    // findAll(query) → { count, current } current 1-based, 0 表示无匹配
+    window.panelEditor.findAll = function (query) {
+      const marks = highlightAll(query);
+      if (marks.length === 0) {
+        activeIdx = -1;
+        return { count: 0, current: 0 };
+      }
+      activeIdx = 0;
+      setActive(marks, 0);
+      return { count: marks.length, current: 1 };
+    };
+
+    window.panelEditor.findNext = function () {
+      const marks = getMarks();
+      if (marks.length === 0) return { count: 0, current: 0 };
+      activeIdx = (activeIdx + 1) % marks.length;
+      setActive(marks, activeIdx);
+      return { count: marks.length, current: activeIdx + 1 };
+    };
+
+    window.panelEditor.findPrev = function () {
+      const marks = getMarks();
+      if (marks.length === 0) return { count: 0, current: 0 };
+      activeIdx = (activeIdx - 1 + marks.length) % marks.length;
+      setActive(marks, activeIdx);
+      return { count: marks.length, current: activeIdx + 1 };
+    };
+
+    window.panelEditor.findClear = function () {
+      clear();
+      return { count: 0, current: 0 };
+    };
+  })();
+  </script>
 </body>
 </html>

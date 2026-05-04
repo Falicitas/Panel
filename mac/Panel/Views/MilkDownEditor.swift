@@ -1,11 +1,18 @@
 import SwiftUI
 import WebKit
 
-/// cmd+F 搜索请求 — id 每次变化都触发新一次 webView.find, 即使 query 相同 (用户连按下一个)。
+/// cmd+F 搜索请求。kind 区分: search(query 全新, 重新高亮全部) / next / prev / clear。
+/// id 每次变化都触发新执行 (用户连按下一个)。
 struct EditorFindCommand: Equatable {
+    enum Kind: Equatable { case search(String); case next; case prev; case clear }
     let id: UUID
-    let query: String
-    let backwards: Bool
+    let kind: Kind
+}
+
+/// JS panelEditor.findAll/Next/Prev 返回的匹配数 / 当前 1-based idx。
+struct EditorFindResult: Equatable {
+    let count: Int
+    let current: Int  // 1-based; 0 表示无匹配
 }
 
 struct MilkDownEditor: NSViewRepresentable {
@@ -14,19 +21,22 @@ struct MilkDownEditor: NSViewRepresentable {
     @Binding var scrollText: String?
     var readOnly: Bool = false
     @Binding var findCommand: EditorFindCommand?
+    @Binding var findResult: EditorFindResult
 
     init(
         text: Binding<String>,
         pageZoom: Double = 1.0,
         scrollText: Binding<String?> = .constant(nil),
         readOnly: Bool = false,
-        findCommand: Binding<EditorFindCommand?> = .constant(nil)
+        findCommand: Binding<EditorFindCommand?> = .constant(nil),
+        findResult: Binding<EditorFindResult> = .constant(EditorFindResult(count: 0, current: 0))
     ) {
         self._text = text
         self.pageZoom = pageZoom
         self._scrollText = scrollText
         self.readOnly = readOnly
         self._findCommand = findCommand
+        self._findResult = findResult
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -79,7 +89,7 @@ struct MilkDownEditor: NSViewRepresentable {
         }
         if let cmd = findCommand, coord.lastFindCommandID != cmd.id {
             coord.lastFindCommandID = cmd.id
-            coord.runFind(query: cmd.query, backwards: cmd.backwards)
+            coord.runFind(cmd.kind)
         }
     }
 
@@ -127,23 +137,32 @@ struct MilkDownEditor: NSViewRepresentable {
             webView.evaluateJavaScript("window.panelEditor.setRaw(\(escaped))", completionHandler: nil)
         }
 
-        /// 用 WKWebView 内置 find API (macOS 12+) 找文本, 找到自动滚到 + 高亮。
-        /// query 空 → 清高亮 (clearFindResults)。
-        func runFind(query: String, backwards: Bool) {
+        /// 调 panelEditor.findAll/Next/Prev/Clear (注入在 index.html 末尾的 IIFE)。
+        /// JS 返 { count, current } → 写回 parent.findResult。
+        func runFind(_ kind: EditorFindCommand.Kind) {
             guard let webView else { return }
-            let trimmed = query.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
-                if #available(macOS 12.0, *) {
-                    Task { try? await webView.find("", configuration: WKFindConfiguration()) }
-                }
-                return
+            let js: String
+            switch kind {
+            case .search(let q):
+                let escaped = Self.jsEscape(q.trimmingCharacters(in: .whitespaces))
+                js = "JSON.stringify(window.panelEditor.findAll(\(escaped)))"
+            case .next:
+                js = "JSON.stringify(window.panelEditor.findNext())"
+            case .prev:
+                js = "JSON.stringify(window.panelEditor.findPrev())"
+            case .clear:
+                js = "JSON.stringify(window.panelEditor.findClear())"
             }
-            if #available(macOS 12.0, *) {
-                let cfg = WKFindConfiguration()
-                cfg.backwards = backwards
-                cfg.caseSensitive = false
-                cfg.wraps = true
-                webView.find(trimmed, configuration: cfg) { _ in }
+            webView.evaluateJavaScript(js) { [weak self] result, _ in
+                guard let self else { return }
+                guard let str = result as? String,
+                      let data = str.data(using: .utf8),
+                      let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+                let count = (dict["count"] as? Int) ?? 0
+                let current = (dict["current"] as? Int) ?? 0
+                Task { @MainActor in
+                    self.parent.findResult = EditorFindResult(count: count, current: current)
+                }
             }
         }
 

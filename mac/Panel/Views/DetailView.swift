@@ -7,6 +7,7 @@ struct DetailView: View {
     @State private var showFindBar: Bool = false
     @State private var findText: String = ""
     @State private var findCommand: EditorFindCommand? = nil
+    @State private var findResult: EditorFindResult = EditorFindResult(count: 0, current: 0)
     @FocusState private var findFieldFocused: Bool
 
     var body: some View {
@@ -57,7 +58,9 @@ struct DetailView: View {
                         text: bufferBinding,
                         pageZoom: state.editorPageZoom,
                         scrollText: $bindable.pendingScrollText,
-                        findCommand: $findCommand
+                        readOnly: showFindBar,  // 搜索期间 readonly, 防 ProseMirror 重建破坏 mark
+                        findCommand: $findCommand,
+                        findResult: $findResult
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -163,7 +166,8 @@ struct DetailView: View {
         .disabled(state.editorPageZoom >= 1.8)
     }
 
-    /// 顶部 find bar — cmd+F 显示, ESC 关闭。输入直接 incremental 搜索, 回车跳下一个。
+    /// 顶部 find bar — cmd+F 显示, ESC 关闭。输入即时搜索, 回车跳下一个, 显示 X / Y 匹配数。
+    /// 期间 editor 自动 readonly, 防 ProseMirror 重建破坏 marker。
     @ViewBuilder
     private var findBar: some View {
         HStack(spacing: 8) {
@@ -172,22 +176,32 @@ struct DetailView: View {
             TextField("搜索 (回车下一个 / Shift+回车上一个)", text: $findText)
                 .textFieldStyle(.roundedBorder)
                 .focused($findFieldFocused)
-                .onSubmit { issueFind(backwards: false) }
+                .onSubmit { issueNext() }
                 .onChange(of: findText) { _, new in
-                    findCommand = EditorFindCommand(id: UUID(), query: new, backwards: false)
+                    let trimmed = new.trimmingCharacters(in: .whitespaces)
+                    if trimmed.isEmpty {
+                        findCommand = EditorFindCommand(id: UUID(), kind: .clear)
+                        findResult = EditorFindResult(count: 0, current: 0)
+                    } else {
+                        findCommand = EditorFindCommand(id: UUID(), kind: .search(trimmed))
+                    }
                 }
+            Text(matchCountText)
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(matchCountColor)
+                .frame(minWidth: 64, alignment: .trailing)
             Button {
-                issueFind(backwards: true)
+                issuePrev()
             } label: { Image(systemName: "chevron.up") }
             .buttonStyle(.borderless)
-            .help("上一个 (⇧⌘G)")
-            .disabled(findText.isEmpty)
+            .help("上一个 (⇧⌘G / ⇧↩)")
+            .disabled(findResult.count == 0)
             Button {
-                issueFind(backwards: false)
+                issueNext()
             } label: { Image(systemName: "chevron.down") }
             .buttonStyle(.borderless)
-            .help("下一个 (⌘G)")
-            .disabled(findText.isEmpty)
+            .help("下一个 (⌘G / ↩)")
+            .disabled(findResult.count == 0)
             Button {
                 closeFindBar()
             } label: { Image(systemName: "xmark.circle.fill") }
@@ -202,16 +216,32 @@ struct DetailView: View {
         .onExitCommand { closeFindBar() }
     }
 
-    private func issueFind(backwards: Bool) {
-        guard !findText.isEmpty else { return }
-        findCommand = EditorFindCommand(id: UUID(), query: findText, backwards: backwards)
+    private var matchCountText: String {
+        if findText.trimmingCharacters(in: .whitespaces).isEmpty { return "" }
+        if findResult.count == 0 { return "无匹配" }
+        return "\(findResult.current) / \(findResult.count)"
+    }
+
+    private var matchCountColor: Color {
+        if findText.trimmingCharacters(in: .whitespaces).isEmpty { return .secondary }
+        return findResult.count == 0 ? .red : .secondary
+    }
+
+    private func issueNext() {
+        guard findResult.count > 0 else { return }
+        findCommand = EditorFindCommand(id: UUID(), kind: .next)
+    }
+
+    private func issuePrev() {
+        guard findResult.count > 0 else { return }
+        findCommand = EditorFindCommand(id: UUID(), kind: .prev)
     }
 
     private func closeFindBar() {
         showFindBar = false
         findText = ""
-        // 清高亮
-        findCommand = EditorFindCommand(id: UUID(), query: "", backwards: false)
+        findCommand = EditorFindCommand(id: UUID(), kind: .clear)
+        findResult = EditorFindResult(count: 0, current: 0)
     }
 
     /// cmd+F 打开 find bar 并 focus 输入框。
@@ -229,25 +259,25 @@ struct DetailView: View {
     /// cmd+G 下一个匹配 (find bar 必须先打开)。
     private var findNextShortcut: some View {
         Button("") {
-            issueFind(backwards: false)
+            issueNext()
         }
         .keyboardShortcut("g", modifiers: .command)
         .frame(width: 0, height: 0)
         .opacity(0)
         .accessibilityHidden(true)
-        .disabled(!showFindBar || findText.isEmpty)
+        .disabled(!showFindBar || findResult.count == 0)
     }
 
     /// shift+cmd+G 上一个。
     private var findPrevShortcut: some View {
         Button("") {
-            issueFind(backwards: true)
+            issuePrev()
         }
         .keyboardShortcut("g", modifiers: [.command, .shift])
         .frame(width: 0, height: 0)
         .opacity(0)
         .accessibilityHidden(true)
-        .disabled(!showFindBar || findText.isEmpty)
+        .disabled(!showFindBar || findResult.count == 0)
     }
 
     private var saveShortcut: some View {
