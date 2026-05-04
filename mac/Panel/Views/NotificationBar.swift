@@ -15,14 +15,19 @@ struct NotificationBar: View {
                 }
             }
             .imageScale(.large)
-            if let latest = state.notifications.first {
-                Text(latest.title + (latest.body.isEmpty ? "" : " · \(latest.body)"))
-                    .font(.body)
-                    .lineLimit(1)
-            } else {
+            if state.notifications.isEmpty {
                 Text("无新通知 — 食物保健品到点提醒在此")
                     .font(.body)
                     .foregroundStyle(.tertiary)
+            } else {
+                // 全部 title 串起来, 宽度不够 SwiftUI 自动 tail 截断 "..." (lineLimit + tail).
+                // body 详情留给 popover 看。多条用 "·" 分隔, 间距给两个空格更清楚。
+                Text(state.notifications.map { item in
+                    item.body.isEmpty ? item.title : "\(item.title): \(item.body)"
+                }.joined(separator: "  ·  "))
+                .font(.body)
+                .lineLimit(1)
+                .truncationMode(.tail)
             }
             Spacer()
             if count > 0 {
