@@ -655,14 +655,18 @@ final class AppState {
     /// 从其它 tab (保健品 / 英文) 一键回到 todolist 当前 focus 行 — 完成杂事直奔关注。
     /// 三步:
     ///   1) selectedTab = .todolist + contentMode = .todolist (不是 micro)
-    ///   2) splitVisibility = .detailOnly (hide sidebar + content list, 只剩 editor)
+    ///   2) splitVisibility = .doubleColumn — 系统 'Hide Sidebar' 按钮同款 state,
+    ///      MainLayout 现有 collapseContent 逻辑会把 content 列宽也一并收为 0,
+    ///      视觉等价 .detailOnly (sidebar+content 都掩盖, 只剩 editor)。
     ///   3) jumpToFocus(focus.text) — 切到 anchor todolist + 滚到该行
+    ///      MilkDownEditor 在 webView ready (handleDidFinish) 时若 scrollText 仍 pending
+    ///      会自动消费一次, 解决首次切到 todolist tab 时 editor 还没 ready 跳不到行的问题。
     /// focus 不存在或文本空 → no-op (按钮也会 disabled)。
     func jumpToTodolistFocus() async {
         guard let text = focus?.text, !text.isEmpty else { return }
         selectedTab = .todolist
         contentMode = .todolist
-        splitVisibility = .detailOnly
+        splitVisibility = .doubleColumn
         await jumpToFocus(text)
     }
 
