@@ -4,12 +4,22 @@ import SwiftUI
 /// M5 接入 ASR + AVAudioPlayer + segment 列表 + ▶ / ☐ 交互。
 struct EnglishView: View {
     @Environment(AppState.self) private var state
+    @State private var showArchive = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("英文练习")
-                    .font(.largeTitle.weight(.semibold))
+                HStack {
+                    Text("英文练习")
+                        .font(.largeTitle.weight(.semibold))
+                    Spacer()
+                    Button {
+                        showArchive = true
+                    } label: {
+                        Label("历史档案", systemImage: "archivebox")
+                    }
+                    .buttonStyle(.bordered)
+                }
 
                 if let today = state.englishToday {
                     headerStats(today: today)
@@ -25,6 +35,9 @@ struct EnglishView: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .sheet(isPresented: $showArchive) {
+            EnglishArchiveSheet(isPresented: $showArchive)
         }
     }
 

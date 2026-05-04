@@ -44,4 +44,18 @@ enum KeyStore {
         UserDefaults.standard.set(value, forKey: keyForModel)
         return true
     }
+
+    // MARK: - Groq API Key (英文精听 ASR 专用, 直连 Groq Whisper Large V3 拿词级 timestamp)
+
+    private static let keyForGroq = "voice.groq_api_key"
+
+    static func getGroq() -> String? {
+        UserDefaults.standard.string(forKey: keyForGroq)
+    }
+
+    @discardableResult
+    static func setGroq(_ value: String) -> Bool {
+        UserDefaults.standard.set(value, forKey: keyForGroq)
+        return true
+    }
 }

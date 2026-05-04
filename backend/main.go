@@ -133,7 +133,10 @@ func runEnglishFetchLoop(ctx context.Context, st *store.Store, englishDir string
 		log.Printf("english mkdir %s: %v", englishDir, err)
 		return
 	}
-	fetchers := []english.Fetcher{english.NewVOAFetcher()}
+	// MVP 主源 = NPR Indicator (经济新闻 9-11min, mp3 真有声, ≤25MB 适配 Groq Whisper)。
+	// VOA Akamai CDN mp3 全静音 (issue-11 调研发现 -90dB 占位), 暂不注册;
+	// Phase 1 加 audio energy 探测后再考虑回挂 VOA + Sciam 作多源轮播。
+	fetchers := []english.Fetcher{english.NewNPRFetcher()}
 	runOnce := func() {
 		runCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
