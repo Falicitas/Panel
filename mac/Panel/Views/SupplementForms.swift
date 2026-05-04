@@ -18,6 +18,9 @@ extension Supplement {
 struct SupplementFormSheet: View {
     let initial: Supplement
     let isNew: Bool
+    /// 仅 isNew=false 时挂: 用户点'复制'按钮 → 把当前 form 状态 (含未保存修改) 抛回外层,
+    /// 外层 dismiss 当前 sheet 并弹新 sheet (isNew=true) 让用户改名保存。
+    var onDuplicate: ((Supplement) -> Void)? = nil
 
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
@@ -145,6 +148,13 @@ struct SupplementFormSheet: View {
                 Divider()
                 HStack {
                     Spacer()
+                    Button {
+                        onDuplicate?(item)
+                        dismiss()
+                    } label: {
+                        Label("复制", systemImage: "doc.on.doc")
+                    }
+                    .help("用当前设置 (含未保存编辑) 创建新条目, 改名保存")
                     Button(role: .destructive) {
                         confirmingDelete = true
                     } label: {

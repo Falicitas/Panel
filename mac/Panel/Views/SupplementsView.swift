@@ -31,15 +31,6 @@ struct SupplementsView: View {
                             Task { await state.toggleSupplementWindowCheck(item, windowIndex: idx) }
                         },
                         onEdit: { sp in editing = sp },
-                        onDuplicate: { sp in
-                            // 拷贝字段, ID=0 让 SupplementFormSheet isNew=true 用 CreateSupplement 路径,
-                            // Name 加 "(副本)" 提示用户改新名 (可保留原名也行)
-                            duplicating = Supplement(
-                                id: 0, name: sp.name + " (副本)", type: sp.type,
-                                windows: sp.windows, notes: sp.notes, dose: sp.dose,
-                                enabled: true, pausedUntil: nil
-                            )
-                        },
                         onPause: { sp, days in Task { await state.pauseSupplement(sp, days: days) } },
                         onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } },
                         onMove: { sp, dir in Task { await state.moveSupplement(sp, direction: dir) } }
@@ -71,7 +62,22 @@ struct SupplementsView: View {
             SupplementFormSheet(initial: .blank, isNew: true).environment(state)
         }
         .sheet(item: $editing) { sp in
-            SupplementFormSheet(initial: sp, isNew: false).environment(state)
+            SupplementFormSheet(
+                initial: sp,
+                isNew: false,
+                onDuplicate: { current in
+                    // form 已 dismiss 自身, 这里异步弹复制 sheet 防 SwiftUI sheet 替换 race。
+                    // current = form 当前 @State (用户可能改了 dose/notes 才点复制)
+                    let dup = Supplement(
+                        id: 0, name: current.name + " (副本)", type: current.type,
+                        windows: current.windows, notes: current.notes, dose: current.dose,
+                        enabled: true, pausedUntil: nil
+                    )
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        duplicating = dup
+                    }
+                }
+            ).environment(state)
         }
         .sheet(item: $duplicating) { sp in
             SupplementFormSheet(initial: sp, isNew: true).environment(state)
@@ -305,7 +311,6 @@ private struct AllListSection: View {
     let search: String
     let onToggleWindow: (SupplementTodayItem, Int) -> Void
     let onEdit: (Supplement) -> Void
-    let onDuplicate: (Supplement) -> Void
     let onPause: (Supplement, Int) -> Void
     let onEnable: (Supplement, Bool) -> Void
     let onMove: (Supplement, Int) -> Void  // direction = -1 上移, +1 下移
@@ -330,7 +335,6 @@ private struct AllListSection: View {
                             isLast: realIdx == orderedIDs.count - 1,
                             onToggleWindow: { idx in onToggleWindow(it, idx) },
                             onEdit: { onEdit(sp) },
-                            onDuplicate: { onDuplicate(sp) },
                             onPause: { days in onPause(sp, days) },
                             onEnable: { on in onEnable(sp, on) },
                             onMove: { dir in onMove(sp, dir) }
@@ -374,7 +378,6 @@ private struct ItemCard: View {
     let isLast: Bool
     let onToggleWindow: (Int) -> Void
     let onEdit: () -> Void
-    let onDuplicate: () -> Void
     let onPause: (Int) -> Void
     let onEnable: (Bool) -> Void
     let onMove: (Int) -> Void  // -1 上移, +1 下移
@@ -519,14 +522,7 @@ private struct ItemCard: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
-            .help("编辑")
-
-            Button(action: onDuplicate) {
-                Image(systemName: "doc.on.doc")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("复制 (用现有设置 + 新名字)")
+            .help("编辑 (复制 / 删除在 form 内)")
 
             Button { onMove(-1) } label: {
                 Image(systemName: "chevron.up")
