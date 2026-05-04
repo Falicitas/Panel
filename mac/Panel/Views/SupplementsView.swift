@@ -462,6 +462,25 @@ private struct ItemCard: View {
         }
     }
 
+    /// 暂停 menu 的状态化 icon / 颜色 / hover 提示 — 把"永久暂停 (disable)" 和
+    /// "暂停 N 天 (pausedUntil)" 合在同一菜单, 用 icon 反映当前状态:
+    ///   - !enabled → playpause.circle 红, 提示已永久暂停 (停用)
+    ///   - paused   → play.circle 橙, 提示限时暂停中
+    ///   - 正常     → pause.circle 灰, 提示点击暂停 / 停用
+    private var pauseIcon: String {
+        if !item.enabled { return "playpause.circle" }
+        return item.paused ? "play.circle" : "pause.circle"
+    }
+    private var pauseColor: Color {
+        if !item.enabled { return .red }
+        return item.paused ? .orange : .secondary
+    }
+    private var pauseHelp: String {
+        if !item.enabled { return "已永久暂停 (停用), 点击启用 / 限时暂停" }
+        if item.paused { return "限时暂停中, 点击调整 / 取消 / 永久暂停" }
+        return "暂停 N 天 / 永久暂停"
+    }
+
     /// 该 item 还在等待哪些餐被触发(如 ["早餐", "午餐"])。
     /// 优先级高于 doneToday,避免还没吃饭就误显示"已完成"。
     private var pendingMeals: [String] {
@@ -477,25 +496,23 @@ private struct ItemCard: View {
                 Button("暂停 7 天") { onPause(7) }
                 Button("暂停 14 天") { onPause(14) }
                 Button("暂停 30 天") { onPause(30) }
+                Divider()
+                if item.enabled {
+                    Button("永久暂停 (停用)") { onEnable(false) }
+                } else {
+                    Button("启用") { onEnable(true) }
+                }
                 if item.paused {
-                    Divider()
-                    Button("取消暂停") { onPause(0) }
+                    Button("取消时限暂停") { onPause(0) }
                 }
             } label: {
-                Image(systemName: item.paused ? "play.circle" : "pause.circle")
-                    .foregroundStyle(.secondary)
+                Image(systemName: pauseIcon)
+                    .foregroundStyle(pauseColor)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .frame(width: 36)
-            .help(item.paused ? "暂停中,点击调整 / 取消" : "暂停 N 天")
-
-            Button { onEnable(!item.enabled) } label: {
-                Image(systemName: item.enabled ? "power" : "power.dotted")
-                    .foregroundStyle(item.enabled ? Color.secondary : Color.red)
-            }
-            .buttonStyle(.borderless)
-            .help(item.enabled ? "停用 (通知不弹,历史保留)" : "重新启用")
+            .help(pauseHelp)
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
