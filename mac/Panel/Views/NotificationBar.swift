@@ -108,9 +108,17 @@ private struct NotificationListPopover: View {
     }
 
     private func handleJump(_ n: PanelNotification) {
-        guard n.source == "supplement", let id = parseSupplementID(n.sourceRef) else { return }
-        state.jumpToSupplement(id: id)
-        dismissPopover()
+        switch n.source {
+        case "supplement":
+            guard let id = parseSupplementID(n.sourceRef) else { return }
+            state.jumpToSupplement(id: id)
+            dismissPopover()
+        case "english":
+            state.jumpToEnglish()
+            dismissPopover()
+        default:
+            return
+        }
     }
 
     /// source_ref 形如 "supplement:{id}:window:{idx}:date:{date}"

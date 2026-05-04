@@ -640,6 +640,12 @@ final class AppState {
         pendingScrollSupplement = id
     }
 
+    /// 通知点击 → 切到 english tab。english 是 window-based 不是 item-based,
+    /// 不需要 scroll 到具体 item, 切 tab 就让用户看到 today / current audio / segments。
+    func jumpToEnglish() {
+        selectedTab = .english
+    }
+
     /// 保存当前 detail。若 rawMD 不传,默认保存 editorBuffer 当前内容。
     func saveDetail(rawMD: String? = nil) async {
         guard let name = detail?.name else { return }
