@@ -104,6 +104,24 @@ func (s *Server) handleUpdateSupplement(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, items)
 }
 
+// POST /api/supplements/reorder body: {"order": [id1, id2, ...]}
+// 按数组顺序重写 sort_order = 索引+1, 未列出 item 保留原 sort_order。
+func (s *Server) handleReorderSupplements(w http.ResponseWriter, r *http.Request) {
+	var p struct {
+		Order []int64 `json:"order"`
+	}
+	if err := decodeJSON(r, &p); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.ReorderSupplements(p.Order); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	items, _ := s.store.ListSupplements()
+	writeJSON(w, http.StatusOK, items)
+}
+
 func (s *Server) handleDeleteSupplement(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {

@@ -196,6 +196,12 @@ func (s *Store) migrate() error {
 		{"daily_state.breakfast_at", `ALTER TABLE daily_state ADD COLUMN breakfast_at TEXT`},
 		{"daily_state.lunch_at", `ALTER TABLE daily_state ADD COLUMN lunch_at TEXT`},
 		{"daily_state.dinner_at", `ALTER TABLE daily_state ADD COLUMN dinner_at TEXT`},
+		// supplements 用户自定义排序: 老数据 sort_order = id 保持现顺序;
+		// 新建 item sort_order = max(sort_order)+1 push 到末尾。
+		{"supplements.sort_order", `ALTER TABLE supplements ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`},
+		// 一次性 backfill: 老 supplements 的 sort_order 默认 0, 全为 0 时 ORDER BY 退化到 id, 视觉无变化。
+		// 但接下来 reorder 操作会写非 0 值, 此时混 0 行排在最前会乱。先把所有 0 行设成 id 保持初始顺序。
+		{"supplements.sort_order_backfill", `UPDATE supplements SET sort_order = id WHERE sort_order = 0`},
 	} {
 		if _, err := s.db.Exec(alter.sql); err != nil {
 			if !isDuplicateColumnErr(err) {

@@ -41,7 +41,7 @@ func (sp Supplement) IsActive(now int64) bool {
 func (s *Store) ListSupplements() ([]Supplement, error) {
 	rows, err := s.db.Query(
 		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until
-		   FROM supplements ORDER BY id`,
+		   FROM supplements ORDER BY sort_order, id`,
 	)
 	if err != nil {
 		return nil, err
@@ -110,10 +110,13 @@ func (s *Store) CreateSupplement(sp Supplement) (Supplement, error) {
 	if sp.PausedUntil != nil {
 		paused = *sp.PausedUntil
 	}
+	// 新 item push 到末尾: sort_order = max(sort_order)+1, 没行时从 1 起。
+	var nextOrder int64
+	_ = s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM supplements`).Scan(&nextOrder)
 	res, err := s.db.Exec(
-		`INSERT INTO supplements (name, type, windows_json, notes, dose, enabled, paused_until)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused,
+		`INSERT INTO supplements (name, type, windows_json, notes, dose, enabled, paused_until, sort_order)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused, nextOrder,
 	)
 	if err != nil {
 		return Supplement{}, err
@@ -121,6 +124,27 @@ func (s *Store) CreateSupplement(sp Supplement) (Supplement, error) {
 	id, _ := res.LastInsertId()
 	sp.ID = id
 	return sp, nil
+}
+
+// ReorderSupplements 按传入 ID 顺序重写 sort_order = 索引 (1-based, 留 0 给未列出的)。
+// 未列出的 item 保留原 sort_order — 不参与重排, 它们继续排在后面。
+// 用于 mac UI 上下移动 item 后的全列表保存。
+func (s *Store) ReorderSupplements(orderedIDs []int64) error {
+	if len(orderedIDs) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	for i, id := range orderedIDs {
+		// 1-based 防 sort_order = 0 被 backfill 误覆盖
+		if _, err := tx.Exec(`UPDATE supplements SET sort_order=? WHERE id=?`, i+1, id); err != nil {
+			return fmt.Errorf("reorder id=%d: %w", id, err)
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) UpdateSupplement(sp Supplement) error {
