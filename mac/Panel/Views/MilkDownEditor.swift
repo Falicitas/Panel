@@ -121,7 +121,17 @@ struct MilkDownEditor: NSViewRepresentable {
             let escaped = Self.jsEscape(initial)
             let readonlyArg = parent.readOnly ? "true" : "false"
             webView.evaluateJavaScript("window.panelEditor.init(\(escaped), \(readonlyArg))") { [weak self] _, _ in
-                self?.isReady = true
+                guard let self else { return }
+                self.isReady = true
+                // 切到 todolist tab + jumpToFocus 时, pendingScrollText 可能在 webView
+                // 还没 ready 就已设, updateNSView 直接 return 没消费 → SwiftUI 不会再
+                // trigger 第二次 (binding 没变)。这里 ready 后主动消费一次。
+                if let pending = self.parent.scrollText, !pending.isEmpty {
+                    self.evalScrollToText(pending)
+                    Task { @MainActor in
+                        self.parent.scrollText = nil
+                    }
+                }
             }
         }
 

@@ -45,6 +45,7 @@
 		824BA5C38C0946AEAC5941E4 /* TodolistContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567AEBCACF44FC805AE86F3D /* TodolistContentView.swift */; };
 		8875EBCEA0E4842F8A9A6707 /* EnglishArchiveSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEA95F9C5B5537519499A96 /* EnglishArchiveSheet.swift */; };
 		8A1B2DF3671C824AA875846C /* EnglishSegmentRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C1D248FAE0891DDA297AF0 /* EnglishSegmentRow.swift */; };
+		92D69A1AA2085682CF82CD92 /* JumpToFocusButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4381B7A86ED89EC349667E7C /* JumpToFocusButton.swift */; };
 		933F4E45405BFEB7D106E2BD /* KeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEB313D3572C774F686B032 /* KeyStore.swift */; };
 		936A5F2329805779552D70F2 /* BashContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5822016198F3258F21DC1E9B /* BashContentView.swift */; };
 		B24661F55FB41D780AD40542 /* SleepGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5EB857FED1152DD1A92D26 /* SleepGuard.swift */; };
@@ -73,6 +74,7 @@
 		25E9443571240FF9C3C02AB4 /* FocusResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusResult.swift; sourceTree = "<group>"; };
 		316E0C809704BDE19F6B5D14 /* SpeechSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechSegmenter.swift; sourceTree = "<group>"; };
 		3D3F6994801E0DB41133D4A8 /* WakeMaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeMaskView.swift; sourceTree = "<group>"; };
+		4381B7A86ED89EC349667E7C /* JumpToFocusButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpToFocusButton.swift; sourceTree = "<group>"; };
 		49404CC26A8DE27225ACC33B /* ComingSoonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComingSoonView.swift; sourceTree = "<group>"; };
 		49D696A31A0D0A222F286504 /* StatusFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusFooter.swift; sourceTree = "<group>"; };
 		4BEB313D3572C774F686B032 /* KeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStore.swift; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 				5AEB088C6C7D53B17EBEDD6A /* FinanceDetailView.swift */,
 				A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */,
 				8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */,
+				4381B7A86ED89EC349667E7C /* JumpToFocusButton.swift */,
 				BF74459F6ADCA6D9056A7911 /* MainLayout.swift */,
 				50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */,
 				4DCA200FC61009012AE4E8F0 /* MiniPlayerControls.swift */,
@@ -364,6 +367,7 @@
 				2B70C5CEB7A1FBE2C3854A05 /* FocusCard.swift in Sources */,
 				3FB8F396A13890631998595A /* FocusResult.swift in Sources */,
 				DA74EFA1D1701F6237FE3D5C /* HotkeyTap.swift in Sources */,
+				92D69A1AA2085682CF82CD92 /* JumpToFocusButton.swift in Sources */,
 				933F4E45405BFEB7D106E2BD /* KeyStore.swift in Sources */,
 				5FFDE4D66D35B64D3C65A633 /* ListEntry.swift in Sources */,
 				6C0A912AC9E07E69812F6B6B /* MainLayout.swift in Sources */,

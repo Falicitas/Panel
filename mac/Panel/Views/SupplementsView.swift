@@ -51,6 +51,9 @@ struct SupplementsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("食物 & 保健品")
+        .toolbar {
+            ToolbarItem { JumpToFocusButton() }
+        }
         .dynamicTypeSize(.accessibility5)  // 整体字号再放大一档 (用户反馈 .accessibility2 仍嫌小)
         .sheet(isPresented: $creating) {
             SupplementFormSheet(initial: .blank, isNew: true).environment(state)
