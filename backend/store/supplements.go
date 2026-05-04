@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 )
 
 // 食物 / 保健品
@@ -163,9 +164,27 @@ func (s *Store) SetSupplementPausedUntil(id int64, until *int64) error {
 	return err
 }
 
+// DeleteSupplement 硬删 supplement + cascade 抹除所有指向它的通知 (硬 DELETE 不是 dismiss)。
+// 用户主动删 item → 通知与 (item, window) 二元组双向绑定, item 不存在则通知不再有意义。
+// 用 source_ref LIKE 'supplement:{id}:%' 锁定该 item 全部 window 的通知 (无关 dismissed_at)。
 func (s *Store) DeleteSupplement(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM supplements WHERE id=?`, id)
-	return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	prefix := fmt.Sprintf("supplement:%d:", id)
+	if _, err := tx.Exec(
+		`DELETE FROM notifications WHERE source='supplement' AND source_ref LIKE ?`,
+		prefix+"%",
+	); err != nil {
+		return fmt.Errorf("cascade delete notifications: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM supplements WHERE id=?`, id); err != nil {
+		return fmt.Errorf("delete supplement: %w", err)
+	}
+	return tx.Commit()
 }
 
 // ---- daily_state ----
