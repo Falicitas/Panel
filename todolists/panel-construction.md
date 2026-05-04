@@ -1014,11 +1014,19 @@
 
 * [x] **issue-11 — STT 切到 Groq Whisper Large V3 直连**: 之前 OpenRouter STT API 把 timestamp\_granularities/response\_format strip 掉, 拿不到词级 timestamp → chunk + fuzzy locate 折腾几轮都不及格 (NPR Indicator 11min located 6-23/55, 段塌缩); Apple Speech 切片版 NPR intro music 段也识别失败。最终切 Groq 直连 (<https://api.groq.com/openai/v1/audio/transcriptions>, 100% OpenAI Whisper API 兼容), 1670 词级 timestamp, 18.5s 完成 (30x+ 实时), 0 zero-dur, 段长度 5-15s 主流, 文本质量 SOTA (人名 / 标点 / 拼写都准)。代价: 单文件 ≤ 25MB (≤30min), \$0.018/11min 极便宜, 需 user 配 GROQ\_API\_KEY。
 
-* [ ] **🔴 源问题修复 (Phase 1)** — VOA Akamai CDN 当前下来的 mp3 全是 28MB 静音占位 (-90dB 数字静音, afinfo 看格式正常但播放无声)。NPR podcast feed (Up First / Indicator / Short Wave) RSS 可用且 mp3 真有声, 可作 fetcher MVP 替换 VOA。可能方向: (a) audio energy 探测自动 reject 静音 mp3 (b) 换 fetcher 主源到 NPR Indicator (\~9min, B2-C1 经济新闻) (c) VOA 仅作 fallback
+* [x] **issue-11 N1 — NPR Indicator fetcher 替换 VOA 主源**: backend/english/npr_fetcher.go 解析 https://feeds.npr.org/510325/podcast.xml, SSRF allowlist 涵盖 prfx.byspotify.com → play.podtrac.com → npr.simplecastaudio.com 整条 redirect chain。9-11min/集 ~10MB 适配 Groq Whisper ≤25MB。VOA 整套 audio 1-20 + mp3 已从 db/盘清掉。Phase 1 加 audio energy 探测后再考虑回挂 VOA。
+
+* [x] **issue-11 N2 — Settings UI Groq key 输入框**: VoiceSettingsView 加 Groq Section, 复用 KeyStore.setGroq/getGroq, console.groq.com 注册免费 + free tier 7200 audio-sec/hour 足日用。
+
+* [x] **issue-11 N3 — 历史档案 sheet (重听归档音频)**: EnglishView 顶部「历史档案」按钮, sheet 列 archived audios 按 archived_at desc, 点击展开 segments 段行 ▶ 直接走 SegmentPlayer 重听, 不动 db / records。
+
+* [x] **issue-11 — 字幕默认隐藏 + 切句调参**: EnglishSegmentRow 加 @State showText, 默认 false 显示 \"[ 点击显示字幕 ]\" 适合精听; sentencesPerSegment 2→3 (NPR 句子碎); maxTokensPerSentence 12→30。
+
+* [x] **issue-12 — 通知 jump english + stale 跨日清理 + 标点率 98%**: NotificationBar.handleJump 加 english 分支 → AppState.jumpToEnglish 切 tab; backend english.GenerateNotifications 入口加 DismissStaleEnglishNotifications (与 supplements 同模式); maxTokensPerSentence 30→40 让 .!? 主导切句, audio 25 实测 41/42 段以 .!? 结尾。
 
 * [ ] Scientific American 60s 第二个源 (Phase 1)
 
-* [ ] 历史档案 sheet (重听 + 复习,Phase 1)
+* [ ] 历史档案 sheet 时间显示精度 + 搜索 (Phase 1)
 
 * [ ] 子音频"自动标记"模式 (听完 N 次后,Phase 1)
 
