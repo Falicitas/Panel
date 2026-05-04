@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarLabel: View {
     var controller: VoiceController
@@ -44,7 +45,7 @@ struct MenuBarContent: View {
             }
             Divider()
             Button("打开设置...") {
-                openSettings()
+                bringSettingsToFront()
             }
             .keyboardShortcut(",", modifiers: .command)
             Button("打开「输入监控」系统设置") {
@@ -74,5 +75,29 @@ struct MenuBarContent: View {
         case .noKey:        "未设置 OpenRouter Key — Cmd+,"
         case .error:        "上次失败"
         }
+    }
+
+    /// 系统 SwiftUI Settings scene 在已存在窗口被其它 app/窗口遮挡时, openSettings()
+    /// 不一定会把它 bring-to-front (尤其从 menu bar item 触发, app 当前不是 frontmost)。
+    /// 三步保险:
+    ///   1) NSApp.activate(ignoringOtherApps: true) — 先把 Panel 提到前台
+    ///   2) openSettings() — 创建 (首次) 或激活 SwiftUI Settings 窗口
+    ///   3) async 找 NSApp.windows 中 settings 窗口 → makeKeyAndOrderFront + orderFrontRegardless
+    private func bringSettingsToFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            for w in NSApp.windows where isSettingsWindow(w) {
+                w.makeKeyAndOrderFront(nil)
+                w.orderFrontRegardless()
+            }
+        }
+    }
+
+    /// SwiftUI Settings 窗口的 NSWindow 没有标准 identifier API, 用 title 含 'settings'
+    /// (英文 macOS) 或 '设置' (中文 macOS) 识别。
+    private func isSettingsWindow(_ w: NSWindow) -> Bool {
+        let t = w.title.lowercased()
+        return t.contains("settings") || t.contains("设置") || t.contains("preferences")
     }
 }

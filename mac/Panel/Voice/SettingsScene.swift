@@ -90,7 +90,7 @@ struct VoiceSettingsView: View {
                             .font(.callout)
                     }
                 }
-                Text("英文 audio 用 Groq Whisper Large V3 直连拿词级 timestamp (OpenRouter STT 不返时间戳)。 https://console.groq.com 注册免费, free tier rate limit 7200 audio-sec/hour 足够日用。")
+                Text("英文 audio 用 Groq Whisper Large V3 直连拿词级 timestamp (OpenRouter STT 不返时间戳)。 https://console.groq.com 注册免费。Free tier 限速 (whisper-large-v3): 20 RPM / 2000 RPD / 7200 audio-sec/hour / 28800 audio-sec/day (= 8 小时音频/天)。日常 30min/天精听远低于上限。")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("使用") {
