@@ -18,16 +18,25 @@ struct EnglishSegmentRow: View {
     private static let playbackPaddingMs: Int = 0
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            playButton
-            Text("\(segment.idx + 1).")
-                .font(.body.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 32, alignment: .trailing)
-            textArea
-            checkBox
+        let playing = player.isPlaying(audioID: audio.id, segIdx: segment.idx)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                playButton
+                Text("\(segment.idx + 1).")
+                    .font(.title3.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+                textArea
+                checkBox
+            }
+            if playing {
+                HStack(spacing: 0) {
+                    Spacer().frame(width: 36 + 12 + 24)  // 对齐到文本起始位置
+                    MiniPlayerControls()
+                }
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
     }
 
@@ -36,11 +45,12 @@ struct EnglishSegmentRow: View {
         Group {
             if showText {
                 Text(segment.text)
-                    .font(.body)
+                    .font(.title3)
+                    .lineSpacing(2)
                     .textSelection(.enabled)
             } else {
                 Text("[ 点击显示字幕 ]")
-                    .font(.body)
+                    .font(.title3)
                     .foregroundStyle(.tertiary)
                     .italic()
             }
@@ -63,7 +73,7 @@ struct EnglishSegmentRow: View {
             }
         } label: {
             Image(systemName: isDone ? "checkmark.square.fill" : "square")
-                .font(.system(size: 16))
+                .font(.system(size: 20))
                 .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
         }
         .buttonStyle(.plain)
@@ -77,7 +87,7 @@ struct EnglishSegmentRow: View {
             togglePlay(playing: playing)
         } label: {
             Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
-                .font(.system(size: 20))
+                .font(.system(size: 24))
                 .foregroundStyle(playing ? Color.orange : Color.accentColor)
         }
         .buttonStyle(.plain)

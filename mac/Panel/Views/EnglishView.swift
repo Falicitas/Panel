@@ -4,6 +4,7 @@ import SwiftUI
 /// M5 接入 ASR + AVAudioPlayer + segment 列表 + ▶ / ☐ 交互。
 struct EnglishView: View {
     @Environment(AppState.self) private var state
+    @Environment(SegmentPlayer.self) private var player
     @State private var showArchive = false
 
     var body: some View {
@@ -45,7 +46,10 @@ struct EnglishView: View {
     private func headerStats(today: EnglishToday) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "今日 %.1f / %d 分钟", today.totalMinutes, today.thresholdMin))
+                Text(String(format: "今日 %.1f /", today.totalMinutes))
+                    .font(.title2.weight(.semibold))
+                ThresholdEditor(currentMin: today.thresholdMin)
+                Text("分钟")
                     .font(.title2.weight(.semibold))
                 if today.todayDone {
                     Text("完成 ✓")
@@ -124,11 +128,62 @@ struct EnglishView: View {
                     }
                 }
 
+                wholeAudioPlayer(audio: a)
                 segmentsList(audio: a, today: today)
             } else {
                 Text("没有可用音频 (等待 backend fetch)")
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// 整段音频播放器 (T4) — 跟 segment 播放共用 SegmentPlayer 单例。
+    /// 用 segIdx = SegmentPlayer.wholeAudioSegIdx 区分整段播。
+    @ViewBuilder
+    private func wholeAudioPlayer(audio: EnglishAudio) -> some View {
+        if !audio.localPath.isEmpty, audio.durationMs > 0 {
+            let playing = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 12) {
+                    Button {
+                        toggleWholePlay(audio: audio, playing: playing)
+                    } label: {
+                        Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(playing ? Color.orange : Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("整段播放 (无字幕)")
+                    Text("整段播放")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                if playing {
+                    MiniPlayerControls()
+                }
+            }
+            .padding(10)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func toggleWholePlay(audio: EnglishAudio, playing: Bool) {
+        if playing {
+            player.stop()
+            return
+        }
+        let url = URL(fileURLWithPath: audio.localPath)
+        do {
+            try player.play(
+                url: url,
+                audioID: audio.id,
+                segIdx: SegmentPlayer.wholeAudioSegIdx,
+                startMs: 0,
+                endMs: Int(audio.durationMs)
+            )
+        } catch {
+            // silent
         }
     }
 
@@ -192,5 +247,51 @@ struct EnglishView: View {
         let m = total / 60
         let s = total % 60
         return String(format: "%d:%02d", m, s)
+    }
+}
+
+/// inline editor: 显示阈值数字, 点击切到 TextField, 失焦/回车提交。
+private struct ThresholdEditor: View {
+    let currentMin: Int
+    @Environment(AppState.self) private var state
+
+    @State private var editing = false
+    @State private var draft: String = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        if editing {
+            TextField("", text: $draft)
+                .font(.title2.weight(.semibold).monospacedDigit())
+                .frame(width: 50)
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.roundedBorder)
+                .focused($focused)
+                .onAppear {
+                    draft = String(currentMin)
+                    focused = true
+                }
+                .onSubmit { commit() }
+                .onChange(of: focused) { _, new in
+                    if !new { commit() }
+                }
+        } else {
+            Text("\(currentMin)")
+                .font(.title2.weight(.semibold).monospacedDigit())
+                .underline(true, color: .secondary.opacity(0.4))
+                .onTapGesture {
+                    draft = String(currentMin)
+                    editing = true
+                }
+                .help("点击修改今日阈值")
+        }
+    }
+
+    private func commit() {
+        defer { editing = false }
+        guard let v = Int(draft.trimmingCharacters(in: .whitespaces)),
+              v > 0, v <= 240,
+              v != currentMin else { return }
+        Task { await state.setEnglishThresholdMin(v) }
     }
 }
