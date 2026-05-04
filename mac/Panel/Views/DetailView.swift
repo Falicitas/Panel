@@ -4,6 +4,10 @@ struct DetailView: View {
     @Environment(AppState.self) private var state
     @State private var isShowingRecurring = false
     @State private var isShowingRating = false
+    @State private var showFindBar: Bool = false
+    @State private var findText: String = ""
+    @State private var findCommand: EditorFindCommand? = nil
+    @FocusState private var findFieldFocused: Bool
 
     var body: some View {
         @Bindable var bindable = state
@@ -48,10 +52,12 @@ struct DetailView: View {
                             .id(focus.text ?? "")
                             .transition(.opacity)
                     }
+                    if showFindBar { findBar }
                     MilkDownEditor(
                         text: bufferBinding,
                         pageZoom: state.editorPageZoom,
-                        scrollText: $bindable.pendingScrollText
+                        scrollText: $bindable.pendingScrollText,
+                        findCommand: $findCommand
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -73,6 +79,9 @@ struct DetailView: View {
         }
         .animation(.easeInOut(duration: 0.18), value: isShowingRating)
         .background(saveShortcut)
+        .background(findShortcut)
+        .background(findNextShortcut)
+        .background(findPrevShortcut)
         .toolbar { toolbarItems }
         .onAppear { syncMicroIfNeeded() }
         .onChange(of: state.contentMode) { _, _ in syncMicroIfNeeded() }
@@ -152,6 +161,93 @@ struct DetailView: View {
         }
         .help("放大字号")
         .disabled(state.editorPageZoom >= 1.8)
+    }
+
+    /// 顶部 find bar — cmd+F 显示, ESC 关闭。输入直接 incremental 搜索, 回车跳下一个。
+    @ViewBuilder
+    private var findBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("搜索 (回车下一个 / Shift+回车上一个)", text: $findText)
+                .textFieldStyle(.roundedBorder)
+                .focused($findFieldFocused)
+                .onSubmit { issueFind(backwards: false) }
+                .onChange(of: findText) { _, new in
+                    findCommand = EditorFindCommand(id: UUID(), query: new, backwards: false)
+                }
+            Button {
+                issueFind(backwards: true)
+            } label: { Image(systemName: "chevron.up") }
+            .buttonStyle(.borderless)
+            .help("上一个 (⇧⌘G)")
+            .disabled(findText.isEmpty)
+            Button {
+                issueFind(backwards: false)
+            } label: { Image(systemName: "chevron.down") }
+            .buttonStyle(.borderless)
+            .help("下一个 (⌘G)")
+            .disabled(findText.isEmpty)
+            Button {
+                closeFindBar()
+            } label: { Image(systemName: "xmark.circle.fill") }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("关闭 (Esc)")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .padding(.horizontal, 12)
+        .onExitCommand { closeFindBar() }
+    }
+
+    private func issueFind(backwards: Bool) {
+        guard !findText.isEmpty else { return }
+        findCommand = EditorFindCommand(id: UUID(), query: findText, backwards: backwards)
+    }
+
+    private func closeFindBar() {
+        showFindBar = false
+        findText = ""
+        // 清高亮
+        findCommand = EditorFindCommand(id: UUID(), query: "", backwards: false)
+    }
+
+    /// cmd+F 打开 find bar 并 focus 输入框。
+    private var findShortcut: some View {
+        Button("") {
+            showFindBar = true
+            findFieldFocused = true
+        }
+        .keyboardShortcut("f", modifiers: .command)
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+    }
+
+    /// cmd+G 下一个匹配 (find bar 必须先打开)。
+    private var findNextShortcut: some View {
+        Button("") {
+            issueFind(backwards: false)
+        }
+        .keyboardShortcut("g", modifiers: .command)
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+        .disabled(!showFindBar || findText.isEmpty)
+    }
+
+    /// shift+cmd+G 上一个。
+    private var findPrevShortcut: some View {
+        Button("") {
+            issueFind(backwards: true)
+        }
+        .keyboardShortcut("g", modifiers: [.command, .shift])
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
+        .disabled(!showFindBar || findText.isEmpty)
     }
 
     private var saveShortcut: some View {

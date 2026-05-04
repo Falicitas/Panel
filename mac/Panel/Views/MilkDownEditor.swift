@@ -1,22 +1,32 @@
 import SwiftUI
 import WebKit
 
+/// cmd+F 搜索请求 — id 每次变化都触发新一次 webView.find, 即使 query 相同 (用户连按下一个)。
+struct EditorFindCommand: Equatable {
+    let id: UUID
+    let query: String
+    let backwards: Bool
+}
+
 struct MilkDownEditor: NSViewRepresentable {
     @Binding var text: String
     var pageZoom: Double = 1.0
     @Binding var scrollText: String?
     var readOnly: Bool = false
+    @Binding var findCommand: EditorFindCommand?
 
     init(
         text: Binding<String>,
         pageZoom: Double = 1.0,
         scrollText: Binding<String?> = .constant(nil),
-        readOnly: Bool = false
+        readOnly: Bool = false,
+        findCommand: Binding<EditorFindCommand?> = .constant(nil)
     ) {
         self._text = text
         self.pageZoom = pageZoom
         self._scrollText = scrollText
         self.readOnly = readOnly
+        self._findCommand = findCommand
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -67,6 +77,10 @@ struct MilkDownEditor: NSViewRepresentable {
             coord.evalScrollToText(text)
             DispatchQueue.main.async { self.scrollText = nil }
         }
+        if let cmd = findCommand, coord.lastFindCommandID != cmd.id {
+            coord.lastFindCommandID = cmd.id
+            coord.runFind(query: cmd.query, backwards: cmd.backwards)
+        }
     }
 
     @MainActor
@@ -76,6 +90,7 @@ struct MilkDownEditor: NSViewRepresentable {
         var isReady = false
         var lastSyncedMarkdown: String?
         var lastReadOnly: Bool = false
+        var lastFindCommandID: UUID?
 
         init(_ parent: MilkDownEditor) {
             self.parent = parent
@@ -110,6 +125,26 @@ struct MilkDownEditor: NSViewRepresentable {
             guard let webView else { return }
             let escaped = Self.jsEscape(md)
             webView.evaluateJavaScript("window.panelEditor.setRaw(\(escaped))", completionHandler: nil)
+        }
+
+        /// 用 WKWebView 内置 find API (macOS 12+) 找文本, 找到自动滚到 + 高亮。
+        /// query 空 → 清高亮 (clearFindResults)。
+        func runFind(query: String, backwards: Bool) {
+            guard let webView else { return }
+            let trimmed = query.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                if #available(macOS 12.0, *) {
+                    Task { try? await webView.find("", configuration: WKFindConfiguration()) }
+                }
+                return
+            }
+            if #available(macOS 12.0, *) {
+                let cfg = WKFindConfiguration()
+                cfg.backwards = backwards
+                cfg.caseSensitive = false
+                cfg.wraps = true
+                webView.find(trimmed, configuration: cfg) { _ in }
+            }
         }
 
         func evalScrollToText(_ text: String) {
