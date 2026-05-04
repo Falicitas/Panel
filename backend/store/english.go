@@ -189,6 +189,23 @@ func (s *Store) SetAudioSegmentsStatus(id int64, status, failedReason string) er
 	return nil
 }
 
+// DismissStaleEnglishNotifications 把 source='english' 且 created_at < beforeUnix
+// 且未 dismissed 的通知一并 dismissed。返回受影响行数。
+// 用于 GenerateNotifications 入口, 避免昨天的英文精听通知堆到今天 (与 supplements 同模式)。
+func (s *Store) DismissStaleEnglishNotifications(beforeUnix, atUnix int64) (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE notifications
+		    SET dismissed_at=?
+		  WHERE source='english' AND dismissed_at IS NULL AND created_at < ?`,
+		atUnix, beforeUnix,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // SetAudioArchived atUnix=0 取消归档,>0 标记归档时间。
 func (s *Store) SetAudioArchived(id int64, atUnix int64) error {
 	var v any

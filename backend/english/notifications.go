@@ -89,6 +89,10 @@ func parseNotifRef(ref string) (int, string, bool) {
 func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 	today := dateutil.LogicalToday(now)
 
+	// 跨日清理: 昨天/更早的英文精听通知自动 dismissed, 避免堆到今天
+	// (与 supplements.GenerateNotifications 同模式)
+	_, _ = s.DismissStaleEnglishNotifications(dateutil.LogicalDayStartUnix(now), now.Unix())
+
 	settings, err := s.GetEnglishSettings()
 	if err != nil {
 		return 0, fmt.Errorf("get english settings: %w", err)
