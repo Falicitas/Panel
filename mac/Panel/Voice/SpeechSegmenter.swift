@@ -32,8 +32,9 @@ enum SpeechSegmenter {
     static let sentenceGapSec: Double = 0.6
 
     /// 累计 ≥ 此 token 数仍未遇到 .!? 或 gap → 强切, 防一句巨长 (safety net)。
-    /// 30 词允许 NPR 长句完整保留 (实测最长一句 ~25 词), 避免在词中切句导致段末缺标点。
-    static let maxTokensPerSentence: Int = 30
+    /// 40 词放宽到 NPR 长句最大值的 1.5x, 让标点 / gap 主导切句 (实测 NPR 最长 ~25 词)。
+    /// 极少触发 hard cap, 避免在词中切句导致段末缺 .!? 标点。
+    static let maxTokensPerSentence: Int = 40
 
     enum Failure: Error, LocalizedError {
         case noKey
