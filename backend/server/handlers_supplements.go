@@ -41,6 +41,16 @@ const supplementModule = "supplement"
 // status / 时间轴 都自动延后, mac 系统通知的 lead range 也跟着延。
 const supplementSnoozeModule = "supplement_snooze"
 
+// kickSupplementsRegen 在 supplements CRUD / enable / pause 之后立刻跑一次
+// GenerateNotifications, 让新增/改后的通知不必等 60s ticker 才出现。
+// 同步调, 失败静默 log (ticker 后续 retry)。
+func (s *Server) kickSupplementsRegen() {
+	if _, err := supplements.GenerateNotifications(s.store, time.Now()); err != nil {
+		// log only; 60s ticker 会兜底
+		_ = err
+	}
+}
+
 func (s *Server) handleListSupplements(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListSupplements()
 	if err != nil {
@@ -65,6 +75,7 @@ func (s *Server) handleCreateSupplement(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.kickSupplementsRegen()
 	writeJSON(w, http.StatusCreated, out)
 }
 
@@ -88,6 +99,7 @@ func (s *Server) handleUpdateSupplement(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.kickSupplementsRegen()
 	items, _ := s.store.ListSupplements()
 	writeJSON(w, http.StatusOK, items)
 }
@@ -102,6 +114,7 @@ func (s *Server) handleDeleteSupplement(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// 不需 regen — DeleteSupplement 已 cascade 抹通知, item 也没了不会再生成。
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -175,6 +188,7 @@ func (s *Server) handlePauseSupplement(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.kickSupplementsRegen()
 	items, _ := s.store.ListSupplements()
 	writeJSON(w, http.StatusOK, items)
 }
@@ -198,6 +212,11 @@ func (s *Server) handleEnableSupplement(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	if !p.Enabled {
+		// disable 后已生成的待处理通知应抹掉 (item 仍在但暂不发, 通知留着无意义)
+		_, _ = s.store.DeleteNotificationsBySupplementID(id)
+	}
+	s.kickSupplementsRegen()
 	items, _ := s.store.ListSupplements()
 	writeJSON(w, http.StatusOK, items)
 }

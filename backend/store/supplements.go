@@ -164,6 +164,22 @@ func (s *Store) SetSupplementPausedUntil(id int64, until *int64) error {
 	return err
 }
 
+// DeleteNotificationsBySupplementID 硬 DELETE 所有 source='supplement' 且 source_ref
+// 前缀 'supplement:{id}:' 的通知 (含 dismissed)。返回受影响行数。
+// 用于: (1) 删 item 时 cascade (DeleteSupplement) (2) disable item 时清待处理通知。
+func (s *Store) DeleteNotificationsBySupplementID(id int64) (int64, error) {
+	prefix := fmt.Sprintf("supplement:%d:", id)
+	res, err := s.db.Exec(
+		`DELETE FROM notifications WHERE source='supplement' AND source_ref LIKE ?`,
+		prefix+"%",
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // DeleteSupplement 硬删 supplement + cascade 抹除所有指向它的通知 (硬 DELETE 不是 dismiss)。
 // 用户主动删 item → 通知与 (item, window) 二元组双向绑定, item 不存在则通知不再有意义。
 // 用 source_ref LIKE 'supplement:{id}:%' 锁定该 item 全部 window 的通知 (无关 dismissed_at)。
