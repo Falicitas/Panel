@@ -280,8 +280,12 @@ final class AppState {
         do {
             async let listR = api.listSupplements()
             async let todayR = api.getSupplementsToday()
+            // backend 在 supplements CRUD / enable / pause 后立即跑 GenerateNotifications,
+            // 顺手把 notifications 也拉一次, 通知栏不必等 5s tick 才看到新通知。
+            async let notifsR = api.listNotifications(all: false)
             self.supplements = try await listR
             self.supplementsToday = try await todayR
+            if let ns = try? await notifsR { self.notifications = ns }
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -313,6 +317,7 @@ final class AppState {
         do {
             self.supplements = try await api.pauseSupplement(id: sp.id, until: until)
             self.supplementsToday = try await api.getSupplementsToday()
+            await reloadNotifications()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
@@ -324,6 +329,7 @@ final class AppState {
         do {
             self.supplements = try await api.enableSupplement(id: sp.id, enabled: enabled)
             self.supplementsToday = try await api.getSupplementsToday()
+            await reloadNotifications()
             self.lastError = nil
         } catch {
             self.lastError = error.localizedDescription
