@@ -646,6 +646,21 @@ final class AppState {
         selectedTab = .english
     }
 
+    /// 改今日精听阈值 (分钟)。复用 PUT /api/english/settings, windows / enabled 保留。
+    func setEnglishThresholdMin(_ min: Int) async {
+        guard min > 0, min <= 240 else { return }
+        guard var es = englishSettings else { return }
+        guard es.thresholdMin != min else { return }
+        es.thresholdMin = min
+        do {
+            self.englishSettings = try await api.putEnglishSettings(es)
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     /// 保存当前 detail。若 rawMD 不传,默认保存 editorBuffer 当前内容。
     func saveDetail(rawMD: String? = nil) async {
         guard let name = detail?.name else { return }
