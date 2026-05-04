@@ -185,6 +185,11 @@ actor APIClient: BackendClient {
         return try await post("/api/supplements/\(id)/enable", body: Body(enabled: enabled))
     }
 
+    func reorderSupplements(orderedIDs: [Int64]) async throws -> [Supplement] {
+        struct Body: Encodable { let order: [Int64] }
+        return try await post("/api/supplements/reorder", body: Body(order: orderedIDs))
+    }
+
     func snoozeSupplement(id: Int64, date: String?, windowIndex: Int) async throws {
         struct Body: Encodable {
             let date: String?

@@ -9,6 +9,7 @@ struct SupplementsView: View {
     @State private var search: String = ""
     @State private var creating = false
     @State private var editing: Supplement?
+    @State private var duplicating: Supplement?
 
     var body: some View {
         ScrollView {
@@ -23,14 +24,25 @@ struct SupplementsView: View {
                     AllListSection(
                         today: state.supplementsToday,
                         supplementsByID: supplementsByID,
+                        orderedIDs: state.supplements.map(\.id),
                         filter: filter,
                         search: search,
                         onToggleWindow: { item, idx in
                             Task { await state.toggleSupplementWindowCheck(item, windowIndex: idx) }
                         },
                         onEdit: { sp in editing = sp },
+                        onDuplicate: { sp in
+                            // 拷贝字段, ID=0 让 SupplementFormSheet isNew=true 用 CreateSupplement 路径,
+                            // Name 加 "(副本)" 提示用户改新名 (可保留原名也行)
+                            duplicating = Supplement(
+                                id: 0, name: sp.name + " (副本)", type: sp.type,
+                                windows: sp.windows, notes: sp.notes, dose: sp.dose,
+                                enabled: true, pausedUntil: nil
+                            )
+                        },
                         onPause: { sp, days in Task { await state.pauseSupplement(sp, days: days) } },
-                        onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } }
+                        onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } },
+                        onMove: { sp, dir in Task { await state.moveSupplement(sp, direction: dir) } }
                     )
                 }
                 .padding(20)
@@ -60,6 +72,9 @@ struct SupplementsView: View {
         }
         .sheet(item: $editing) { sp in
             SupplementFormSheet(initial: sp, isNew: false).environment(state)
+        }
+        .sheet(item: $duplicating) { sp in
+            SupplementFormSheet(initial: sp, isNew: true).environment(state)
         }
     }
 
@@ -283,12 +298,17 @@ private struct MealCard: View {
 private struct AllListSection: View {
     let today: SupplementToday?
     let supplementsByID: [Int64: Supplement]
+    /// 完整全列表 (含被 filter/search 过滤的) 在 backend 的真实 sort_order 顺序。
+    /// ItemCard 用它判断 isFirst / isLast 决定上下移按钮的 disabled。
+    let orderedIDs: [Int64]
     let filter: SupplementsFilter
     let search: String
     let onToggleWindow: (SupplementTodayItem, Int) -> Void
     let onEdit: (Supplement) -> Void
+    let onDuplicate: (Supplement) -> Void
     let onPause: (Supplement, Int) -> Void
     let onEnable: (Supplement, Bool) -> Void
+    let onMove: (Supplement, Int) -> Void  // direction = -1 上移, +1 下移
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -303,12 +323,17 @@ private struct AllListSection: View {
             } else {
                 ForEach(filteredItems) { it in
                     if let sp = supplementsByID[it.id] {
+                        let realIdx = orderedIDs.firstIndex(of: it.id) ?? 0
                         ItemCard(
                             item: it, sp: sp,
+                            isFirst: realIdx == 0,
+                            isLast: realIdx == orderedIDs.count - 1,
                             onToggleWindow: { idx in onToggleWindow(it, idx) },
                             onEdit: { onEdit(sp) },
+                            onDuplicate: { onDuplicate(sp) },
                             onPause: { days in onPause(sp, days) },
-                            onEnable: { on in onEnable(sp, on) }
+                            onEnable: { on in onEnable(sp, on) },
+                            onMove: { dir in onMove(sp, dir) }
                         )
                         .id(it.id)
                     }
@@ -345,10 +370,14 @@ private struct AllListSection: View {
 private struct ItemCard: View {
     let item: SupplementTodayItem
     let sp: Supplement
+    let isFirst: Bool
+    let isLast: Bool
     let onToggleWindow: (Int) -> Void
     let onEdit: () -> Void
+    let onDuplicate: () -> Void
     let onPause: (Int) -> Void
     let onEnable: (Bool) -> Void
+    let onMove: (Int) -> Void  // -1 上移, +1 下移
 
     @Environment(AppState.self) private var state
 
@@ -474,6 +503,29 @@ private struct ItemCard: View {
             }
             .buttonStyle(.borderless)
             .help("编辑")
+
+            Button(action: onDuplicate) {
+                Image(systemName: "doc.on.doc")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("复制 (用现有设置 + 新名字)")
+
+            Button { onMove(-1) } label: {
+                Image(systemName: "chevron.up")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(isFirst)
+            .help("上移")
+
+            Button { onMove(1) } label: {
+                Image(systemName: "chevron.down")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(isLast)
+            .help("下移")
         }
     }
 
