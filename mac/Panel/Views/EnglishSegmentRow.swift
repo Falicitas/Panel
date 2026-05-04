@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// 单条 segment 行: ▶/■ 按钮 + 序号 + 文本 + ☐/☑ checkbox。
-/// 勾选后 POST /api/english/segments/check, backend 写 records 并自动归档。
+/// 单条 segment 行: ▶/■ 按钮 + 序号 + (隐藏的) 文本 + ☐/☑ checkbox。
+/// 精听场景文本默认隐藏 ("[ 点击显示字幕 ]"), 听一段不懂时点击该段才看字幕,
+/// 听懂了直接勾 checkbox 不必看字幕。勾选后 POST /api/english/segments/check。
 struct EnglishSegmentRow: View {
     let audio: EnglishAudio
     let segment: EnglishSegment
@@ -9,6 +10,7 @@ struct EnglishSegmentRow: View {
 
     @Environment(SegmentPlayer.self) private var player
     @Environment(AppState.self) private var state
+    @State private var showText: Bool = false
 
     /// 段播放时前后各扩 N ms 听感缓冲, 抵消 ASR timestamp 偏差。
     /// Groq 词级 timestamp 已经精确, 暂置 0 看裸精度; 若末尾常吞词再加回 200-500ms。
@@ -22,14 +24,31 @@ struct EnglishSegmentRow: View {
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 32, alignment: .trailing)
-            Text(segment.text)
-                .font(.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+            textArea
             checkBox
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var textArea: some View {
+        Group {
+            if showText {
+                Text(segment.text)
+                    .font(.body)
+                    .textSelection(.enabled)
+            } else {
+                Text("[ 点击显示字幕 ]")
+                    .font(.body)
+                    .foregroundStyle(.tertiary)
+                    .italic()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { showText.toggle() }
+        .help(showText ? "点击隐藏字幕" : "点击显示字幕")
     }
 
     @ViewBuilder

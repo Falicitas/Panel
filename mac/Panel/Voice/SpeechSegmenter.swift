@@ -25,14 +25,15 @@ enum SpeechSegmenter {
     private static let logger = Logger(subsystem: "com.kinesis.panel", category: "speech")
 
     /// 句子级 segment 合并: N 句合 1 段, 让段更长更连贯 (精听点 ▶ 听完整 N 句)。
-    /// 1 = 不合并, 2 = 两句合一段。后续可改 Settings 可配。
-    static let sentencesPerSegment: Int = 2
+    /// 3 适合 NPR 这种快语速多人对话 (单句平均 5-10 词, 3 句合段 ~15-30 词 5-10s 一段)。
+    static let sentencesPerSegment: Int = 3
 
     /// 词间 gap > 此阈值 → 强制句子边界 (即使没有 .!? 标点)。
     static let sentenceGapSec: Double = 0.6
 
-    /// 累计 ≥ 此 token 数仍未遇到 .!? 或 gap → 强切, 防一句巨长。
-    static let maxTokensPerSentence: Int = 12
+    /// 累计 ≥ 此 token 数仍未遇到 .!? 或 gap → 强切, 防一句巨长 (safety net)。
+    /// 30 词允许 NPR 长句完整保留 (实测最长一句 ~25 词), 避免在词中切句导致段末缺标点。
+    static let maxTokensPerSentence: Int = 30
 
     enum Failure: Error, LocalizedError {
         case noKey
