@@ -47,6 +47,7 @@
 		8A1B2DF3671C824AA875846C /* EnglishSegmentRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5C1D248FAE0891DDA297AF0 /* EnglishSegmentRow.swift */; };
 		933F4E45405BFEB7D106E2BD /* KeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEB313D3572C774F686B032 /* KeyStore.swift */; };
 		936A5F2329805779552D70F2 /* BashContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5822016198F3258F21DC1E9B /* BashContentView.swift */; };
+		B24661F55FB41D780AD40542 /* SleepGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5EB857FED1152DD1A92D26 /* SleepGuard.swift */; };
 		BD0AC0B4D2ECBB42811F4516 /* PrimarySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */; };
 		BD93E5AF68EB1BC4E606D012 /* StatusFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D696A31A0D0A222F286504 /* StatusFooter.swift */; };
 		C07107129F13625FCC585BD6 /* WakeMaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3F6994801E0DB41133D4A8 /* WakeMaskView.swift */; };
@@ -115,6 +116,7 @@
 		DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimarySidebarView.swift; sourceTree = "<group>"; };
 		DD23B1DF137F8CEAAB64A2A6 /* English.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = English.swift; sourceTree = "<group>"; };
 		DDB4D7055D1E71929BC92B3E /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		DE5EB857FED1152DD1A92D26 /* SleepGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepGuard.swift; sourceTree = "<group>"; };
 		DFF9D9E1AACD32AAC90943A6 /* TextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjector.swift; sourceTree = "<group>"; };
 		E1166585D8F0E17D1ED5D28B /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		E450DC3CDC2476B1AA151040 /* Panel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Panel.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -160,6 +162,7 @@
 				A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */,
 				138C0250B9F183120FC62812 /* RecordsDetailView.swift */,
 				5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */,
+				DE5EB857FED1152DD1A92D26 /* SleepGuard.swift */,
 				49D696A31A0D0A222F286504 /* StatusFooter.swift */,
 				A22D6102ADB89301B5F475EE /* SupplementForms.swift */,
 				D3062A0F8CB95C2386D0B4E2 /* SupplementsView.swift */,
@@ -380,6 +383,7 @@
 				EDD047A4C24549C7D1DBB979 /* RecurringSheet.swift in Sources */,
 				233031829FFF2C248FA085A0 /* RecurringTodo.swift in Sources */,
 				72797ED76565984409261BAC /* SettingsScene.swift in Sources */,
+				B24661F55FB41D780AD40542 /* SleepGuard.swift in Sources */,
 				35B4D2D020001D0CB2DAE99E /* SpeechSegmenter.swift in Sources */,
 				BD93E5AF68EB1BC4E606D012 /* StatusFooter.swift in Sources */,
 				D829A06EC28905CFCEF0F794 /* SupplementForms.swift in Sources */,

@@ -37,7 +37,9 @@ private struct ContentColumn: View {
     @Environment(AppState.self) private var state
     var body: some View {
         switch state.selectedTab {
-        case .todolist:    TodolistContentView()
+        case .todolist:
+            TodolistContentView()
+                .overlay { SleepGuardOverlay() }
         case .finance:     FinanceContentView()
         case .supplements: Color.clear  // 列宽收 0;Color.clear 防 macOS 因为完全空内容把 toggle 一并丢
         case .english:     Color.clear
@@ -51,7 +53,9 @@ private struct DetailColumn: View {
     @Environment(AppState.self) private var state
     var body: some View {
         switch state.selectedTab {
-        case .todolist:    DetailView()
+        case .todolist:
+            DetailView()
+                .overlay { SleepGuardOverlay() }
         case .finance:     FinanceDetailView()
         case .supplements: SupplementsView()
         case .english:     EnglishView()
