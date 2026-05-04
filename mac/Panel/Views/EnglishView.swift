@@ -40,6 +40,9 @@ struct EnglishView: View {
         .sheet(isPresented: $showArchive) {
             EnglishArchiveSheet(isPresented: $showArchive)
         }
+        .toolbar {
+            ToolbarItem { JumpToFocusButton() }
+        }
     }
 
     @ViewBuilder

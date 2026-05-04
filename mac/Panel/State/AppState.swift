@@ -652,6 +652,20 @@ final class AppState {
         selectedTab = .english
     }
 
+    /// 从其它 tab (保健品 / 英文) 一键回到 todolist 当前 focus 行 — 完成杂事直奔关注。
+    /// 三步:
+    ///   1) selectedTab = .todolist + contentMode = .todolist (不是 micro)
+    ///   2) splitVisibility = .detailOnly (hide sidebar + content list, 只剩 editor)
+    ///   3) jumpToFocus(focus.text) — 切到 anchor todolist + 滚到该行
+    /// focus 不存在或文本空 → no-op (按钮也会 disabled)。
+    func jumpToTodolistFocus() async {
+        guard let text = focus?.text, !text.isEmpty else { return }
+        selectedTab = .todolist
+        contentMode = .todolist
+        splitVisibility = .detailOnly
+        await jumpToFocus(text)
+    }
+
     /// 改今日精听阈值 (分钟)。复用 PUT /api/english/settings, windows / enabled 保留。
     func setEnglishThresholdMin(_ min: Int) async {
         guard min > 0, min <= 240 else { return }
