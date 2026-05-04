@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00024CEDD68A32F2CB22BDF5 /* MiniPlayerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCA200FC61009012AE4E8F0 /* MiniPlayerControls.swift */; };
 		00486EFB3FBF97934CF3549D /* MenuBarItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E865FAD42860A4D230E43B90 /* MenuBarItem.swift */; };
 		0497B18187F208C491E6E28E /* editor in Resources */ = {isa = PBXBuildFile; fileRef = 96E9A106BE15A10D3A195580 /* editor */; };
 		0F041F4C1A303E3928A73D91 /* Todolist.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C3DA32EC86A724BA60EAD7 /* Todolist.swift */; };
@@ -74,6 +75,7 @@
 		49404CC26A8DE27225ACC33B /* ComingSoonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComingSoonView.swift; sourceTree = "<group>"; };
 		49D696A31A0D0A222F286504 /* StatusFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusFooter.swift; sourceTree = "<group>"; };
 		4BEB313D3572C774F686B032 /* KeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStore.swift; sourceTree = "<group>"; };
+		4DCA200FC61009012AE4E8F0 /* MiniPlayerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerControls.swift; sourceTree = "<group>"; };
 		4E695D73E361DCE1AAE1D25B /* EnglishView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishView.swift; sourceTree = "<group>"; };
 		4EEE48D918C7332B0CCAD88F /* BashDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashDetailView.swift; sourceTree = "<group>"; };
 		50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MilkDownEditor.swift; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 				8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */,
 				BF74459F6ADCA6D9056A7911 /* MainLayout.swift */,
 				50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */,
+				4DCA200FC61009012AE4E8F0 /* MiniPlayerControls.swift */,
 				B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */,
 				DB3C7A50C02E5CD50DB114A0 /* PrimarySidebarView.swift */,
 				0DDBB57FF684EC13D8A724B5 /* RatingReferencePanel.swift */,
@@ -364,6 +367,7 @@
 				00486EFB3FBF97934CF3549D /* MenuBarItem.swift in Sources */,
 				C8B3B69D8B987C49D4B142C6 /* MicroProgress.swift in Sources */,
 				D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */,
+				00024CEDD68A32F2CB22BDF5 /* MiniPlayerControls.swift in Sources */,
 				213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */,
 				40BCD17562911C8FE8BB11C6 /* PanelApp.swift in Sources */,
 				F1832D5AC7464601EEF34137 /* Permissions.swift in Sources */,

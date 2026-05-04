@@ -4,6 +4,7 @@ import SwiftUI
 /// M5 接入 ASR + AVAudioPlayer + segment 列表 + ▶ / ☐ 交互。
 struct EnglishView: View {
     @Environment(AppState.self) private var state
+    @Environment(SegmentPlayer.self) private var player
     @State private var showArchive = false
 
     var body: some View {
@@ -127,11 +128,62 @@ struct EnglishView: View {
                     }
                 }
 
+                wholeAudioPlayer(audio: a)
                 segmentsList(audio: a, today: today)
             } else {
                 Text("没有可用音频 (等待 backend fetch)")
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    /// 整段音频播放器 (T4) — 跟 segment 播放共用 SegmentPlayer 单例。
+    /// 用 segIdx = SegmentPlayer.wholeAudioSegIdx 区分整段播。
+    @ViewBuilder
+    private func wholeAudioPlayer(audio: EnglishAudio) -> some View {
+        if !audio.localPath.isEmpty, audio.durationMs > 0 {
+            let playing = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 12) {
+                    Button {
+                        toggleWholePlay(audio: audio, playing: playing)
+                    } label: {
+                        Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(playing ? Color.orange : Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("整段播放 (无字幕)")
+                    Text("整段播放")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                if playing {
+                    MiniPlayerControls()
+                }
+            }
+            .padding(10)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func toggleWholePlay(audio: EnglishAudio, playing: Bool) {
+        if playing {
+            player.stop()
+            return
+        }
+        let url = URL(fileURLWithPath: audio.localPath)
+        do {
+            try player.play(
+                url: url,
+                audioID: audio.id,
+                segIdx: SegmentPlayer.wholeAudioSegIdx,
+                startMs: 0,
+                endMs: Int(audio.durationMs)
+            )
+        } catch {
+            // silent
         }
     }
 

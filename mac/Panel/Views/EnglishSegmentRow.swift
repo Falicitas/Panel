@@ -18,14 +18,23 @@ struct EnglishSegmentRow: View {
     private static let playbackPaddingMs: Int = 0
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            playButton
-            Text("\(segment.idx + 1).")
-                .font(.title3.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 36, alignment: .trailing)
-            textArea
-            checkBox
+        let playing = player.isPlaying(audioID: audio.id, segIdx: segment.idx)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                playButton
+                Text("\(segment.idx + 1).")
+                    .font(.title3.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+                textArea
+                checkBox
+            }
+            if playing {
+                HStack(spacing: 0) {
+                    Spacer().frame(width: 36 + 12 + 24)  // 对齐到文本起始位置
+                    MiniPlayerControls()
+                }
+            }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
