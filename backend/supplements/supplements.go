@@ -168,7 +168,7 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 		// 场景: 用户原先 set dinner=19:00 → "dinner+90m" window 20:30 active 发了通知;
 		//       现在 user 取消 dinner (clear) → window UI 因 RequiresMeal 隐藏,
 		//       通知却没人 dismiss 留在通知栏 — 这里级联清理。
-		_, sOk, sMiss := ParseTimeExpr(sp.Windows[winIdx].Start, anchors, now)
+		startT, sOk, sMiss := ParseTimeExpr(sp.Windows[winIdx].Start, anchors, now)
 		endT, eOk, eMiss := ParseTimeExpr(sp.Windows[winIdx].End, anchors, now)
 		if !sOk || !eOk {
 			// 仅在 missing != "" (引用了未设的 meal) 时 dismiss; 其它解析错误保持原行为不动。
@@ -178,10 +178,17 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 			continue
 		}
 		effectiveEndT := endT.Add(time.Duration(snoozeMap[key]) * 30 * time.Minute)
-		if !now.After(effectiveEndT) {
-			continue // 还没过期 (含 snooze 延后)
+		// 三类该 dismiss 的 case (剩下 1 类 active 留着):
+		//   (a) 已过期: now > effectiveEndT (原行为)
+		//   (b) 锚点变到 window 之前: now < startT (anchor 改后 window 倒退到 upcoming —
+		//       原本是 active 时生成的 notif body 跟新时段不符; 老 notif 该清掉, 等 window
+		//       真正 active 时 GenerateNotifications inner loop 会重新 INSERT/UPDATE body)
+		switch {
+		case now.After(effectiveEndT):
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+		case now.Before(startT):
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 		}
-		_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 	}
 }
 
@@ -291,6 +298,11 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			}
 			if ok {
 				created++
+			} else {
+				// ref 已存在 (通常是 user 多次 set/clear meal 后, 老 anchor 时刻下生成的同 ref
+				// 还在); body 是基于 anchor 解析的当前时段, 必须 sync 过去, 否则用户在
+				// NotificationBar 看到的依然是老 dinner_at 算出的 "21:00-21:30" 老 body。
+				_ = s.UpdateNotificationBodyByRef(ref, body)
 			}
 		}
 	}

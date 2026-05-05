@@ -458,6 +458,19 @@ func (s *Store) CreateNotificationIdempotent(n Notification) (bool, error) {
 	return rows > 0, nil
 }
 
+// UpdateNotificationBodyByRef 更新 source_ref 对应通知的 body, 不动 dismissed_at。
+// 用于通知 body 中的时段字符串随 anchor 变化时同步 — 例如用户先 set dinner=20:30
+// 让 body 变成 "时段 21:00-21:30", 再 set dinner=21:00 时, body 应更新到新时刻。
+// INSERT IGNORE 不会覆写已存在行的 body, 必须显式 UPDATE。
+// dismissed_at 故意不动: 用户主动 dismiss 的通知不该因为 anchor 变化又自动复活。
+func (s *Store) UpdateNotificationBodyByRef(ref, body string) error {
+	if ref == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`UPDATE notifications SET body = ? WHERE source_ref = ?`, body, ref)
+	return err
+}
+
 func (s *Store) DismissNotification(id int64, at int64) error {
 	_, err := s.db.Exec(`UPDATE notifications SET dismissed_at=? WHERE id=? AND dismissed_at IS NULL`, at, id)
 	return err
