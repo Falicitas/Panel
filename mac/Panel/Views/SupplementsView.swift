@@ -71,7 +71,8 @@ struct SupplementsView: View {
                     let dup = Supplement(
                         id: 0, name: current.name + " (副本)", type: current.type,
                         windows: current.windows, notes: current.notes, dose: current.dose,
-                        enabled: true, pausedUntil: nil
+                        enabled: true, pausedUntil: nil,
+                        completionMode: current.completionMode
                     )
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         duplicating = dup
@@ -398,6 +399,7 @@ private struct ItemCard: View {
                     Text("· \(item.dose)")
                         .foregroundStyle(.secondary)
                 }
+                modeChip
                 statusChip
                 Spacer()
                 actions
@@ -456,12 +458,24 @@ private struct ItemCard: View {
             Chip(text: "已禁用", color: .secondary)
         } else if item.paused, let until = item.pausedUntil {
             Chip(text: "暂停至 " + dateLabel(until), color: .orange)
+        } else if item.completionMode == "any" && item.doneToday {
+            // any 模式下勾任一即整项完成 — 优先级高于 "现在该做" / "等待餐",
+            // 否则会出现 "已勾完但 chip 还提示该做" 的矛盾。
+            Chip(text: "今日已勾 (任一)", color: .green)
         } else if item.hasActive {
             Chip(text: "现在该做", color: .anchorAccent)
         } else if !pendingMeals.isEmpty {
             Chip(text: "等待 \(pendingMeals.joined(separator: " / "))", color: .orange)
         } else if item.doneToday {
             Chip(text: "今日已勾完", color: .green)
+        }
+    }
+
+    /// 完成方式 chip — 仅 "任一" 模式时显示一个小提示, "全部" 是默认行为不显示。
+    @ViewBuilder
+    private var modeChip: some View {
+        if item.completionMode == "any" {
+            Chip(text: "任一", color: .indigo)
         }
     }
 

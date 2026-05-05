@@ -9,10 +9,43 @@ struct Supplement: Codable, Identifiable, Hashable {
     var dose: String        // "1 颗" / "5 滴" / "30g" 等,可空
     var enabled: Bool       // false = 临时停用,通知不弹,统计不计 expected
     var pausedUntil: Int64? // unix 秒,> now 时不弹通知
+    /// "all" (默认: 所有 window 都勾才算 item 当日完成) | "any" (任一 window 勾上即算)。
+    /// 老 backend 不返该字段时默认 "all", 行为不变。
+    var completionMode: String
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, windows, notes, dose, enabled
         case pausedUntil = "paused_until"
+        case completionMode = "completion_mode"
+    }
+
+    init(
+        id: Int64, name: String, type: String, windows: [SupplementWindow],
+        notes: String, dose: String, enabled: Bool, pausedUntil: Int64?,
+        completionMode: String = "all"
+    ) {
+        self.id = id
+        self.name = name
+        self.type = type
+        self.windows = windows
+        self.notes = notes
+        self.dose = dose
+        self.enabled = enabled
+        self.pausedUntil = pausedUntil
+        self.completionMode = completionMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(Int64.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.windows = try c.decode([SupplementWindow].self, forKey: .windows)
+        self.notes = try c.decode(String.self, forKey: .notes)
+        self.dose = try c.decode(String.self, forKey: .dose)
+        self.enabled = try c.decode(Bool.self, forKey: .enabled)
+        self.pausedUntil = try c.decodeIfPresent(Int64.self, forKey: .pausedUntil)
+        self.completionMode = try c.decodeIfPresent(String.self, forKey: .completionMode) ?? "all"
     }
 }
 
@@ -50,6 +83,7 @@ struct SupplementTodayItem: Codable, Identifiable, Hashable {
     let pausedUntil: Int64?
     let paused: Bool
     let doneToday: Bool
+    let completionMode: String  // "all" | "any" — UI 提示用
     let windows: [SupplementWindowStatus]
     let hasActive: Bool
 
@@ -57,7 +91,24 @@ struct SupplementTodayItem: Codable, Identifiable, Hashable {
         case id, name, type, dose, notes, enabled, paused, windows
         case pausedUntil = "paused_until"
         case doneToday = "done_today"
+        case completionMode = "completion_mode"
         case hasActive = "has_active"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(Int64.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.type = try c.decode(String.self, forKey: .type)
+        self.dose = try c.decode(String.self, forKey: .dose)
+        self.notes = try c.decode(String.self, forKey: .notes)
+        self.enabled = try c.decode(Bool.self, forKey: .enabled)
+        self.pausedUntil = try c.decodeIfPresent(Int64.self, forKey: .pausedUntil)
+        self.paused = try c.decode(Bool.self, forKey: .paused)
+        self.doneToday = try c.decode(Bool.self, forKey: .doneToday)
+        self.completionMode = try c.decodeIfPresent(String.self, forKey: .completionMode) ?? "all"
+        self.windows = try c.decode([SupplementWindowStatus].self, forKey: .windows)
+        self.hasActive = try c.decode(Bool.self, forKey: .hasActive)
     }
 }
 

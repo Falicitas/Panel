@@ -64,6 +64,24 @@ struct SupplementFormSheet: View {
                         .labelsHidden()
                     }
 
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("完成方式").frame(width: 70, alignment: .leading)
+                            Picker("", selection: $item.completionMode) {
+                                Text("全部完成").tag("all")
+                                Text("任一完成").tag("any")
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                        }
+                        Text(item.completionMode == "any"
+                             ? "任一时段勾上即视为整项当日完成 (其它时段不再发提醒)"
+                             : "所有时段都勾上才算整项当日完成")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 70)
+                    }
+
                     HStack {
                         Text("剂量").frame(width: 70, alignment: .leading)
                         TextField("1 颗 / 5 滴 / 30g 等 (可空)", text: $item.dose)
