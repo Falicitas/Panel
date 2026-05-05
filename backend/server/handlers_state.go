@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -133,7 +134,7 @@ func (s *Server) handleGetStateSettings(w http.ResponseWriter, r *http.Request) 
 // handlePostMeal POST /api/state/meal body {meal, time?}
 //   - meal ∈ {"breakfast","lunch","dinner"}
 //   - time 缺省 = 当前 HH:MM;不缺省必须为 HH:MM
-//   - 验证小时落在 meal 区间内 (breakfast 7-11, lunch 12-15, dinner 16-23)
+//   - 验证 HH:MM 落在 meal 区间内 (breakfast 07:00-11:59, lunch 12:00-17:29, dinner 17:30-23:59)
 //   - meal="" + time="" 视作清空 (取消触发)
 func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 	var p struct {
@@ -155,6 +156,11 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		// 用户清空餐时刻 → meal 通知回归 (跟记录时立即 dismiss 对称); 时段已过的会被
+		// expireUnrecordedMealNotifications 再次 dismiss, 仍在范围内的保留 → 提醒重新挂起。
+		ref := fmt.Sprintf("meal:%s:date:%s", p.Meal, today)
+		_ = s.store.UndismissNotificationByRef(ref)
+		_, _ = supplements.GenerateMealNotifications(s.store, time.Now())
 		ds, _ := s.store.GetDailyState(today)
 		writeJSON(w, http.StatusOK, ds)
 		return
@@ -166,10 +172,12 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("time must be HH:MM"))
 		return
 	}
-	hour, _ := strconv.Atoi(strings.SplitN(p.Time, ":", 2)[0])
-	if !validMealHour(p.Meal, hour) {
+	parts := strings.SplitN(p.Time, ":", 2)
+	hour, _ := strconv.Atoi(parts[0])
+	minute, _ := strconv.Atoi(parts[1])
+	if !validMealMinute(p.Meal, hour, minute) {
 		writeError(w, http.StatusBadRequest,
-			errors.New(p.Meal+" out of range (breakfast 7-11, lunch 12-15, dinner 16-23)"))
+			errors.New(p.Meal+" out of range (breakfast 07:00-11:59, lunch 12:00-17:29, dinner 17:30-23:59)"))
 		return
 	}
 	if err := s.store.SetMealTime(today, p.Meal, p.Time); err != nil {
@@ -183,18 +191,26 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 	} else if n > 0 {
 		log.Printf("supplement notif gen (post-meal): %d new", n)
 	}
+	// 同时让 meal 提醒立刻 dismiss (用户刚记录, 不要让 '还没记录' 的通知挂在那)
+	if _, err := supplements.GenerateMealNotifications(s.store, time.Now()); err != nil {
+		log.Printf("meal notif gen (post-meal): %v", err)
+	}
 	ds, _ := s.store.GetDailyState(today)
 	writeJSON(w, http.StatusOK, ds)
 }
 
-func validMealHour(meal string, hour int) bool {
+// validMealMinute 餐时间区间 (分钟级):
+//   breakfast 07:00-11:59 / lunch 12:00-17:29 / dinner 17:30-23:59
+// 跟 mac mealMetas.validRangeMin 保持一致, 防 mac UI 已在范围内但 backend 拒绝。
+func validMealMinute(meal string, hour, minute int) bool {
+	mins := hour*60 + minute
 	switch meal {
 	case "breakfast":
-		return hour >= 7 && hour <= 11
+		return mins >= 7*60 && mins <= 11*60+59
 	case "lunch":
-		return hour >= 12 && hour <= 15
+		return mins >= 12*60 && mins <= 17*60+29
 	case "dinner":
-		return hour >= 16 && hour <= 23
+		return mins >= 17*60+30 && mins <= 23*60+59
 	}
 	return false
 }

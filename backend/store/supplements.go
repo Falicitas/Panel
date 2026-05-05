@@ -509,3 +509,20 @@ func (s *Store) DismissStaleSupplementNotifications(beforeUnix, atUnix int64) (i
 	n, _ := res.RowsAffected()
 	return n, nil
 }
+
+// DismissStaleMealNotifications 跨日清理: 把 source='meal' 且 created_at < beforeUnix
+// 且未 dismissed 的通知一并 dismissed, 避免昨天的早午晚餐提醒堆到今天。
+// 用法跟 DismissStaleSupplementNotifications 一致, 在 GenerateMealNotifications 入口调一次。
+func (s *Store) DismissStaleMealNotifications(beforeUnix, atUnix int64) (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE notifications
+		    SET dismissed_at=?
+		  WHERE source='meal' AND dismissed_at IS NULL AND created_at < ?`,
+		atUnix, beforeUnix,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
