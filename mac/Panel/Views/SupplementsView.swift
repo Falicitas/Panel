@@ -174,14 +174,17 @@ private struct MealMeta {
     let key: String      // breakfast/lunch/dinner
     let label: String    // 早餐/午餐/晚餐
     let icon: String     // SF symbol
-    let validRange: ClosedRange<Int>  // 小时 (闭区间) — 7...11 / 12...15 / 16...23
+    let validRangeMin: ClosedRange<Int>  // 分钟 (闭区间, 0..1439) — 早 07:00-11:59 / 午 12:00-17:29 / 晚 17:30-23:59
     let rangeLabel: String  // "7:00-11:59"
 }
 
 private let mealMetas: [MealMeta] = [
-    .init(key: "breakfast", label: "早餐", icon: "sun.haze", validRange: 7...11, rangeLabel: "7:00–11:59"),
-    .init(key: "lunch",     label: "午餐", icon: "sun.max",  validRange: 12...15, rangeLabel: "12:00–15:59"),
-    .init(key: "dinner",    label: "晚餐", icon: "moon",     validRange: 16...23, rangeLabel: "16:00–23:59"),
+    .init(key: "breakfast", label: "早餐", icon: "sun.haze",
+          validRangeMin: (7 * 60)...(11 * 60 + 59),  rangeLabel: "7:00–11:59"),
+    .init(key: "lunch",     label: "午餐", icon: "sun.max",
+          validRangeMin: (12 * 60)...(17 * 60 + 29), rangeLabel: "12:00–17:29"),
+    .init(key: "dinner",    label: "晚餐", icon: "moon",
+          validRangeMin: (17 * 60 + 30)...(23 * 60 + 59), rangeLabel: "17:30–23:59"),
 ]
 
 private struct MealsSection: View {
@@ -236,8 +239,9 @@ private struct MealCard: View {
 
     private var inRange: Bool {
         let _ = state.timeTick
-        let hour = Calendar.current.component(.hour, from: Date())
-        return meta.validRange.contains(hour)
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let mins = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
+        return meta.validRangeMin.contains(mins)
     }
 
     var body: some View {

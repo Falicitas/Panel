@@ -121,6 +121,9 @@ private struct NotificationListPopover: View {
         case "english":
             state.jumpToEnglish()
             dismissPopover()
+        case "meal":
+            state.jumpToMeals()
+            dismissPopover()
         default:
             return
         }
