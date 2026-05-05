@@ -162,17 +162,37 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 		}
 		key := fmt.Sprintf("%d:%d", spID, winIdx)
 		if doneSet[key] {
-			continue // 已 done, handleCheckSupplement 已 dismiss
+			// 已 done — 防御性 dismiss: handleCheckSupplement 在勾的时候 dismiss 过, 但
+			// 后续 set meal 路径里的 undismiss 可能误复活同 ref 通知 (也已加 doneSet 防护,
+			// 但旧 db 状态需要 ticker 自愈)。done 的 window 通知必须保持 dismissed_at != null。
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+			continue
 		}
-		endT, ok, _ := ParseTimeExpr(sp.Windows[winIdx].End, anchors, now)
-		if !ok {
+		// 优先看 start 是否引用未触发餐 — 表达式不可解析时也按 "window 已隐藏" 处理。
+		// 场景: 用户原先 set dinner=19:00 → "dinner+90m" window 20:30 active 发了通知;
+		//       现在 user 取消 dinner (clear) → window UI 因 RequiresMeal 隐藏,
+		//       通知却没人 dismiss 留在通知栏 — 这里级联清理。
+		startT, sOk, sMiss := ParseTimeExpr(sp.Windows[winIdx].Start, anchors, now)
+		endT, eOk, eMiss := ParseTimeExpr(sp.Windows[winIdx].End, anchors, now)
+		if !sOk || !eOk {
+			// 仅在 missing != "" (引用了未设的 meal) 时 dismiss; 其它解析错误保持原行为不动。
+			if sMiss != "" || eMiss != "" {
+				_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+			}
 			continue
 		}
 		effectiveEndT := endT.Add(time.Duration(snoozeMap[key]) * 30 * time.Minute)
-		if !now.After(effectiveEndT) {
-			continue // 还没过期 (含 snooze 延后)
+		// 三类该 dismiss 的 case (剩下 1 类 active 留着):
+		//   (a) 已过期: now > effectiveEndT (原行为)
+		//   (b) 锚点变到 window 之前: now < startT (anchor 改后 window 倒退到 upcoming —
+		//       原本是 active 时生成的 notif body 跟新时段不符; 老 notif 该清掉, 等 window
+		//       真正 active 时 GenerateNotifications inner loop 会重新 INSERT/UPDATE body)
+		switch {
+		case now.After(effectiveEndT):
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+		case now.Before(startT):
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 		}
-		_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 	}
 }
 
@@ -282,6 +302,11 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			}
 			if ok {
 				created++
+			} else {
+				// ref 已存在 (通常是 user 多次 set/clear meal 后, 老 anchor 时刻下生成的同 ref
+				// 还在); body 是基于 anchor 解析的当前时段, 必须 sync 过去, 否则用户在
+				// NotificationBar 看到的依然是老 dinner_at 算出的 "21:00-21:30" 老 body。
+				_ = s.UpdateNotificationBodyByRef(ref, body)
 			}
 		}
 	}

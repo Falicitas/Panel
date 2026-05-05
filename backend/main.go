@@ -75,9 +75,10 @@ func main() {
 	// 数据库每日备份: 启动 + 每 6h 扫一次,缺当日备份则 VACUUM INTO,保留 7 份
 	go runBackupLoop(ctx, st, backupsDir)
 
-	// 食物保健品 + 英文练习通知生成器: 每 60s 扫一次, active window 写 notification (幂等)
+	// 食物保健品 + 英文练习 + 三餐通知生成器: 每 60s 扫一次, active window 写 notification (幂等)
 	go func() {
 		_, _ = supplements.GenerateNotifications(st, time.Now())
+		_, _ = supplements.GenerateMealNotifications(st, time.Now())
 		_, _ = english.GenerateNotifications(st, time.Now())
 		tick := time.NewTicker(60 * time.Second)
 		defer tick.Stop()
@@ -90,6 +91,11 @@ func main() {
 					log.Printf("supplement notif gen: %v", err)
 				} else if n > 0 {
 					log.Printf("supplement notif gen: %d new", n)
+				}
+				if n, err := supplements.GenerateMealNotifications(st, t); err != nil {
+					log.Printf("meal notif gen: %v", err)
+				} else if n > 0 {
+					log.Printf("meal notif gen: %d new", n)
 				}
 				if n, err := english.GenerateNotifications(st, t); err != nil {
 					log.Printf("english notif gen: %v", err)

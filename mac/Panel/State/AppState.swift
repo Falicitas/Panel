@@ -671,6 +671,12 @@ final class AppState {
         selectedTab = .english
     }
 
+    /// 三餐通知点击 → 切到 supplements tab。三餐 card 在 SupplementsView 顶部 MealsSection,
+    /// 不需要 scroll, 切 tab 用户就能看到。
+    func jumpToMeals() {
+        selectedTab = .supplements
+    }
+
     /// 从其它 tab (保健品 / 英文) 一键回到 todolist 当前 focus 行 — 完成杂事直奔关注。
     /// 三步:
     ///   1) selectedTab = .todolist + contentMode = .todolist (不是 micro)
