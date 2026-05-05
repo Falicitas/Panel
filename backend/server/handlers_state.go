@@ -161,6 +161,10 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 		ref := fmt.Sprintf("meal:%s:date:%s", p.Meal, today)
 		_ = s.store.UndismissNotificationByRef(ref)
 		_, _ = supplements.GenerateMealNotifications(s.store, time.Now())
+		// 同时让 supplement 通知重扫 — 引用了刚被 clear 的 meal 的 window (e.g. "dinner+90m")
+		// 现在解析失败、UI 隐藏, 之前发的通知必须级联 dismiss
+		// (expireUnfinishedSupplementNotifications 已扩展处理 missing-meal case)。
+		_, _ = supplements.GenerateNotifications(s.store, time.Now())
 		ds, _ := s.store.GetDailyState(today)
 		writeJSON(w, http.StatusOK, ds)
 		return
@@ -184,6 +188,20 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// 用户重新 set meal → 之前 clear 时被 cascade dismiss 的 supplement 通知该回归。
+	// CreateNotificationIdempotent 是 INSERT OR IGNORE, 不会 undismiss 同 ref 已 dismissed
+	// 的旧记录, 所以这里手动 undismiss 引用了该 meal 的 window 的通知, 让 mac UrgentNotifier
+	// 下一 tick 看到 dismissed_at = NULL 自动恢复 banner。
+	suppls, _ := s.store.ListSupplements()
+	for _, sp := range suppls {
+		for idx, w := range sp.Windows {
+			if !exprUsesMeal(w.Start, p.Meal) && !exprUsesMeal(w.End, p.Meal) {
+				continue
+			}
+			supRef := fmt.Sprintf("supplement:%d:window:%d:date:%s", sp.ID, idx, today)
+			_ = s.store.UndismissNotificationByRef(supRef)
+		}
+	}
 	// 触发餐后立刻扫一次通知 — 否则下次生成器跑要等到 60s tick,
 	// 引用了这餐的 supplement 当前若处于 active 也得拖到一分钟内才弹
 	if n, err := supplements.GenerateNotifications(s.store, time.Now()); err != nil {
@@ -197,6 +215,17 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 	}
 	ds, _ := s.store.GetDailyState(today)
 	writeJSON(w, http.StatusOK, ds)
+}
+
+// exprUsesMeal 检查 supplement window 时间表达式是否引用了某 meal 锚点。
+// 跟 supplements.ParseTimeExpr 的 anchor prefix 匹配规则一致 (HasPrefix), 仅识别
+// breakfast/lunch/dinner (wake 不算 meal, 跟 firstMealMiss 一致)。
+func exprUsesMeal(expr, meal string) bool {
+	expr = strings.TrimSpace(expr)
+	if meal != "breakfast" && meal != "lunch" && meal != "dinner" {
+		return false
+	}
+	return strings.HasPrefix(expr, meal)
 }
 
 // validMealMinute 餐时间区间 (分钟级):

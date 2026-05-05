@@ -164,8 +164,17 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 		if doneSet[key] {
 			continue // 已 done, handleCheckSupplement 已 dismiss
 		}
-		endT, ok, _ := ParseTimeExpr(sp.Windows[winIdx].End, anchors, now)
-		if !ok {
+		// 优先看 start 是否引用未触发餐 — 表达式不可解析时也按 "window 已隐藏" 处理。
+		// 场景: 用户原先 set dinner=19:00 → "dinner+90m" window 20:30 active 发了通知;
+		//       现在 user 取消 dinner (clear) → window UI 因 RequiresMeal 隐藏,
+		//       通知却没人 dismiss 留在通知栏 — 这里级联清理。
+		_, sOk, sMiss := ParseTimeExpr(sp.Windows[winIdx].Start, anchors, now)
+		endT, eOk, eMiss := ParseTimeExpr(sp.Windows[winIdx].End, anchors, now)
+		if !sOk || !eOk {
+			// 仅在 missing != "" (引用了未设的 meal) 时 dismiss; 其它解析错误保持原行为不动。
+			if sMiss != "" || eMiss != "" {
+				_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+			}
 			continue
 		}
 		effectiveEndT := endT.Add(time.Duration(snoozeMap[key]) * 30 * time.Minute)
