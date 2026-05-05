@@ -9,14 +9,31 @@ import (
 
 // 食物 / 保健品
 type Supplement struct {
-	ID          int64    `json:"id"`
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`         // "food" | "supplement"
-	Windows     []Window `json:"windows"`      // 可空
-	Notes       string   `json:"notes"`
-	Dose        string   `json:"dose"`         // "1 颗" / "5 滴" 等,纯字符串
-	Enabled     bool     `json:"enabled"`      // false 时通知不弹,统计不计 expected
-	PausedUntil *int64   `json:"paused_until"` // unix 秒;> now 时不弹通知
+	ID             int64    `json:"id"`
+	Name           string   `json:"name"`
+	Type           string   `json:"type"`            // "food" | "supplement"
+	Windows        []Window `json:"windows"`         // 可空
+	Notes          string   `json:"notes"`
+	Dose           string   `json:"dose"`            // "1 颗" / "5 滴" 等,纯字符串
+	Enabled        bool     `json:"enabled"`         // false 时通知不弹,统计不计 expected
+	PausedUntil    *int64   `json:"paused_until"`    // unix 秒;> now 时不弹通知
+	CompletionMode string   `json:"completion_mode"` // "all" (默认, 全部 window 都勾才算 item 完成) | "any" (任一勾上就算)
+}
+
+// CompletionModeAll / CompletionModeAny 是 Supplement.CompletionMode 的合法值。
+const (
+	CompletionModeAll = "all"
+	CompletionModeAny = "any"
+)
+
+// NormalizedCompletionMode 把空 / 未知值规范成 "all" (默认)。
+// 老数据写库时 completion_mode 字段不存在 → DB DEFAULT 'all'; 但 JSON 反序列化
+// 时若 client 传空字符串需要在 handler 里调一次。
+func (sp Supplement) NormalizedCompletionMode() string {
+	if sp.CompletionMode == CompletionModeAny {
+		return CompletionModeAny
+	}
+	return CompletionModeAll
 }
 
 // Window 是单个 (start, end) 段。
@@ -40,7 +57,7 @@ func (sp Supplement) IsActive(now int64) bool {
 
 func (s *Store) ListSupplements() ([]Supplement, error) {
 	rows, err := s.db.Query(
-		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until
+		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until, completion_mode
 		   FROM supplements ORDER BY sort_order, id`,
 	)
 	if err != nil {
@@ -53,7 +70,7 @@ func (s *Store) ListSupplements() ([]Supplement, error) {
 		var raw string
 		var enabledI int
 		var paused sql.NullInt64
-		if err := rows.Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes, &sp.Dose, &enabledI, &paused); err != nil {
+		if err := rows.Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes, &sp.Dose, &enabledI, &paused, &sp.CompletionMode); err != nil {
 			return nil, err
 		}
 		sp.Windows = []Window{}
@@ -65,6 +82,7 @@ func (s *Store) ListSupplements() ([]Supplement, error) {
 			v := paused.Int64
 			sp.PausedUntil = &v
 		}
+		sp.CompletionMode = sp.NormalizedCompletionMode()
 		out = append(out, sp)
 	}
 	return out, rows.Err()
@@ -76,9 +94,9 @@ func (s *Store) GetSupplement(id int64) (Supplement, error) {
 	var enabledI int
 	var paused sql.NullInt64
 	err := s.db.QueryRow(
-		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until
+		`SELECT id, name, type, windows_json, notes, dose, enabled, paused_until, completion_mode
 		   FROM supplements WHERE id=?`, id,
-	).Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes, &sp.Dose, &enabledI, &paused)
+	).Scan(&sp.ID, &sp.Name, &sp.Type, &raw, &sp.Notes, &sp.Dose, &enabledI, &paused, &sp.CompletionMode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Supplement{}, sql.ErrNoRows
 	}
@@ -94,6 +112,7 @@ func (s *Store) GetSupplement(id int64) (Supplement, error) {
 		v := paused.Int64
 		sp.PausedUntil = &v
 	}
+	sp.CompletionMode = sp.NormalizedCompletionMode()
 	return sp, nil
 }
 
@@ -101,6 +120,7 @@ func (s *Store) CreateSupplement(sp Supplement) (Supplement, error) {
 	if sp.Windows == nil {
 		sp.Windows = []Window{}
 	}
+	sp.CompletionMode = sp.NormalizedCompletionMode()
 	raw, _ := json.Marshal(sp.Windows)
 	enabledI := 1
 	if !sp.Enabled {
@@ -114,9 +134,9 @@ func (s *Store) CreateSupplement(sp Supplement) (Supplement, error) {
 	var nextOrder int64
 	_ = s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), 0) + 1 FROM supplements`).Scan(&nextOrder)
 	res, err := s.db.Exec(
-		`INSERT INTO supplements (name, type, windows_json, notes, dose, enabled, paused_until, sort_order)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused, nextOrder,
+		`INSERT INTO supplements (name, type, windows_json, notes, dose, enabled, paused_until, sort_order, completion_mode)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused, nextOrder, sp.CompletionMode,
 	)
 	if err != nil {
 		return Supplement{}, err
@@ -151,6 +171,7 @@ func (s *Store) UpdateSupplement(sp Supplement) error {
 	if sp.Windows == nil {
 		sp.Windows = []Window{}
 	}
+	sp.CompletionMode = sp.NormalizedCompletionMode()
 	raw, _ := json.Marshal(sp.Windows)
 	enabledI := 1
 	if !sp.Enabled {
@@ -161,9 +182,9 @@ func (s *Store) UpdateSupplement(sp Supplement) error {
 		paused = *sp.PausedUntil
 	}
 	_, err := s.db.Exec(
-		`UPDATE supplements SET name=?, type=?, windows_json=?, notes=?, dose=?, enabled=?, paused_until=?
+		`UPDATE supplements SET name=?, type=?, windows_json=?, notes=?, dose=?, enabled=?, paused_until=?, completion_mode=?
 		   WHERE id=?`,
-		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused, sp.ID,
+		sp.Name, sp.Type, string(raw), sp.Notes, sp.Dose, enabledI, paused, sp.CompletionMode, sp.ID,
 	)
 	return err
 }
@@ -202,6 +223,39 @@ func (s *Store) DeleteNotificationsBySupplementID(id int64) (int64, error) {
 	}
 	n, _ := res.RowsAffected()
 	return n, nil
+}
+
+// DismissSupplementItemNotificationsForDate 把 supplement id 在 date 当日的所有未 dismissed
+// window 通知一并 dismiss。用于 completion_mode="any" 勾选任一 window 后视为整 item 当日已完成,
+// 后续其它 window 的通知不再有意义。返回受影响行数。
+func (s *Store) DismissSupplementItemNotificationsForDate(id int64, date string, atUnix int64) (int64, error) {
+	pattern := fmt.Sprintf("supplement:%d:window:%%:date:%s", id, date)
+	res, err := s.db.Exec(
+		`UPDATE notifications SET dismissed_at=?
+		  WHERE source='supplement' AND dismissed_at IS NULL AND source_ref LIKE ?`,
+		atUnix, pattern,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// UndismissSupplementItemNotificationsForDate 把 supplement id 在 date 当日所有 window 通知
+// undismiss (dismissed_at = NULL), 跟 DismissSupplementItemNotificationsForDate 对称。
+// 用于 completion_mode="any" 取消勾选时让 item 整组通知重新 active, mac UrgentNotifier
+// 下一 tick 会基于 dismissed_at IS NULL 自动恢复 banner / cancelPending 的反向。
+// 已过期 window 通知由调用方紧随其后调 GenerateNotifications -> expireUnfinishedSupplementNotifications
+// 再次 dismiss 干净, 不会留过期通知在通知栏。
+func (s *Store) UndismissSupplementItemNotificationsForDate(id int64, date string) error {
+	pattern := fmt.Sprintf("supplement:%d:window:%%:date:%s", id, date)
+	_, err := s.db.Exec(
+		`UPDATE notifications SET dismissed_at=NULL
+		  WHERE source='supplement' AND source_ref LIKE ?`,
+		pattern,
+	)
+	return err
 }
 
 // DeleteSupplement 硬删 supplement + cascade 抹除所有指向它的通知 (硬 DELETE 不是 dismiss)。

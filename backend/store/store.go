@@ -91,7 +91,8 @@ func (s *Store) migrate() error {
 			notes TEXT NOT NULL DEFAULT '',
 			dose TEXT NOT NULL DEFAULT '',
 			enabled INTEGER NOT NULL DEFAULT 1,
-			paused_until INTEGER
+			paused_until INTEGER,
+			completion_mode TEXT NOT NULL DEFAULT 'all'
 		);
 		CREATE TABLE IF NOT EXISTS daily_state (
 			date TEXT PRIMARY KEY,
@@ -202,6 +203,9 @@ func (s *Store) migrate() error {
 		// 一次性 backfill: 老 supplements 的 sort_order 默认 0, 全为 0 时 ORDER BY 退化到 id, 视觉无变化。
 		// 但接下来 reorder 操作会写非 0 值, 此时混 0 行排在最前会乱。先把所有 0 行设成 id 保持初始顺序。
 		{"supplements.sort_order_backfill", `UPDATE supplements SET sort_order = id WHERE sort_order = 0`},
+		// completion_mode: "all"(默认 -> 所有 window 都勾才算 item 完成) | "any"(任一 window 勾上即算)。
+		// 老数据补列默认 'all', 行为不变。
+		{"supplements.completion_mode", `ALTER TABLE supplements ADD COLUMN completion_mode TEXT NOT NULL DEFAULT 'all'`},
 	} {
 		if _, err := s.db.Exec(alter.sql); err != nil {
 			if !isDuplicateColumnErr(err) {

@@ -218,6 +218,19 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 		return 0, err
 	}
 
+	// 当日已勾过的 (id, idx) 集合 — 用于 completion_mode="any" 短路: 只要任一 window 已勾,
+	// 后续不再发该 item 的新通知 (任一即整 item 完成)。
+	doneRecs, _ := s.ListRecords("supplement", today, today)
+	itemAnyDone := map[int64]bool{}
+	for _, rec := range doneRecs {
+		parts := strings.SplitN(rec.Key, ":", 2)
+		spID, perr := strconv.ParseInt(parts[0], 10, 64)
+		if perr != nil {
+			continue
+		}
+		itemAnyDone[spID] = true
+	}
+
 	anchors := Anchors{
 		Wake:      state.WakeTime,
 		Breakfast: state.BreakfastAt,
@@ -229,6 +242,10 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 	for _, sp := range suppls {
 		// 禁用 / 暂停期内不弹通知 (历史数据保留)
 		if !sp.IsActive(now.Unix()) {
+			continue
+		}
+		// completion_mode="any" + 该 item 当日已有任一 window 勾过 → 不再发新通知
+		if sp.NormalizedCompletionMode() == store.CompletionModeAny && itemAnyDone[sp.ID] {
 			continue
 		}
 		for idx, w := range sp.Windows {

@@ -71,7 +71,8 @@ struct SupplementsView: View {
                     let dup = Supplement(
                         id: 0, name: current.name + " (副本)", type: current.type,
                         windows: current.windows, notes: current.notes, dose: current.dose,
-                        enabled: true, pausedUntil: nil
+                        enabled: true, pausedUntil: nil,
+                        completionMode: current.completionMode
                     )
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         duplicating = dup
@@ -398,6 +399,7 @@ private struct ItemCard: View {
                     Text("· \(item.dose)")
                         .foregroundStyle(.secondary)
                 }
+                modeChip
                 statusChip
                 Spacer()
                 actions
@@ -456,12 +458,24 @@ private struct ItemCard: View {
             Chip(text: "已禁用", color: .secondary)
         } else if item.paused, let until = item.pausedUntil {
             Chip(text: "暂停至 " + dateLabel(until), color: .orange)
+        } else if item.completionMode == "any" && item.doneToday {
+            // any 模式下勾任一即整项完成 — 优先级高于 "现在该做" / "等待餐",
+            // 否则会出现 "已勾完但 chip 还提示该做" 的矛盾。
+            Chip(text: "今日已勾 (任一)", color: .green)
         } else if item.hasActive {
             Chip(text: "现在该做", color: .anchorAccent)
         } else if !pendingMeals.isEmpty {
             Chip(text: "等待 \(pendingMeals.joined(separator: " / "))", color: .orange)
         } else if item.doneToday {
             Chip(text: "今日已勾完", color: .green)
+        }
+    }
+
+    /// 完成方式 chip — 仅 "任一" 模式时显示一个小提示, "全部" 是默认行为不显示。
+    @ViewBuilder
+    private var modeChip: some View {
+        if item.completionMode == "any" {
+            Chip(text: "任一", color: .indigo)
         }
     }
 
@@ -661,7 +675,7 @@ private struct ItemTimeline: View {
     let windows: [SupplementWindowStatus]
 
     private static let dayStartMin = 6 * 60   // 06:00
-    private static let dayEndMin = 22 * 60    // 22:00
+    private static let dayEndMin = 24 * 60    // 24:00 (跨天 window 在当天部分截到 24:00)
 
     var body: some View {
         GeometryReader { geo in
@@ -690,8 +704,8 @@ private struct ItemTimeline: View {
                         .offset(x: w * nf, y: 2)
                 }
 
-                // tick labels 6/12/18/22
-                ForEach([6, 12, 18, 22], id: \.self) { hour in
+                // tick labels 6/12/18/24
+                ForEach([6, 12, 18, 24], id: \.self) { hour in
                     Text(String(format: "%02d", hour))
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.tertiary)
@@ -705,7 +719,10 @@ private struct ItemTimeline: View {
 
     private func segment(for w: SupplementWindowStatus) -> Seg? {
         guard w.requiresMeal.isEmpty else { return nil }   // 未触发餐 — 不画
-        guard let s = parseHM(w.startHM), let e = parseHM(w.endHM), e > s else { return nil }
+        guard let s = parseHM(w.startHM), let rawE = parseHM(w.endHM) else { return nil }
+        // 跨午夜 (e <= s, 例如 21:03–01:43): e 实际是 next day, 当 +24h 处理。
+        // frac 内部 clamp [0,1], 跨到 24:00 之外的部分自动截掉, timeline 上画当天 [s, 24:00) 段。
+        let e = rawE <= s ? rawE + 24 * 60 : rawE
         let sf = frac(s)
         let ef = frac(e)
         guard ef > sf else { return nil }
