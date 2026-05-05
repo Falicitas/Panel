@@ -9,6 +9,7 @@ struct SupplementsView: View {
     @State private var search: String = ""
     @State private var creating = false
     @State private var editing: Supplement?
+    @State private var duplicating: Supplement?
 
     var body: some View {
         ScrollView {
@@ -23,6 +24,7 @@ struct SupplementsView: View {
                     AllListSection(
                         today: state.supplementsToday,
                         supplementsByID: supplementsByID,
+                        orderedIDs: state.supplements.map(\.id),
                         filter: filter,
                         search: search,
                         onToggleWindow: { item, idx in
@@ -30,7 +32,8 @@ struct SupplementsView: View {
                         },
                         onEdit: { sp in editing = sp },
                         onPause: { sp, days in Task { await state.pauseSupplement(sp, days: days) } },
-                        onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } }
+                        onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } },
+                        onMove: { sp, dir in Task { await state.moveSupplement(sp, direction: dir) } }
                     )
                 }
                 .padding(20)
@@ -59,7 +62,25 @@ struct SupplementsView: View {
             SupplementFormSheet(initial: .blank, isNew: true).environment(state)
         }
         .sheet(item: $editing) { sp in
-            SupplementFormSheet(initial: sp, isNew: false).environment(state)
+            SupplementFormSheet(
+                initial: sp,
+                isNew: false,
+                onDuplicate: { current in
+                    // form 已 dismiss 自身, 这里异步弹复制 sheet 防 SwiftUI sheet 替换 race。
+                    // current = form 当前 @State (用户可能改了 dose/notes 才点复制)
+                    let dup = Supplement(
+                        id: 0, name: current.name + " (副本)", type: current.type,
+                        windows: current.windows, notes: current.notes, dose: current.dose,
+                        enabled: true, pausedUntil: nil
+                    )
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        duplicating = dup
+                    }
+                }
+            ).environment(state)
+        }
+        .sheet(item: $duplicating) { sp in
+            SupplementFormSheet(initial: sp, isNew: true).environment(state)
         }
     }
 
@@ -283,12 +304,16 @@ private struct MealCard: View {
 private struct AllListSection: View {
     let today: SupplementToday?
     let supplementsByID: [Int64: Supplement]
+    /// 完整全列表 (含被 filter/search 过滤的) 在 backend 的真实 sort_order 顺序。
+    /// ItemCard 用它判断 isFirst / isLast 决定上下移按钮的 disabled。
+    let orderedIDs: [Int64]
     let filter: SupplementsFilter
     let search: String
     let onToggleWindow: (SupplementTodayItem, Int) -> Void
     let onEdit: (Supplement) -> Void
     let onPause: (Supplement, Int) -> Void
     let onEnable: (Supplement, Bool) -> Void
+    let onMove: (Supplement, Int) -> Void  // direction = -1 上移, +1 下移
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -303,12 +328,16 @@ private struct AllListSection: View {
             } else {
                 ForEach(filteredItems) { it in
                     if let sp = supplementsByID[it.id] {
+                        let realIdx = orderedIDs.firstIndex(of: it.id) ?? 0
                         ItemCard(
                             item: it, sp: sp,
+                            isFirst: realIdx == 0,
+                            isLast: realIdx == orderedIDs.count - 1,
                             onToggleWindow: { idx in onToggleWindow(it, idx) },
                             onEdit: { onEdit(sp) },
                             onPause: { days in onPause(sp, days) },
-                            onEnable: { on in onEnable(sp, on) }
+                            onEnable: { on in onEnable(sp, on) },
+                            onMove: { dir in onMove(sp, dir) }
                         )
                         .id(it.id)
                     }
@@ -345,10 +374,13 @@ private struct AllListSection: View {
 private struct ItemCard: View {
     let item: SupplementTodayItem
     let sp: Supplement
+    let isFirst: Bool
+    let isLast: Bool
     let onToggleWindow: (Int) -> Void
     let onEdit: () -> Void
     let onPause: (Int) -> Void
     let onEnable: (Bool) -> Void
+    let onMove: (Int) -> Void  // -1 上移, +1 下移
 
     @Environment(AppState.self) private var state
 
@@ -433,6 +465,25 @@ private struct ItemCard: View {
         }
     }
 
+    /// 暂停 menu 的状态化 icon / 颜色 / hover 提示 — 把"永久暂停 (disable)" 和
+    /// "暂停 N 天 (pausedUntil)" 合在同一菜单, 用 icon 反映当前状态:
+    ///   - !enabled → playpause.circle 红, 提示已永久暂停 (停用)
+    ///   - paused   → play.circle 橙, 提示限时暂停中
+    ///   - 正常     → pause.circle 灰, 提示点击暂停 / 停用
+    private var pauseIcon: String {
+        if !item.enabled { return "playpause.circle" }
+        return item.paused ? "play.circle" : "pause.circle"
+    }
+    private var pauseColor: Color {
+        if !item.enabled { return .red }
+        return item.paused ? .orange : .secondary
+    }
+    private var pauseHelp: String {
+        if !item.enabled { return "已永久暂停 (停用), 点击启用 / 限时暂停" }
+        if item.paused { return "限时暂停中, 点击调整 / 取消 / 永久暂停" }
+        return "暂停 N 天 / 永久暂停"
+    }
+
     /// 该 item 还在等待哪些餐被触发(如 ["早餐", "午餐"])。
     /// 优先级高于 doneToday,避免还没吃饭就误显示"已完成"。
     private var pendingMeals: [String] {
@@ -448,32 +499,46 @@ private struct ItemCard: View {
                 Button("暂停 7 天") { onPause(7) }
                 Button("暂停 14 天") { onPause(14) }
                 Button("暂停 30 天") { onPause(30) }
+                Divider()
+                if item.enabled {
+                    Button("永久暂停 (停用)") { onEnable(false) }
+                } else {
+                    Button("启用") { onEnable(true) }
+                }
                 if item.paused {
-                    Divider()
-                    Button("取消暂停") { onPause(0) }
+                    Button("取消时限暂停") { onPause(0) }
                 }
             } label: {
-                Image(systemName: item.paused ? "play.circle" : "pause.circle")
-                    .foregroundStyle(.secondary)
+                Image(systemName: pauseIcon)
+                    .foregroundStyle(pauseColor)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .frame(width: 36)
-            .help(item.paused ? "暂停中,点击调整 / 取消" : "暂停 N 天")
-
-            Button { onEnable(!item.enabled) } label: {
-                Image(systemName: item.enabled ? "power" : "power.dotted")
-                    .foregroundStyle(item.enabled ? Color.secondary : Color.red)
-            }
-            .buttonStyle(.borderless)
-            .help(item.enabled ? "停用 (通知不弹,历史保留)" : "重新启用")
+            .help(pauseHelp)
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
-            .help("编辑")
+            .help("编辑 (复制 / 删除在 form 内)")
+
+            Button { onMove(-1) } label: {
+                Image(systemName: "chevron.up")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(isFirst)
+            .help("上移")
+
+            Button { onMove(1) } label: {
+                Image(systemName: "chevron.down")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .disabled(isLast)
+            .help("下移")
         }
     }
 

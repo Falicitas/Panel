@@ -358,6 +358,25 @@ final class AppState {
         }
     }
 
+    /// 把 sp 在当前列表里向 direction 方向移动一步, 然后调 reorder API 全列表保存。
+    /// direction = -1 上移, +1 下移; 越界 (已是首/末) 时 no-op。
+    func moveSupplement(_ sp: Supplement, direction: Int) async {
+        guard direction == -1 || direction == 1 else { return }
+        var items = self.supplements
+        guard let idx = items.firstIndex(where: { $0.id == sp.id }) else { return }
+        let target = idx + direction
+        guard target >= 0, target < items.count else { return }
+        items.swapAt(idx, target)
+        let order = items.map(\.id)
+        do {
+            self.supplements = try await api.reorderSupplements(orderedIDs: order)
+            self.supplementsToday = try await api.getSupplementsToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     func setMode(_ mode: String, wakeTime: String? = nil) async {
         do {
             self.dailyState = try await api.setTodayState(mode: mode, wakeTime: wakeTime)

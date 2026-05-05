@@ -5,6 +5,40 @@ import (
 	"testing"
 )
 
+// 新建 item sort_order = max+1 push 末尾; ReorderSupplements 按 ID 数组重写 sort_order
+// 让 ListSupplements 按新顺序返回。
+func TestReorderSupplements(t *testing.T) {
+	s := newTestStore(t)
+
+	a, _ := s.CreateSupplement(Supplement{Name: "A", Type: "supplement", Enabled: true})
+	b, _ := s.CreateSupplement(Supplement{Name: "B", Type: "supplement", Enabled: true})
+	c, _ := s.CreateSupplement(Supplement{Name: "C", Type: "supplement", Enabled: true})
+
+	// 默认顺序 A B C (创建顺序 = sort_order 1 2 3)
+	got, err := s.ListSupplements()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	wantNames := []string{"A", "B", "C"}
+	for i, sp := range got {
+		if sp.Name != wantNames[i] {
+			t.Fatalf("default order [%d] expected %q got %q", i, wantNames[i], sp.Name)
+		}
+	}
+
+	// reorder 成 C A B
+	if err := s.ReorderSupplements([]int64{c.ID, a.ID, b.ID}); err != nil {
+		t.Fatalf("Reorder: %v", err)
+	}
+	got, _ = s.ListSupplements()
+	wantNames = []string{"C", "A", "B"}
+	for i, sp := range got {
+		if sp.Name != wantNames[i] {
+			t.Fatalf("after reorder [%d] expected %q got %q", i, wantNames[i], sp.Name)
+		}
+	}
+}
+
 // 用户主动删 supplement → 同 source_ref 前缀 'supplement:{id}:' 的所有通知应硬 DELETE,
 // 不是 dismiss。剩下其它 supplement 的通知不受影响。
 func TestDeleteSupplement_CascadesNotifications(t *testing.T) {
