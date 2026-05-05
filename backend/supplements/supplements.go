@@ -162,7 +162,11 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 		}
 		key := fmt.Sprintf("%d:%d", spID, winIdx)
 		if doneSet[key] {
-			continue // 已 done, handleCheckSupplement 已 dismiss
+			// 已 done — 防御性 dismiss: handleCheckSupplement 在勾的时候 dismiss 过, 但
+			// 后续 set meal 路径里的 undismiss 可能误复活同 ref 通知 (也已加 doneSet 防护,
+			// 但旧 db 状态需要 ticker 自愈)。done 的 window 通知必须保持 dismissed_at != null。
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+			continue
 		}
 		// 优先看 start 是否引用未触发餐 — 表达式不可解析时也按 "window 已隐藏" 处理。
 		// 场景: 用户原先 set dinner=19:00 → "dinner+90m" window 20:30 active 发了通知;

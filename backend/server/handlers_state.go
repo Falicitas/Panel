@@ -192,10 +192,22 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 	// CreateNotificationIdempotent 是 INSERT OR IGNORE, 不会 undismiss 同 ref 已 dismissed
 	// 的旧记录, 所以这里手动 undismiss 引用了该 meal 的 window 的通知, 让 mac UrgentNotifier
 	// 下一 tick 看到 dismissed_at = NULL 自动恢复 banner。
+	// 但 — 已勾选完成的 window 通知不该复活 (用户场景: 完成晚餐 → 测试 window active 发通知 →
+	// 勾完测试 → 取消晚餐 → 重新完成晚餐, 此时测试 window 仍是 done 状态 (records 表里有
+	// 记录), 通知不该再挂出来)。所以 undismiss 前查 records 跳过已 done 的 (id, idx)。
 	suppls, _ := s.store.ListSupplements()
+	doneRecs, _ := s.store.ListRecords(supplementModule, today, today)
+	doneSet := map[string]bool{}
+	for _, rec := range doneRecs {
+		doneSet[rec.Key] = true
+	}
 	for _, sp := range suppls {
 		for idx, w := range sp.Windows {
 			if !exprUsesMeal(w.Start, p.Meal) && !exprUsesMeal(w.End, p.Meal) {
+				continue
+			}
+			doneKey := fmt.Sprintf("%d:%d", sp.ID, idx)
+			if doneSet[doneKey] {
 				continue
 			}
 			supRef := fmt.Sprintf("supplement:%d:window:%d:date:%s", sp.ID, idx, today)
