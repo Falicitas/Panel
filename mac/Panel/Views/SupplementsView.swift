@@ -675,7 +675,7 @@ private struct ItemTimeline: View {
     let windows: [SupplementWindowStatus]
 
     private static let dayStartMin = 6 * 60   // 06:00
-    private static let dayEndMin = 22 * 60    // 22:00
+    private static let dayEndMin = 24 * 60    // 24:00 (跨天 window 在当天部分截到 24:00)
 
     var body: some View {
         GeometryReader { geo in
@@ -704,8 +704,8 @@ private struct ItemTimeline: View {
                         .offset(x: w * nf, y: 2)
                 }
 
-                // tick labels 6/12/18/22
-                ForEach([6, 12, 18, 22], id: \.self) { hour in
+                // tick labels 6/12/18/24
+                ForEach([6, 12, 18, 24], id: \.self) { hour in
                     Text(String(format: "%02d", hour))
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.tertiary)
@@ -719,7 +719,10 @@ private struct ItemTimeline: View {
 
     private func segment(for w: SupplementWindowStatus) -> Seg? {
         guard w.requiresMeal.isEmpty else { return nil }   // 未触发餐 — 不画
-        guard let s = parseHM(w.startHM), let e = parseHM(w.endHM), e > s else { return nil }
+        guard let s = parseHM(w.startHM), let rawE = parseHM(w.endHM) else { return nil }
+        // 跨午夜 (e <= s, 例如 21:03–01:43): e 实际是 next day, 当 +24h 处理。
+        // frac 内部 clamp [0,1], 跨到 24:00 之外的部分自动截掉, timeline 上画当天 [s, 24:00) 段。
+        let e = rawE <= s ? rawE + 24 * 60 : rawE
         let sf = frac(s)
         let ef = frac(e)
         guard ef > sf else { return nil }
