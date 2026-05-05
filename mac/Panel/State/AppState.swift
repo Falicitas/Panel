@@ -710,6 +710,18 @@ final class AppState {
         }
     }
 
+    /// 整体保存英文 settings (windows / threshold / enabled), 用于 EnglishSettingsSheet。
+    /// backend 已 kick GenerateNotifications, 通知 body 会同步到新 windows 边界。
+    func saveEnglishSettings(_ es: EnglishSettings) async {
+        do {
+            self.englishSettings = try await api.putEnglishSettings(es)
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     /// 保存当前 detail。若 rawMD 不传,默认保存 editorBuffer 当前内容。
     func saveDetail(rawMD: String? = nil) async {
         guard let name = detail?.name else { return }

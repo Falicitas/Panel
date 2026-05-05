@@ -6,6 +6,7 @@ struct EnglishView: View {
     @Environment(AppState.self) private var state
     @Environment(SegmentPlayer.self) private var player
     @State private var showArchive = false
+    @State private var showSettings = false
 
     var body: some View {
         ScrollView {
@@ -14,6 +15,13 @@ struct EnglishView: View {
                     Text("英文练习")
                         .font(.largeTitle.weight(.semibold))
                     Spacer()
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Label("设置", systemImage: "gearshape")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(state.englishSettings == nil)
                     Button {
                         showArchive = true
                     } label: {
@@ -39,6 +47,11 @@ struct EnglishView: View {
         }
         .sheet(isPresented: $showArchive) {
             EnglishArchiveSheet(isPresented: $showArchive)
+        }
+        .sheet(isPresented: $showSettings) {
+            if let es = state.englishSettings {
+                EnglishSettingsSheet(initial: es).environment(state)
+            }
         }
         .toolbar {
             ToolbarItem { JumpToFocusButton() }
