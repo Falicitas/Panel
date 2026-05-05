@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -340,23 +341,46 @@ func (s *Server) handlePutEnglishSettings(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	// 简单校验: HH:MM 字段非空 (深校验留给前端)
+	// HH:MM 严格校验, 顺手验 start < end
 	for i, win := range es.Windows {
-		if strings.TrimSpace(win.Start) == "" || strings.TrimSpace(win.End) == "" {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("window %d has empty start/end", i))
+		if !hhmmRegex.MatchString(strings.TrimSpace(win.Start)) ||
+			!hhmmRegex.MatchString(strings.TrimSpace(win.End)) {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("window %d start/end must be HH:MM", i))
+			return
+		}
+		sm := hhmmToMin(win.Start)
+		em := hhmmToMin(win.End)
+		if sm >= em {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("window %d start must be before end", i))
 			return
 		}
 	}
-	if es.ThresholdMin <= 0 {
-		writeError(w, http.StatusBadRequest, errors.New("threshold_min must be > 0"))
+	if es.ThresholdMin <= 0 || es.ThresholdMin > 240 {
+		writeError(w, http.StatusBadRequest, errors.New("threshold_min must be between 1 and 240"))
 		return
 	}
 	if err := s.store.SetEnglishSettings(es); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// 改 settings 后立刻 regen — 让 inner loop 里的 UpdateNotificationBodyByRef
+	// 把已存在的 ref 同步到新 windows 边界, expire 函数把 idx 越界 / 退到 leadStart 之前的 dismiss。
+	if _, err := english.GenerateNotifications(s.store, time.Now()); err != nil {
+		log.Printf("english notif gen (post-settings): %v", err)
+	}
 	out, _ := s.store.GetEnglishSettings()
 	writeJSON(w, http.StatusOK, out)
+}
+
+// hhmmToMin "HH:MM" → 分钟 (0..1439), 已经过 hhmmRegex 校验, 失败返 0。
+func hhmmToMin(s string) int {
+	parts := strings.SplitN(strings.TrimSpace(s), ":", 2)
+	if len(parts) != 2 {
+		return 0
+	}
+	h, _ := strconv.Atoi(parts[0])
+	m, _ := strconv.Atoi(parts[1])
+	return h*60 + m
 }
 
 // ---- helpers ----
