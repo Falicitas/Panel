@@ -64,6 +64,7 @@
 		F1832D5AC7464601EEF34137 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC082A3656358B75E3D0C9A1 /* Permissions.swift */; };
 		F46C02CF0872C5DC865EFD4F /* UrgentNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE5A1A92DB4F3166F482702 /* UrgentNotifier.swift */; };
 		FA3A289E08F189633F342CE2 /* EnglishView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E695D73E361DCE1AAE1D25B /* EnglishView.swift */; };
+		FB356D2BA047AABD854873B0 /* CommitRitualView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F5DD50AEB2C3D86F551DB0 /* CommitRitualView.swift */; };
 		FBE8D2D08FE5E43E604B3674 /* BashDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EEE48D918C7332B0CCAD88F /* BashDetailView.swift */; };
 /* End PBXBuildFile section */
 
@@ -94,6 +95,7 @@
 		65BDF0617EDF92971A4168A2 /* ListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListEntry.swift; sourceTree = "<group>"; };
 		6EB340428613B213332CFB3E /* Finance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finance.swift; sourceTree = "<group>"; };
 		784D8DC34515C61BEC0914F6 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		81F5DD50AEB2C3D86F551DB0 /* CommitRitualView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommitRitualView.swift; sourceTree = "<group>"; };
 		87F59C4D70D2A509B0F65C2F /* Supplements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Supplements.swift; sourceTree = "<group>"; };
 		8D0E61A5A1A5DBBB0241123F /* FocusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCard.swift; sourceTree = "<group>"; };
 		8D2848561D75BC5D180BEF25 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				5822016198F3258F21DC1E9B /* BashContentView.swift */,
 				4EEE48D918C7332B0CCAD88F /* BashDetailView.swift */,
 				49404CC26A8DE27225ACC33B /* ComingSoonView.swift */,
+				81F5DD50AEB2C3D86F551DB0 /* CommitRitualView.swift */,
 				D754AC7CF099F8B68D14859D /* DetailView.swift */,
 				FBEA95F9C5B5537519499A96 /* EnglishArchiveSheet.swift */,
 				D5C1D248FAE0891DDA297AF0 /* EnglishSegmentRow.swift */,
@@ -354,6 +357,7 @@
 				936A5F2329805779552D70F2 /* BashContentView.swift in Sources */,
 				FBE8D2D08FE5E43E604B3674 /* BashDetailView.swift in Sources */,
 				76F3E83F38771F4F5E973B24 /* ComingSoonView.swift in Sources */,
+				FB356D2BA047AABD854873B0 /* CommitRitualView.swift in Sources */,
 				390FC385137ADF28255C8BC0 /* ContentView.swift in Sources */,
 				27D2A375A7B30146C7407436 /* DetailView.swift in Sources */,
 				7FA40456F313F3E14F6D236F /* English.swift in Sources */,
