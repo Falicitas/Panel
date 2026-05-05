@@ -242,6 +242,22 @@ func (s *Store) DismissSupplementItemNotificationsForDate(id int64, date string,
 	return n, nil
 }
 
+// UndismissSupplementItemNotificationsForDate 把 supplement id 在 date 当日所有 window 通知
+// undismiss (dismissed_at = NULL), 跟 DismissSupplementItemNotificationsForDate 对称。
+// 用于 completion_mode="any" 取消勾选时让 item 整组通知重新 active, mac UrgentNotifier
+// 下一 tick 会基于 dismissed_at IS NULL 自动恢复 banner / cancelPending 的反向。
+// 已过期 window 通知由调用方紧随其后调 GenerateNotifications -> expireUnfinishedSupplementNotifications
+// 再次 dismiss 干净, 不会留过期通知在通知栏。
+func (s *Store) UndismissSupplementItemNotificationsForDate(id int64, date string) error {
+	pattern := fmt.Sprintf("supplement:%d:window:%%:date:%s", id, date)
+	_, err := s.db.Exec(
+		`UPDATE notifications SET dismissed_at=NULL
+		  WHERE source='supplement' AND source_ref LIKE ?`,
+		pattern,
+	)
+	return err
+}
+
 // DeleteSupplement 硬删 supplement + cascade 抹除所有指向它的通知 (硬 DELETE 不是 dismiss)。
 // 用户主动删 item → 通知与 (item, window) 二元组双向绑定, item 不存在则通知不再有意义。
 // 用 source_ref LIKE 'supplement:{id}:%' 锁定该 item 全部 window 的通知 (无关 dismissed_at)。

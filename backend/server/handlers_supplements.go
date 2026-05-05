@@ -183,10 +183,19 @@ func (s *Server) handleCheckSupplement(w http.ResponseWriter, r *http.Request) {
 	} else {
 		err = s.store.DeleteRecord(supplementModule, p.Date, key)
 		if err == nil {
-			// 取消勾选 → 通知回归 (undismiss 让原通知重新出现; 若从未生成则无操作)。
-			// any 模式下不复活其它 window 通知 — 即使复活也意义不大 (用户主动取消一项,
-			// 只需该 window 通知回来就够了; 其它过期 / 已被 expire 的不该突然冒出来)。
-			_ = s.store.UndismissNotificationByRef(ref)
+			// 取消勾选 → 通知回归。逻辑跟勾选时对称, 防止 mac UrgentNotifier 状态错位:
+			//   "all" 模式: 仅复活该 window 通知 (勾选时也只 dismiss 了这一条)
+			//   "any" 模式: 复活整 item 当日通知 (跟 DismissSupplementItemNotificationsForDate 配对)。
+			// any 模式如果只复活当前 window, 会出现 "勾时全部 dismiss → 取消勾仅一个复活, 其它 window
+			// 通知永久 dismissed, idempotent INSERT 跳过 → 后续 active window 不再发 mac banner" 的 bug。
+			// 复活后立即 kickSupplementsRegen → expire 会清掉已过期的, 仍 active 的保留 → 状态对齐。
+			sp, gerr := s.store.GetSupplement(id)
+			if gerr == nil && sp.NormalizedCompletionMode() == store.CompletionModeAny {
+				_ = s.store.UndismissSupplementItemNotificationsForDate(id, p.Date)
+				s.kickSupplementsRegen()
+			} else {
+				_ = s.store.UndismissNotificationByRef(ref)
+			}
 		}
 	}
 	if err != nil {
