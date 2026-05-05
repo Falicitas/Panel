@@ -169,13 +169,23 @@ func (s *Server) handleCheckSupplement(w http.ResponseWriter, r *http.Request) {
 			Module: supplementModule, Date: p.Date, Key: key, ValueNum: &one,
 		})
 		if err == nil {
-			// 完成 → 顺手 dismiss 对应通知 (ref 跟 supplements.GenerateNotifications 一致)
-			_ = s.store.DismissNotificationByRef(ref, time.Now().Unix())
+			// completion_mode="any" 下勾任一 window → 视为整 item 当日完成,
+			// 把该 item 当日所有未 dismissed 通知一并清掉, 避免多余提醒。
+			// "all" 模式下保持现有行为: 仅 dismiss 当前 window 对应通知。
+			now := time.Now().Unix()
+			sp, gerr := s.store.GetSupplement(id)
+			if gerr == nil && sp.NormalizedCompletionMode() == store.CompletionModeAny {
+				_, _ = s.store.DismissSupplementItemNotificationsForDate(id, p.Date, now)
+			} else {
+				_ = s.store.DismissNotificationByRef(ref, now)
+			}
 		}
 	} else {
 		err = s.store.DeleteRecord(supplementModule, p.Date, key)
 		if err == nil {
-			// 取消勾选 → 通知回归 (undismiss 让原通知重新出现; 若从未生成则无操作)
+			// 取消勾选 → 通知回归 (undismiss 让原通知重新出现; 若从未生成则无操作)。
+			// any 模式下不复活其它 window 通知 — 即使复活也意义不大 (用户主动取消一项,
+			// 只需该 window 通知回来就够了; 其它过期 / 已被 expire 的不该突然冒出来)。
 			_ = s.store.UndismissNotificationByRef(ref)
 		}
 	}
@@ -292,17 +302,21 @@ type windowStatus struct {
 }
 
 type supplementTodayItem struct {
-	ID          int64          `json:"id"`
-	Name        string         `json:"name"`
-	Type        string         `json:"type"`
-	Dose        string         `json:"dose"`
-	Notes       string         `json:"notes"`
-	Enabled     bool           `json:"enabled"`
-	PausedUntil *int64         `json:"paused_until"`
-	Paused      bool           `json:"paused"`     // 当前是否在暂停期
-	DoneToday   bool           `json:"done_today"` // 所有 window 都勾完才算 (无 window 时 false)
-	Windows     []windowStatus `json:"windows"`
-	HasActive   bool           `json:"has_active"` // 任意 window 是 active
+	ID             int64          `json:"id"`
+	Name           string         `json:"name"`
+	Type           string         `json:"type"`
+	Dose           string         `json:"dose"`
+	Notes          string         `json:"notes"`
+	Enabled        bool           `json:"enabled"`
+	PausedUntil    *int64         `json:"paused_until"`
+	Paused         bool           `json:"paused"` // 当前是否在暂停期
+	// DoneToday 语义随 CompletionMode 变化:
+	//   "all" → 所有可见 window (RequiresMeal == "" 部分) 都勾完且不存在 pending 才 true
+	//   "any" → 任一 window 勾过即 true
+	DoneToday      bool           `json:"done_today"`
+	CompletionMode string         `json:"completion_mode"` // "all" | "any" — 前端用于显示完成方式 chip
+	Windows        []windowStatus `json:"windows"`
+	HasActive      bool           `json:"has_active"` // 任意 window 是 active
 }
 
 type supplementTodayResp struct {
@@ -371,22 +385,25 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 
 	for _, sp := range supps {
 		paused := sp.PausedUntil != nil && *sp.PausedUntil > nowUnix
+		mode := sp.NormalizedCompletionMode()
 		item := supplementTodayItem{
-			ID:          sp.ID,
-			Name:        sp.Name,
-			Type:        sp.Type,
-			Dose:        sp.Dose,
-			Notes:       sp.Notes,
-			Enabled:     sp.Enabled,
-			PausedUntil: sp.PausedUntil,
-			Paused:      paused,
-			Windows:     []windowStatus{},
+			ID:             sp.ID,
+			Name:           sp.Name,
+			Type:           sp.Type,
+			Dose:           sp.Dose,
+			Notes:          sp.Notes,
+			Enabled:        sp.Enabled,
+			PausedUntil:    sp.PausedUntil,
+			Paused:         paused,
+			CompletionMode: mode,
+			Windows:        []windowStatus{},
 		}
-		// done_today 必须 (a) 至少 1 个 window 已浮现 (b) 全部已浮现 window 都勾过 (c) 没有等待餐触发的 window。
-		// 否则"今天还没触发任何餐 → 0 visible & 全部 done"会被误判为"今日已勾完"。
+		// "all" 模式下 done_today 必须 (a) 至少 1 个 window 已浮现 (b) 全部已浮现 window 都勾过 (c) 没有等待餐触发的 window;
+		// "any" 模式下 done_today = 任一 window 勾过即可 (含未浮现的 — 实际 UI 不能勾, 但语义上一致)。
 		visibleCount := 0
 		doneVisible := 0
 		hasPending := false
+		anyDone := false
 		for idx, win := range sp.Windows {
 			ws := windowStatus{
 				Start:     win.Start,
@@ -396,11 +413,9 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 			}
 			startT, okS, missS := supplements.ParseTimeExpr(win.Start, anchors, now)
 			endT, okE, missE := supplements.ParseTimeExpr(win.End, anchors, now)
-			// 引用未触发的餐 → 标记 requires_meal,前端隐藏 (wake 不算 meal,有自己的设置 flow)
 			if miss := firstMealMiss(missS, missE); miss != "" {
 				ws.RequiresMeal = miss
 			}
-			// effective end = original end + snoozeCount * 30min
 			effectiveEndT := endT
 			if okE {
 				if cnt := snoozeMap[sp.ID][idx]; cnt > 0 {
@@ -427,15 +442,9 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				}
 			}
 			item.Windows = append(item.Windows, ws)
-			// totalDoses/doneDoses 统计所有 enabled & 未暂停的 window (包括等待餐触发的),
-			// 反映 item 一日实际要做的总次数,而非"已浮现"的次数
-			if sp.Enabled && !paused {
-				resp.TotalDoses++
-				if ws.DoneToday {
-					resp.DoneDoses++
-				}
+			if ws.DoneToday {
+				anyDone = true
 			}
-			// 等待餐触发的 window 不计入 visibleCount / done_today (item 级) 判断
 			if ws.RequiresMeal != "" {
 				hasPending = true
 				continue
@@ -445,13 +454,34 @@ func (s *Server) handleGetSupplementsToday(w http.ResponseWriter, r *http.Reques
 				doneVisible++
 			}
 		}
-		item.DoneToday = visibleCount > 0 && doneVisible == visibleCount && !hasPending
+
+		if mode == store.CompletionModeAny {
+			item.DoneToday = anyDone
+		} else {
+			item.DoneToday = visibleCount > 0 && doneVisible == visibleCount && !hasPending
+		}
 		resp.Items = append(resp.Items, item)
 
 		if sp.Enabled && !paused {
 			resp.TotalActive++
 			if item.HasActive {
 				resp.ActiveCount++
+			}
+			// total_doses 语义:
+			//   "all" → item 一日要做 N 次 (N = window 数, 含等餐 window)
+			//   "any" → item 一日要做 1 次 (任一 window 完成即整 item 完成)
+			if mode == store.CompletionModeAny {
+				resp.TotalDoses++
+				if anyDone {
+					resp.DoneDoses++
+				}
+			} else {
+				for _, ws := range item.Windows {
+					resp.TotalDoses++
+					if ws.DoneToday {
+						resp.DoneDoses++
+					}
+				}
 			}
 		}
 	}
@@ -475,6 +505,13 @@ func validateSupplement(sp *store.Supplement) error {
 	}
 	if sp.Type != "food" && sp.Type != "supplement" {
 		return errors.New("type must be food | supplement")
+	}
+	// 空字符串 (老 client) 默认 "all"。其它值拒掉, 避免 silent 落库。
+	if sp.CompletionMode == "" {
+		sp.CompletionMode = store.CompletionModeAll
+	}
+	if sp.CompletionMode != store.CompletionModeAll && sp.CompletionMode != store.CompletionModeAny {
+		return errors.New("completion_mode must be all | any")
 	}
 	for i, w := range sp.Windows {
 		if strings.TrimSpace(w.Start) == "" || strings.TrimSpace(w.End) == "" {
