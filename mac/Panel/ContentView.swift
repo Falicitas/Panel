@@ -39,12 +39,15 @@ struct ContentView: View {
     }
 
     /// 蒙版条件: 06:00+ 当日 mode 还没人为设置过 (mode_set_at == 0)。
+    /// dailyState 还没加载完时 (启动初瞬, 异步请求未返) 不弹蒙版 — 老逻辑用
+    /// `(state.dailyState?.modeSetAt ?? 0) == 0` 把 nil 当成 0 → 启动初一闪而过,
+    /// 加载完发现 modeSetAt != 0 又消失。改成 guard nil 视作 "loading", 不显示。
     private var shouldShowWakeMask: Bool {
         let _ = state.timeTick
-        let now = Date()
-        let h = Calendar.current.component(.hour, from: now)
+        guard let ds = state.dailyState else { return false }
+        let h = Calendar.current.component(.hour, from: Date())
         guard h >= 6 else { return false }
-        return (state.dailyState?.modeSetAt ?? 0) == 0
+        return ds.modeSetAt == 0
     }
 
     /// 22:00 后弹白色手机 ritual, 当日已 commit (UserDefaults today key set) 则不弹。
