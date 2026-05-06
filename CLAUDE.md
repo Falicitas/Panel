@@ -43,6 +43,9 @@ git add todolists/ && \
 ❌ 不要给: `git merge --no-ff issue-N` (丢失 todolists snapshot)
 ✅ 必须给: 上面的完整三段式
 
+`chore(todolists): snapshot` **不是 issue 终点** — 之后仍可在 issue branch 继续加
+fix/docs/test 等 commit, 合时同一条命令覆盖 (snapshot 步骤幂等, 无新改动 silent skip)。
+
 ### 新 issue vs 留原 branch (硬规则)
 
 新推进前按顺序判断:
