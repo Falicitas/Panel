@@ -11,8 +11,10 @@ html, body {
   background: transparent !important;
 }
 
-/* 只读模式 (RatingReferencePanel 这种)缩小左右边距 — Crepe 默认 60/120 太占空间 */
-body.readonly .milkdown .ProseMirror {
+/* 普适缩小左右边距 — Crepe 默认 60/120 太占空间。
+ * 之前仅 body.readonly 选择器, 导致 cmd+F (readonly) 时窄、正常编辑时宽,
+ * 切换抖动 + 用户偏好 32px 窄边距。统一所有模式都用 32px。 */
+.milkdown .ProseMirror {
   padding: 32px 32px !important;
 }
 
@@ -27,4 +29,30 @@ body.readonly .milkdown .ProseMirror {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+/* cmd+F 文本高亮 — 同时适配 light / dark mode (主 mac 用 dark, fallback 给 light) */
+.panel-find-mark {
+  background-color: rgba(255, 220, 80, 0.45);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-shadow: 0 0 0 1px rgba(180, 140, 0, 0.5);
+}
+.panel-find-mark.panel-find-active {
+  background-color: rgba(255, 140, 0, 0.85);
+  color: #000;
+  box-shadow: 0 0 0 1.5px rgba(220, 90, 0, 1);
+}
+@media (prefers-color-scheme: dark) {
+  .panel-find-mark {
+    background-color: rgba(255, 220, 80, 0.30);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 220, 80, 0.7);
+  }
+  .panel-find-mark.panel-find-active {
+    background-color: rgba(255, 165, 0, 0.95);
+    color: #000;
+    box-shadow: 0 0 0 1.5px rgba(255, 215, 0, 1);
+  }
 }

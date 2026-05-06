@@ -58,7 +58,14 @@ struct DetailView: View {
                         text: bufferBinding,
                         pageZoom: state.editorPageZoom,
                         scrollText: $bindable.pendingScrollText,
-                        readOnly: showFindBar,  // 搜索期间 readonly, 防 ProseMirror 重建破坏 mark
+                        // find bar 打开时必须 readonly: ProseMirror 持续监听 DOM mutation,
+                        // 见到 .panel-find-mark span 不在 schema 里就异步 reconcile 把它 unwrap,
+                        // 后续 next/prev 调用时 marks 已空 → 立刻 '无匹配'。readonly 模式
+                        // 下 ProseMirror 不 reconcile, mark 才能保留。
+                        // user '找到位置后想编辑' 的需求由 esc 关闭后自然解锁 readOnly 满足,
+                        // cursor 通过 commitFindCursor 同步到 cmd+F 跳到的位置, 关闭 find bar
+                        // 后用户在该位置可继续编辑。
+                        readOnly: showFindBar,
                         findCommand: $findCommand,
                         findResult: $findResult
                     )
@@ -213,12 +220,15 @@ struct DetailView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .help("关闭 (Esc)")
+            // .cancelAction 把 button 绑到 ESC 键。在 macOS SwiftUI 下, cancelAction
+            // 优先级高于 TextField 自己对 ESC 的处理 (TextField 默认 ESC 失焦), 即使
+            // findFieldFocused=true 也能触发, 修原来 .onExitCommand 不触发的 bug。
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
         .padding(.horizontal, 12)
-        .onExitCommand { closeFindBar() }
     }
 
     private var matchCountText: String {
