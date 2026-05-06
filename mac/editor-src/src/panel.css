@@ -11,8 +11,10 @@ html, body {
   background: transparent !important;
 }
 
-/* 只读模式 (RatingReferencePanel 这种)缩小左右边距 — Crepe 默认 60/120 太占空间 */
-body.readonly .milkdown .ProseMirror {
+/* 普适缩小左右边距 — Crepe 默认 60/120 太占空间。
+ * 之前仅 body.readonly 选择器, 导致 cmd+F (readonly) 时窄、正常编辑时宽,
+ * 切换抖动 + 用户偏好 32px 窄边距。统一所有模式都用 32px。 */
+.milkdown .ProseMirror {
   padding: 32px 32px !important;
 }
 
