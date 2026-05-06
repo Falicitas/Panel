@@ -23,11 +23,15 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
     private static let log = OSLog(subsystem: "com.kinesis.panel", category: "notify.urgent")
 
     private static let categoryID = "panel.urgent"
-    private static let snoozeActionID = "snooze.30min"
+    private static let snooze30ActionID = "snooze.30min"
+    private static let snooze2hActionID = "snooze.2hour"
     private static let dismissActionID = "dismiss"
 
     private let leadSeconds: TimeInterval = 15 * 60
     private let snoozeSeconds: TimeInterval = 30 * 60
+    /// "延后 2 小时" = 4 个 30min 槽 (跟 backend records value_num 累加单位一致)。
+    /// 改这数字要同步改 backend handlers_*.go 的 normalizeSnoozeCount cap。
+    private let snooze2hMultiplier: Int = 4
 
     private var firedKeys: Set<String> = []
     private var firedDate: String = ""
@@ -47,12 +51,17 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         super.init()
     }
 
-    /// PanelApp 启动时调一次: 设 delegate + 注册通知 category 含 snooze/dismiss 两个 action。
+    /// PanelApp 启动时调一次: 设 delegate + 注册通知 category 含 snooze30 / snooze2h / dismiss 三个 action。
     func setUp() {
         UNUserNotificationCenter.current().delegate = self
-        let snooze = UNNotificationAction(
-            identifier: Self.snoozeActionID,
+        let snooze30 = UNNotificationAction(
+            identifier: Self.snooze30ActionID,
             title: "延后 30 分钟",
+            options: []
+        )
+        let snooze2h = UNNotificationAction(
+            identifier: Self.snooze2hActionID,
+            title: "延后 2 小时",
             options: []
         )
         let dismiss = UNNotificationAction(
@@ -62,7 +71,7 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         )
         let category = UNNotificationCategory(
             identifier: Self.categoryID,
-            actions: [snooze, dismiss],
+            actions: [snooze30, snooze2h, dismiss],
             intentIdentifiers: [],
             options: []
         )
@@ -306,19 +315,27 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
 
     // MARK: - response handlers (snooze / dismiss)
 
+    /// 按 actionID 决定 multiplier (1 = 30min, 4 = 2h), 派给对应 kind 的 inner snooze handler。
+    /// next banner 的 schedule 时刻 + backend records value_num 累加都按 multiplier 推进。
     fileprivate func snoozeFromResponse(_ response: UNNotificationResponse) {
         let info = response.notification.request.content.userInfo
         guard let kindRaw = info["kind"] as? String,
               let kind = NotifKind(rawValue: kindRaw) else { return }
+        let multiplier: Int
+        switch response.actionIdentifier {
+        case Self.snooze30ActionID: multiplier = 1
+        case Self.snooze2hActionID: multiplier = snooze2hMultiplier
+        default: return
+        }
         switch kind {
         case .supplement:
-            snoozeSupplementResponse(info: info)
+            snoozeSupplementResponse(info: info, multiplier: multiplier)
         case .english:
-            snoozeEnglishResponse(info: info)
+            snoozeEnglishResponse(info: info, multiplier: multiplier)
         }
     }
 
-    private func snoozeSupplementResponse(info: [AnyHashable: Any]) {
+    private func snoozeSupplementResponse(info: [AnyHashable: Any], multiplier: Int) {
         guard let baseKey = info["baseKey"] as? String,
               let itemID = info["supplementID"] as? Int64,
               let windowIndex = info["windowIndex"] as? Int,
@@ -337,7 +354,9 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
 
         Task {
             do {
-                try await APIClient.shared.snoozeSupplement(id: itemID, date: date, windowIndex: windowIndex)
+                try await APIClient.shared.snoozeSupplement(
+                    id: itemID, date: date, windowIndex: windowIndex, count: multiplier
+                )
             } catch {
                 os_log("snooze supplement err: %{public}@", log: Self.log, type: .error, String(describing: error))
             }
@@ -349,7 +368,7 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
             title: item.name,
             body: "\(label) 时段 \(win.startHM)–\(win.endHM)",
             endTime: endTime,
-            snoozeCount: snoozeCount + 1,
+            snoozeCount: snoozeCount + multiplier,
             notificationID: notificationID,
             kind: .supplement,
             extraUserInfo: [
@@ -359,7 +378,7 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
         )
     }
 
-    private func snoozeEnglishResponse(info: [AnyHashable: Any]) {
+    private func snoozeEnglishResponse(info: [AnyHashable: Any], multiplier: Int) {
         guard let baseKey = info["baseKey"] as? String,
               let windowIndex = info["englishWindowIndex"] as? Int,
               let endUnix = info["windowEndUnix"] as? TimeInterval,
@@ -376,7 +395,7 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
 
         Task {
             do {
-                try await APIClient.shared.snoozeEnglishWindow(idx: windowIndex, date: date)
+                try await APIClient.shared.snoozeEnglishWindow(idx: windowIndex, date: date, count: multiplier)
             } catch {
                 os_log("snooze english err: %{public}@", log: Self.log, type: .error, String(describing: error))
             }
@@ -387,7 +406,7 @@ final class UrgentNotifier: NSObject, @unchecked Sendable {
             title: "英文精听",
             body: String(format: "时段 %@–%@, 还差 %.1f 分钟", win.startHM, win.endHM, remaining),
             endTime: endTime,
-            snoozeCount: snoozeCount + 1,
+            snoozeCount: snoozeCount + multiplier,
             notificationID: notificationID,
             kind: .english,
             extraUserInfo: [
@@ -451,7 +470,7 @@ extension UrgentNotifier: UNUserNotificationCenterDelegate {
         let actionID = response.actionIdentifier
         Task { @MainActor in
             switch actionID {
-            case Self.snoozeActionID:
+            case Self.snooze30ActionID, Self.snooze2hActionID:
                 self.snoozeFromResponse(response)
             case Self.dismissActionID, UNNotificationDismissActionIdentifier:
                 self.dismissFromResponse(response)
