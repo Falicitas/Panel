@@ -10,6 +10,8 @@
 
 项目 = Mac 本地个人指挥中枢 (SwiftUI + Go 后端 + SQLite)。详见 PRD.md。
 
+**不确定时 STOP 问用户, 不要猜了执行**。适用于: issue 编号、该不该新开 branch、测试放单测还是集成测试、命令影响范围不明等。
+
 ---
 
 ## Git 工作流 (硬规则)
@@ -26,7 +28,9 @@ git add ... && git commit -m "feat(...): ..."
 
 **做完 STOP — 不自己 merge 到 dev**。把 commit 留在 issue branch 等用户验证后合。
 
-合的命令 (用户执行) — head 已在 issue branch, todolists/ 笔记一并 chore commit:
+### 合 issue 到 dev 的命令格式 (硬规则)
+
+CC 给用户的合并命令**必须**是下面这个完整格式:
 
 ```bash
 git add todolists/ && \
@@ -34,16 +38,28 @@ git add todolists/ && \
   git checkout dev && git merge --no-ff issue-N
 ```
 
-无 todolists/ 改动时 commit 静默失败 (2>/dev/null), `;` 不阻断后续 checkout + merge。
-CC 给合命令必须用这格式, **不能**只给 `git merge --no-ff issue-N` 一句。
+无 todolists/ 改动时 commit 静默失败 (`2>/dev/null`), `;` 不阻断后续 checkout + merge。
 
-**同一功能的多个修复留在同一个 issue branch** (不开新 branch):
-- 用户上次纠正过两次 (issue-14/15 拆错, issue-17/18 拆错) — cherry-pick 到原 branch 上
-- 如果 issue 已被用户 merge, 才开新 issue branch
+❌ 不要给: `git merge --no-ff issue-N` (丢失 todolists snapshot)
+✅ 必须给: 上面的完整三段式
+
+`chore(todolists): snapshot` **不是 issue 终点** — 之后仍可在 issue branch 继续加
+fix/docs/test 等 commit, 合时同一条命令覆盖 (snapshot 步骤幂等, 无新改动 silent skip)。
+
+### 新 issue vs 留原 branch (硬规则)
+
+新推进前按顺序判断:
+
+1. 是不是修**最近几个 issue** 留下的 bug? → **留原 issue branch**, 用 cherry-pick
+2. 那些 issue 都已 merge 到 dev 了? → 才开新 issue branch
+3. 不确定属于哪种? → **问用户**, 不要猜
+
+历史教训: issue-14/15 拆错过一次, issue-17/18 又拆错一次 — 默认倾向「留原 branch」。
 
 ## Conventional Commits
 
 格式 `<type>(<area>-<module>[-<feature>]): ...`:
+
 - `feat(backend-保健品-提醒推送): ...`
 - `feat(mac-todolist-聚焦卡片): ...`
 - `fix(mac-财务): ...`
@@ -57,11 +73,13 @@ type: `feat / fix / refactor / docs / test / chore / perf / ci`。**粒度细** 
 
 - **默认避免 `git reset --hard`**, 优先 `git revert` 或 fix-forward
 - 必须 reset --hard 时先 stash:
-  ```bash
-  git stash push -m "save todolists" -- todolists/
-  git reset --hard <commit>
-  git stash pop
-  ```
+
+```bash
+git stash push -m "save todolists" -- todolists/
+git reset --hard <commit>
+git stash pop
+```
+
 - 单文件回退用 `git checkout <commit> -- <path>`
 - 已 gitignore: `data/` `mac/build/` `todolists/micro/`
 
@@ -92,23 +110,15 @@ cd /Users/kinesis/panel/backend && go test ./... -race
 context 压缩后 LLM 拿不到测试方法 / 容易重复踩坑。
 
 布局:
+
 - 单测: 紧挨实现, `<pkg>/<code>_test.go` (如 `store/supplements_test.go`)
 - 集成测试: `backend/tests/integration/`
-  - **必读索引**: `backend/tests/integration/README.md` — 列每个文件覆盖的 case +
-    历史 commit ref + user 原话复现步骤
-  - 基础设施: `helpers.go` 提供 `newTestEnv` / `assertNotifBody` 等
 
 何时进集成测试 (而不是仅单测):
+
 - 跨包状态机 (store + server + supplements/english 三包以上)
 - 通知 lifecycle (dismiss/undismiss/cascade/idx 越界)
 - 任何 user 在 issue 推进时 bash+curl 验过的复现路径
-
-写测试约定 (issue-27 起):
-1. **fix 完同步加 test** — issue 上一个 commit 修 bug, 紧跟一个 commit 加 test
-   (commit type 用 `test(...): ...`)
-2. test func 注释里带 历史 commit hash + user 原话复现步骤,
-   利于压缩后 grep 找回上下文
-3. 加 / 改 test 时同步更新 `backend/tests/integration/README.md` 索引表
 
 ## 关键路径
 
@@ -127,35 +137,28 @@ CC 输出的代码块在 iTerm2 / 大多数终端里会按窗口宽度 wrap 成�
 粘贴时, wrap 后的尾部 token 常被当成下一行命令独立执行 (例如把 `issue-27` 单独
 当命令), 导致行为错乱。
 
-**任何超过 ~80 字符的 shell 命令必须用 `\` 续行**, 每物理行 < 80 字符。
+**任何超过 ~80 字符的 shell 命令必须用 `\` 续行**, 每物理行 < 80 字符。适用所有
+CC 输出给用户复制的命令 (git / curl / sqlite3 / xcodebuild / docker / 等等)。
 
 ❌ 错误 (单行过长, iTerm2 wrap 后复制易断):
+
 ```bash
 git add todolists/ && git commit -m "chore(todolists): snapshot" 2>/dev/null; git checkout dev && git merge --no-ff issue-N
 ```
 
 ✅ 正确 (反斜杠续行, wrap 后整段复制仍正确):
+
 ```bash
 git add todolists/ && \
   git commit -m "chore(todolists): snapshot" 2>/dev/null; \
   git checkout dev && git merge --no-ff issue-N
 ```
 
-✅ 也可 (拆多行执行, 失去 short-circuit 但更直观):
-```bash
-git add todolists/
-git commit -m "chore(todolists): snapshot" 2>/dev/null
-git checkout dev && git merge --no-ff issue-N
-```
-
-适用于所有 CC 输出给用户复制的命令 (curl / sqlite3 / xcodebuild / docker / 等等),
-不限于 git。
-
 ## 验证 SwiftUI 改动
 
 SourceKit 单文件分析常报 "Cannot find type X in scope" 跨文件 false positive — **以 `xcodebuild ... build` 输出为准**, `BUILD SUCCEEDED` 即可忽略 SourceKit 报错。
 
-修 UI 后必须实际重启 Panel 验证 (xcodebuild + pkill + open),不能只 build 不跑。
+修 UI 后必须实际重启 Panel 验证 (xcodebuild + pkill + open), 不能只 build 不跑。
 
 ## Conventions
 
