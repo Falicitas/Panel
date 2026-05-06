@@ -45,3 +45,7 @@ mac/editor-src/dist/
 
 # Claude Code 本地配置 (per-machine)
 .claude/
+
+# Icon build pipeline 中间产物 (不入库, design 源在 mac/design/)
+mac/icon_1024.png
+mac/AppIcon.iconset/
