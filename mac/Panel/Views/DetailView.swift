@@ -318,7 +318,8 @@ struct DetailView: View {
             found: true,
             text: first.text,
             lineNo: first.lineNo,
-            breadcrumbs: first.parentChain
+            breadcrumbs: first.parentChain,
+            group: nil
         )
     }
 }
