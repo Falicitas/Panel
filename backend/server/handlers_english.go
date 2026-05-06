@@ -324,6 +324,13 @@ func (s *Server) handleSnoozeEnglishWindow(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// snooze 后 leadStart / endT 整体推后, 已存在 panel 通知 body 中的时段字符串需要 sync。
+	// english.GenerateNotifications 内部跑 syncEnglishNotificationBodies 会 UPDATE body
+	// (跟 supplements 的 inner loop UPDATE body 思路一致, 但 english lead range 之外
+	// inner loop 不进, 所以单独抽了 sync helper)。
+	if _, err := english.GenerateNotifications(s.store, time.Now()); err != nil {
+		log.Printf("english notif gen (post-snooze): %v", err)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

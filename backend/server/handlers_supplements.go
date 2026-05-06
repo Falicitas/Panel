@@ -299,6 +299,11 @@ func (s *Server) handleSnoozeSupplement(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// kick 一次 GenerateNotifications: snooze 后 effective end 推后, 已存在的 panel 通知
+	// body 还是老时段字符串 ("时段 21:00–21:30"). inner loop 看 IsWindowActive (active 区间)
+	// 仍然 true (snooze 让 endT 推后, now 必然仍在 active), INSERT IGNORE 跳过 → 走
+	// UpdateNotificationBodyByRef 把 body 同步到新 endHM. 否则 panel 通知和 chip 时段不一致。
+	s.kickSupplementsRegen()
 	w.WriteHeader(http.StatusNoContent)
 }
 
