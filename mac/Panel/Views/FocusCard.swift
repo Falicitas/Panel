@@ -3,8 +3,10 @@ import SwiftUI
 struct FocusCard: View {
     @Environment(AppState.self) private var state
     let focus: FocusResult
-    /// 多 focus 时的当前显示索引。focus.group 变化 (id 用 group hash) 时会重置。
-    @State private var groupIdx: Int = 0
+    /// 多 focus 时的当前显示索引, 持久化一份 (不 per-file) — 重启 panel 保留, 切换锚定
+    /// 重置回 0。UserDefaults key = "focusCard.groupIdx", @State 初值读 UserDefaults。
+    @State private var groupIdx: Int = UserDefaults.standard.integer(forKey: Self.groupIdxKey)
+    private static let groupIdxKey = "focusCard.groupIdx"
 
     /// 当前显示的 (text, lineNo, breadcrumbs) — 多 focus 模式从 group[groupIdx] 取,
     /// 单条 / 无 group 模式从顶层 focus 取。封装一下避免 body 多处分支。
@@ -63,9 +65,23 @@ struct FocusCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
-        // focus.group 变化时 (todolist 重 fetch / 锚定切换 / 用户改 [[[focus]]] 标记)
-        // 重置到第一项, 防 idx 指到旧 group 不存在的位置。
-        .onChange(of: focus.group) { _, _ in groupIdx = 0 }
+        // 锚定切换 (focus.anchored 变化) → 重置 idx 到第一项 + 写 UserDefaults。
+        // 这是用户原话 "重新锚定到其他文件上的时候,可持久化的下标就初始化为 1"。
+        .onChange(of: focus.anchored) { _, _ in setGroupIdx(0) }
+        // focus.group 内容变化 (同锚定下用户加/删 [[[focus]]] 标记) → 不重置, 但 clamp
+        // 防 idx 指到不存在位置 (group 缩短后)。
+        .onChange(of: focus.group) { _, new in
+            if let g = new, !g.isEmpty, groupIdx >= g.count {
+                setGroupIdx(g.count - 1)
+            }
+        }
+    }
+
+    /// 写 UserDefaults + 更新 @State, 持久化 groupIdx 一份全局。panel 重启后 @State
+    /// init 会读这个 key 恢复;锚定切换时由调用方传 0 重置。
+    private func setGroupIdx(_ idx: Int) {
+        groupIdx = idx
+        UserDefaults.standard.set(idx, forKey: Self.groupIdxKey)
     }
 
     /// 多 focus 切换控件 — chevron.left / 当前页码 (1/3) / chevron.right, 循环。
@@ -74,7 +90,7 @@ struct FocusCard: View {
     private func groupNav(total: Int) -> some View {
         HStack(spacing: 12) {
             Button {
-                groupIdx = (groupIdx - 1 + total) % total
+                setGroupIdx((groupIdx - 1 + total) % total)
                 jumpToCurrentGroup()
             } label: {
                 Image(systemName: "chevron.left")
@@ -91,7 +107,7 @@ struct FocusCard: View {
                 .foregroundStyle(.secondary)
 
             Button {
-                groupIdx = (groupIdx + 1) % total
+                setGroupIdx((groupIdx + 1) % total)
                 jumpToCurrentGroup()
             } label: {
                 Image(systemName: "chevron.right")
