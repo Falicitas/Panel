@@ -280,25 +280,36 @@ function findClear(): FindResult {
 }
 
 /** 把 ProseMirror 的 cursor 同步到 .panel-find-active mark 所在位置。
- * 通过 EditorView.posAtDOM(node, offset) 把 mark span 对应到 doc position,
- * 直接 dispatch transaction 设 selection — 走 ProseMirror state 不动 DOM,
- * 关闭 find bar 后 view sync 到这个 cursor, 不会滚回 cmd+F 之前的位置。 */
+ * 关闭 find bar 后 ProseMirror view sync 到这个 cursor, 不会滚回 cmd+F 之前的
+ * focus 行。
+ *
+ * 用 posAtCoords (屏幕坐标) 而不是 posAtDOM (DOM node) 找 doc position —
+ * .panel-find-mark span 不在 ProseMirror schema 里, posAtDOM 在 readonly 模式
+ * 下/对 unknown node 可能返回不准。posAtCoords 用 mark 中点屏幕坐标找最近的
+ * ProseMirror text 位置, 更鲁棒。 */
 function commitFindCursor(): void {
   if (!crepe) return
   const root = document.querySelector('.ProseMirror') as HTMLElement | null
   if (!root) return
   const active = root.querySelector('.panel-find-active') as HTMLElement | null
   if (!active) return
+  const rect = active.getBoundingClientRect()
+  if (rect.width === 0 && rect.height === 0) return
+  // 取 mark 中点屏幕坐标 — 落到 mark 内部 text 节点上, posAtCoords 拿到对应 doc pos
+  const coords = { left: rect.left + rect.width / 2, top: rect.top + rect.height / 2 }
   crepe.editor.action((ctx) => {
     const view = ctx.get(editorViewCtx)
     let pos: number | null = null
     try {
-      // mark span 的内部 text node offset 0; side=1 让 pos 落在 mark 文本起点
-      pos = view.posAtDOM(active.firstChild ?? active, 0, 1)
+      const result = view.posAtCoords(coords)
+      pos = result ? result.pos : null
     } catch (_) {
       pos = null
     }
     if (pos == null) return
+    // 不调 tr.scrollIntoView() — setActive 已用 DOM scrollIntoView 滚到 mark 位置,
+    // 这里只更新 ProseMirror state cursor, 不让 view 自己 sync 到 cursor 二次滚动
+    // (有可能滚回老位置或抖动)。
     const tr = view.state.tr.setSelection(
       TextSelection.create(view.state.doc, pos)
     )
