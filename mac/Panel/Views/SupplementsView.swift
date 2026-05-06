@@ -30,6 +30,9 @@ struct SupplementsView: View {
                         onToggleWindow: { item, idx in
                             Task { await state.toggleSupplementWindowCheck(item, windowIndex: idx) }
                         },
+                        onSnoozeWindow: { item, idx in
+                            Task { await state.snoozeSupplementWindow(item, windowIndex: idx) }
+                        },
                         onEdit: { sp in editing = sp },
                         onPause: { sp, days in Task { await state.pauseSupplement(sp, days: days) } },
                         onEnable: { sp, on in Task { await state.setSupplementEnabled(sp, enabled: on) } },
@@ -315,6 +318,7 @@ private struct AllListSection: View {
     let filter: SupplementsFilter
     let search: String
     let onToggleWindow: (SupplementTodayItem, Int) -> Void
+    let onSnoozeWindow: (SupplementTodayItem, Int) -> Void
     let onEdit: (Supplement) -> Void
     let onPause: (Supplement, Int) -> Void
     let onEnable: (Supplement, Bool) -> Void
@@ -339,6 +343,7 @@ private struct AllListSection: View {
                             isFirst: realIdx == 0,
                             isLast: realIdx == orderedIDs.count - 1,
                             onToggleWindow: { idx in onToggleWindow(it, idx) },
+                            onSnoozeWindow: { idx in onSnoozeWindow(it, idx) },
                             onEdit: { onEdit(sp) },
                             onPause: { days in onPause(sp, days) },
                             onEnable: { on in onEnable(sp, on) },
@@ -382,6 +387,7 @@ private struct ItemCard: View {
     let isFirst: Bool
     let isLast: Bool
     let onToggleWindow: (Int) -> Void
+    let onSnoozeWindow: (Int) -> Void  // window 卡片右侧 +30min 按钮触发
     let onEdit: () -> Void
     let onPause: (Int) -> Void
     let onEnable: (Bool) -> Void
@@ -425,9 +431,12 @@ private struct ItemCard: View {
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], spacing: 10) {
                         ForEach(visibleWindows.map(\.offset), id: \.self) { idx in
-                            WindowChip(window: item.windows[idx], disabled: item.paused || !item.enabled) {
-                                onToggleWindow(idx)
-                            }
+                            WindowChip(
+                                window: item.windows[idx],
+                                disabled: item.paused || !item.enabled,
+                                onToggle: { onToggleWindow(idx) },
+                                onSnooze30: { onSnoozeWindow(idx) }
+                            )
                         }
                     }
                 }
@@ -585,6 +594,9 @@ private struct WindowChip: View {
     let window: SupplementWindowStatus
     let disabled: Bool
     let onToggle: () -> Void
+    let onSnooze30: () -> Void
+
+    @State private var showSnoozeConfirm = false
 
     /// 是否可点击:仅 active 窗口可点 (符合用户要求"在对应时间可以吃,不在则灰色不可点")。
     /// disabled (项被暂停/禁用) 时整体不可点。
@@ -592,33 +604,81 @@ private struct WindowChip: View {
         !disabled && window.status == "active"
     }
 
+    /// 显示 +30min 按钮: window 还没过期 (upcoming/active/unknown 都允许 — 用户可以提前
+    /// snooze, 哪怕离 active 还远) + item 没被 disable/pause + endHM 已解析出来。
+    private var showSnoozeButton: Bool {
+        !disabled && window.status != "passed" && !window.endHM.isEmpty
+    }
+
     var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: 8) {
-                Image(systemName: iconName)
-                    .font(.title3)
-                    .foregroundStyle(iconColor)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(timeLabel)
-                        .font(.body.monospacedDigit())
-                        .foregroundStyle(textColor)
-                    Text(statusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        HStack(spacing: 0) {
+            Button(action: onToggle) {
+                HStack(spacing: 8) {
+                    Image(systemName: iconName)
+                        .font(.title3)
+                        .foregroundStyle(iconColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(timeLabel)
+                            .font(.body.monospacedDigit())
+                            .foregroundStyle(textColor)
+                        Text(statusText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .padding(.leading, 10)
+                .padding(.trailing, showSnoozeButton ? 4 : 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(bgColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(bgColor.opacity(0.4), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            .disabled(!isClickable)
+
+            if showSnoozeButton {
+                Button {
+                    showSnoozeConfirm = true
+                } label: {
+                    Image(systemName: "clock.badge.plus")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("延后 30 分钟 (会再确认一次)")
+                .padding(.trailing, 4)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!isClickable)
+        .background(bgColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(bgColor.opacity(0.4), lineWidth: 1)
+        )
+        .confirmationDialog(
+            "延后 30 分钟?",
+            isPresented: $showSnoozeConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("延后到 \(snoozedEndHM)") { onSnooze30() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("\(window.startHM)–\(window.endHM)  →  \(window.startHM)–\(snoozedEndHM)")
+        }
+    }
+
+    /// 当前 endHM 加 30 分钟 (跨午夜 mod 1440), 跟 backend snooze 后 GetSupplementsToday
+    /// 返回的 endHM 一致 — confirm dialog 显示给用户确认。
+    private var snoozedEndHM: String {
+        Self.plusMinutes(window.endHM, 30)
+    }
+
+    private static func plusMinutes(_ hm: String, _ minutes: Int) -> String {
+        let parts = hm.split(separator: ":")
+        guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return hm }
+        let total = (h * 60 + m + minutes) % (24 * 60)
+        return String(format: "%02d:%02d", total / 60, total % 60)
     }
 
     private var timeLabel: String {
