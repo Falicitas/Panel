@@ -58,7 +58,7 @@ struct DetailView: View {
                         text: bufferBinding,
                         pageZoom: state.editorPageZoom,
                         scrollText: $bindable.pendingScrollText,
-                        readOnly: showFindBar,  // 搜索期间 readonly, 防 ProseMirror 重建破坏 mark
+                        readOnly: false,  // find bar 打开也允许编辑 — user 找到位置后可直接改; mark 被破坏由 setActive 同步 selection 兜底
                         findCommand: $findCommand,
                         findResult: $findResult
                     )
@@ -213,12 +213,15 @@ struct DetailView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .help("关闭 (Esc)")
+            // .cancelAction 把 button 绑到 ESC 键。在 macOS SwiftUI 下, cancelAction
+            // 优先级高于 TextField 自己对 ESC 的处理 (TextField 默认 ESC 失焦), 即使
+            // findFieldFocused=true 也能触发, 修原来 .onExitCommand 不触发的 bug。
+            .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
         .padding(.horizontal, 12)
-        .onExitCommand { closeFindBar() }
     }
 
     private var matchCountText: String {

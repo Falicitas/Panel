@@ -123,8 +123,25 @@
     function setActive(marks, idx) {
       marks.forEach(m => m.classList.remove('panel-find-active'));
       if (idx < 0 || idx >= marks.length) return;
-      marks[idx].classList.add('panel-find-active');
-      marks[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const mark = marks[idx];
+      mark.classList.add('panel-find-active');
+      mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 把 DOM selection 折到 mark 末尾, ProseMirror 监听 selectionchange 同步内部
+      // cursor 到该位置 — 否则关闭 find bar 后 ProseMirror 会把 view sync 回老 cursor,
+      // user 看到 editor 滚回 cmd+F 之前的 focus 行。
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(mark);
+        range.collapse(false);
+        const sel = window.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch (_) {
+        // 极少数情况下 mark 可能已被 ProseMirror 重建剥掉, selection 设失败时静默 —
+        // 不影响 highlight/scroll, 仅退出 find bar 后可能滚回原 cursor。
+      }
     }
 
     function getMarks() {
