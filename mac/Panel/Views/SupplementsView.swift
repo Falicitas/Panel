@@ -604,58 +604,59 @@ private struct WindowChip: View {
         !disabled && window.status == "active"
     }
 
-    /// 显示 +30min 按钮: window 还没过期 (upcoming/active/unknown 都允许 — 用户可以提前
-    /// snooze, 哪怕离 active 还远) + item 没被 disable/pause + endHM 已解析出来。
+    /// 显示 +30min 按钮: item 没被 disable/pause + endHM 已解析出来即可, status 任意。
+    /// passed 状态也允许 — 用户错过的窗口可以一直按 +30min 推到现在能完成的时刻。
     private var showSnoozeButton: Bool {
-        !disabled && window.status != "passed" && !window.endHM.isEmpty
+        !disabled && !window.endHM.isEmpty
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            Button(action: onToggle) {
-                HStack(spacing: 8) {
-                    Image(systemName: iconName)
-                        .font(.title3)
-                        .foregroundStyle(iconColor)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(timeLabel)
-                            .font(.body.monospacedDigit())
-                            .foregroundStyle(textColor)
-                        Text(statusText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(.leading, 10)
-                .padding(.trailing, showSnoozeButton ? 4 : 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!isClickable)
-
-            if showSnoozeButton {
-                Button {
-                    showSnoozeConfirm = true
-                } label: {
-                    Image(systemName: "clock.badge.plus")
-                        .font(.body)
+        Button(action: onToggle) {
+            HStack(spacing: 8) {
+                Image(systemName: iconName)
+                    .font(.title3)
+                    .foregroundStyle(iconColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(timeLabel)
+                        .font(.body.monospacedDigit())
+                        .foregroundStyle(textColor)
+                    Text(statusText)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("延后 30 分钟 (会再确认一次)")
-                .padding(.trailing, 4)
+                Spacer()
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .disabled(!isClickable)
         .background(bgColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(bgColor.opacity(0.4), lineWidth: 1)
         )
+        // +30min 按钮浮在右上角, hit test 独立于主 button — 不再跟主按钮挤压同一行,
+        // 也不受主按钮 disabled (passed/upcoming) 影响, 可单独点。
+        .overlay(alignment: .topTrailing) {
+            if showSnoozeButton {
+                Button {
+                    showSnoozeConfirm = true
+                } label: {
+                    Image(systemName: "clock.badge.plus")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(5)
+                        .background(.regularMaterial, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("延后 30 分钟 (会再确认一次)")
+                .padding(4)
+            }
+        }
         .confirmationDialog(
             "延后 30 分钟?",
             isPresented: $showSnoozeConfirm,
