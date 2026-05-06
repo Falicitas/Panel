@@ -24,9 +24,9 @@ struct CommitRitualConfig {
 extension CommitRitualConfig {
     static let focus = CommitRitualConfig(
         title: "进入专注模式",
-        stage1Body: "关闭社交、即时通讯,防止打扰、防止引来打扰",
+        stage1Body: "关闭社交、即时通讯，防止打扰、防止引来打扰",
         stage1Button: "我准备好",
-        stage2Body: "确认所有社交已关闭?",
+        stage2Body: "确认所有社交已关闭？",
         stage2Button: "确认关闭社交",
         countdownSec: 5,
         commitKey: "focusRitualCommit"
@@ -36,7 +36,7 @@ extension CommitRitualConfig {
         title: "收起白色手机",
         stage1Body: "把白色 iPhone 14 拿到那个晚上不会再碰的位置",
         stage1Button: "我去拿了",
-        stage2Body: "已经放到那个地方了吗?",
+        stage2Body: "已经放到那个地方了吗？",
         stage2Button: "确认放好",
         countdownSec: 5,
         commitKey: "phoneRitualCommit"
@@ -73,16 +73,13 @@ struct CommitRitualView: View {
 
                 Button(action: handleButton) {
                     Text(buttonLabel)
-                        .font(.title2.weight(.medium))
-                        .foregroundStyle(buttonReady ? .white : .white.opacity(0.4))
-                        .frame(width: 360, height: 72)
-                        .background(
-                            buttonReady ? Color.anchorAccent : .white.opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 16)
-                        )
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.white.opacity(buttonReady ? 0.95 : 0.40))
+                        .frame(width: 280, height: 52)
+                        .background(.white.opacity(buttonReady ? 0.14 : 0.06), in: Capsule())
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(.white.opacity(buttonReady ? 0 : 0.2), lineWidth: 1)
+                            Capsule()
+                                .stroke(.white.opacity(buttonReady ? 0.32 : 0.12), lineWidth: 1)
                         )
                 }
                 .buttonStyle(.plain)
