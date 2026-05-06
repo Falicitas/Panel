@@ -14,7 +14,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var label: String {
         switch self {
         case .todolist:    "Todolist"
-        case .supplements: "保健品"
+        case .supplements: "食物/保健品"
         case .english:     "英文"
         case .finance:     "财务"
         case .records:     "记录"
