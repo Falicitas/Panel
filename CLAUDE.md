@@ -75,8 +75,32 @@ pkill -9 -f "Panel.app/Contents/MacOS/Panel"
 open /Users/kinesis/panel/mac/build/Build/Products/Debug/Panel.app
 
 # 测试
-cd /Users/kinesis/panel/backend && go test ./store/... ./english/... -race
+cd /Users/kinesis/panel/backend && go test ./... -race
 ```
+
+## 测试沉淀 (硬规则)
+
+**每个 feat/fix 的复现路径必须沉淀成测试代码**, 不能 bash+curl 验完就消失 —
+context 压缩后 LLM 拿不到测试方法 / 容易重复踩坑。
+
+布局:
+- 单测: 紧挨实现, `<pkg>/<code>_test.go` (如 `store/supplements_test.go`)
+- 集成测试: `backend/tests/integration/`
+  - **必读索引**: `backend/tests/integration/README.md` — 列每个文件覆盖的 case +
+    历史 commit ref + user 原话复现步骤
+  - 基础设施: `helpers.go` 提供 `newTestEnv` / `assertNotifBody` 等
+
+何时进集成测试 (而不是仅单测):
+- 跨包状态机 (store + server + supplements/english 三包以上)
+- 通知 lifecycle (dismiss/undismiss/cascade/idx 越界)
+- 任何 user 在 issue 推进时 bash+curl 验过的复现路径
+
+写测试约定 (issue-27 起):
+1. **fix 完同步加 test** — issue 上一个 commit 修 bug, 紧跟一个 commit 加 test
+   (commit type 用 `test(...): ...`)
+2. test func 注释里带 历史 commit hash + user 原话复现步骤,
+   利于压缩后 grep 找回上下文
+3. 加 / 改 test 时同步更新 `backend/tests/integration/README.md` 索引表
 
 ## 关键路径
 
