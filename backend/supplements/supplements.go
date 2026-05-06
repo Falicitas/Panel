@@ -240,8 +240,11 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 
 	// 当日已勾过的 (id, idx) 集合 — 用于 completion_mode="any" 短路: 只要任一 window 已勾,
 	// 后续不再发该 item 的新通知 (任一即整 item 完成)。
+	// doneWinSet 是 per-window 粒度 ("{id}:{idx}"), 用于 inner loop undismiss 路径 skip
+	// 已勾完成的 window — 已 done 的通知是用户主动完成 dismiss 的, 不该自动复活。
 	doneRecs, _ := s.ListRecords("supplement", today, today)
 	itemAnyDone := map[int64]bool{}
+	doneWinSet := map[string]bool{}
 	for _, rec := range doneRecs {
 		parts := strings.SplitN(rec.Key, ":", 2)
 		spID, perr := strconv.ParseInt(parts[0], 10, 64)
@@ -249,6 +252,19 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			continue
 		}
 		itemAnyDone[spID] = true
+		doneWinSet[rec.Key] = true
+	}
+
+	// snoozeMap key="{id}:{idx}" → 累计 30min 槽数; 算 effective end 用。
+	// inner loop 用 effective active range 判 active, body endHM 也用 effective end,
+	// 这样 user snooze 后 (a) original 已过期但 effective 仍 active 时通知不消失
+	// (b) panel 通知 body 跟 chip 显示的时段一致。
+	snoozeRecs, _ := s.ListRecords("supplement_snooze", today, today)
+	snoozeMap := map[string]int{}
+	for _, rec := range snoozeRecs {
+		if rec.ValueNum != nil {
+			snoozeMap[rec.Key] = int(*rec.ValueNum)
+		}
 	}
 
 	anchors := Anchors{
@@ -269,7 +285,15 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			continue
 		}
 		for idx, w := range sp.Windows {
-			if !IsWindowActive(w, anchors, now) {
+			startT, sOk, _ := ParseTimeExpr(w.Start, anchors, now)
+			endT, eOk, _ := ParseTimeExpr(w.End, anchors, now)
+			if !sOk || !eOk {
+				continue
+			}
+			snoozeKey := fmt.Sprintf("%d:%d", sp.ID, idx)
+			effectiveEnd := endT.Add(time.Duration(snoozeMap[snoozeKey]) * 30 * time.Minute)
+			// effective active: now ∈ [startT, effectiveEnd)
+			if now.Before(startT) || !now.Before(effectiveEnd) {
 				continue
 			}
 			ref := fmt.Sprintf("supplement:%d:window:%d:date:%s", sp.ID, idx, today)
@@ -277,17 +301,8 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			if sp.Type == "supplement" {
 				label = "保健品"
 			}
-			// 表达式 (dinner+0m 等) 解析成具体 HH:MM, panel 内通知 + mac 系统通知
-			// 都读这个 body, 不再向用户暴露原始 anchor 表达式
-			startStr := w.Start
-			endStr := w.End
-			if t, ok, _ := ParseTimeExpr(w.Start, anchors, now); ok {
-				startStr = t.Format("15:04")
-			}
-			if t, ok, _ := ParseTimeExpr(w.End, anchors, now); ok {
-				endStr = t.Format("15:04")
-			}
-			body := fmt.Sprintf("%s 时段 %s–%s", label, startStr, endStr)
+			body := fmt.Sprintf("%s 时段 %s–%s", label,
+				startT.Format("15:04"), effectiveEnd.Format("15:04"))
 			n := store.Notification{
 				Source:    "supplement",
 				SourceRef: ref,
@@ -303,10 +318,18 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			if ok {
 				created++
 			} else {
-				// ref 已存在 (通常是 user 多次 set/clear meal 后, 老 anchor 时刻下生成的同 ref
-				// 还在); body 是基于 anchor 解析的当前时段, 必须 sync 过去, 否则用户在
-				// NotificationBar 看到的依然是老 dinner_at 算出的 "21:00-21:30" 老 body。
+				// ref 已存在 → body 用 effective 时段 (snoozeMap + anchors 重新算) UPDATE,
+				// 跟 chip 上 GetSupplementsToday 返回的 endHM 严格一致。覆盖 issue-22 修过的
+				// '改 anchor 后 body 没 sync' + 现在的 'snooze 后 body 没 sync' 两个 case。
 				_ = s.UpdateNotificationBodyByRef(ref, body)
+				// 重 active 路径: user 改 windows / snooze 让原已过期 dismissed 的 ref
+				// 又落入 effective active. 通知该回归, 否则 panel/mac 都看不到提醒。
+				// skip 已 done 的 window — 那是用户主动完成 dismiss 的, 不自动复活。
+				// 用户主动点 mac banner '知道了' dismiss 的也会被这里复活 (60s ticker 内),
+				// 这是有意为之的语义: dismiss 只是临时不看, 唯一彻底消除是勾完成 / snooze 出 active。
+				if !doneWinSet[snoozeKey] {
+					_ = s.UndismissNotificationByRef(ref)
+				}
 			}
 		}
 	}

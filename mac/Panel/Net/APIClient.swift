@@ -190,19 +190,20 @@ actor APIClient: BackendClient {
         return try await post("/api/supplements/reorder", body: Body(order: orderedIDs))
     }
 
-    func snoozeSupplement(id: Int64, date: String?, windowIndex: Int) async throws {
+    func snoozeSupplement(id: Int64, date: String?, windowIndex: Int, count: Int = 1) async throws {
         struct Body: Encodable {
             let date: String?
             let windowIndex: Int
+            let count: Int
             enum CodingKeys: String, CodingKey {
-                case date
+                case date, count
                 case windowIndex = "window_index"
             }
         }
         var req = URLRequest(url: try url("/api/supplements/\(id)/snooze"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try encoder.encode(Body(date: date, windowIndex: windowIndex))
+        req.httpBody = try encoder.encode(Body(date: date, windowIndex: windowIndex, count: count))
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError(message: "snooze supplement \(id) failed")
@@ -319,12 +320,15 @@ actor APIClient: BackendClient {
         }
     }
 
-    func snoozeEnglishWindow(idx: Int, date: String?) async throws {
-        struct Body: Encodable { let date: String? }
+    func snoozeEnglishWindow(idx: Int, date: String?, count: Int = 1) async throws {
+        struct Body: Encodable {
+            let date: String?
+            let count: Int
+        }
         var req = URLRequest(url: try url("/api/english/windows/\(idx)/snooze"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try encoder.encode(Body(date: date))
+        req.httpBody = try encoder.encode(Body(date: date, count: count))
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError(message: "snooze english window \(idx) failed")

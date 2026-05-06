@@ -106,19 +106,22 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 		return 0, fmt.Errorf("get daily state: %w", err)
 	}
 
-	// 过期清理 (无 mode 限制)
-	expireUnfinishedNotifications(s, now, today, settings)
-
-	// 外出 / 睡眠不弹新通知
-	if state.Mode == "outside" || state.Mode == "sleep" {
-		return 0, nil
-	}
-
 	perWin, err := s.ComputeWindowMinutes(today, settings.Windows)
 	if err != nil {
 		return 0, fmt.Errorf("compute window minutes: %w", err)
 	}
 	snoozeMap := LoadSnoozeMap(s, today)
+
+	// 过期清理 (无 mode 限制)
+	expireUnfinishedNotifications(s, now, today, settings)
+	// body sync (无 mode 限制) — snooze / 改 settings 都会让 effective 时段变化, 通知 body
+	// 必须 sync 到新时段, 否则 panel 通知列表显示的是老时段跟 chip 不一致。
+	syncEnglishNotificationBodies(s, now, today, settings, perWin, snoozeMap)
+
+	// 外出 / 睡眠不弹新通知
+	if state.Mode == "outside" || state.Mode == "sleep" {
+		return 0, nil
+	}
 
 	created := 0
 	for idx, w := range settings.Windows {
@@ -151,9 +154,10 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 		if ok {
 			created++
 		} else {
-			// ref 已存在 — windows/threshold 用户改过, body 跟着 sync (跟 supplements 一致,
-			// dismissed_at 不动避免复活用户主动 dismiss 的)
+			// 跟 supplements 同思路: ref 已存在 + 仍 in lead range + 阈值未达 (上面已 guard) →
+			// body sync + undismiss. 阈值达的话上面已 continue, 不会到这。
 			_ = s.UpdateNotificationBodyByRef(ref, body)
+			_ = s.UndismissNotificationByRef(ref)
 		}
 	}
 	return created, nil
@@ -194,16 +198,46 @@ func expireUnfinishedNotifications(s *store.Store, now time.Time, today string, 
 		if !ok {
 			continue
 		}
-		// 三类 dismiss case (跟 supplements 的 expire 逻辑对齐):
-		//   (a) 已过期: now > endT
-		//   (b) window 改后退到 lead range 之前: now < leadStart (anchor/window 编辑场景)
-		// 中间 active in lead range 的留着, GenerateNotifications inner loop 会 UPDATE body。
-		leadStart := endT.Add(-LeadDuration)
-		switch {
-		case now.After(endT):
-			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
-		case now.Before(leadStart):
+		// 仅过期 dismiss。lead 之前不 dismiss — 用户 snooze / 改 settings 让 endT 推后时,
+		// 通知 ref 该保留 + body sync 到新时段 (syncEnglishNotificationBodies 处理),
+		// dismiss 会让通知消失反而造成 panel 通知列表跟 chip 状态错位。
+		if now.After(endT) {
 			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 		}
+	}
+}
+
+// syncEnglishNotificationBodies 扫今日所有未 dismissed 的 english 通知, 把 body 同步到
+// 当前 effective 时段 (snoozeMap + settings.Windows 重新计算)。CreateNotificationIdempotent
+// 是 INSERT IGNORE 不覆写已存在 ref 的 body, 所以 snooze / 改 settings 后已挂着的通知
+// 会显示老时段字符串, 必须显式 UPDATE 一次。
+//
+// 跟 supplements GenerateNotifications inner loop 的 UPDATE body 等价, 但 english 通知
+// 仅在 lead range [end-15min, end) 内创建, snooze 让 leadStart / endT 整体推后后 inner
+// loop 看 now < leadStart 不进, 所以这里独立扫一次。
+func syncEnglishNotificationBodies(s *store.Store, now time.Time, today string, settings store.EnglishSettings, perWin map[int]float64, snoozeMap map[int]int) {
+	notifs, err := s.ListNotifications(false)
+	if err != nil {
+		return
+	}
+	for _, n := range notifs {
+		if n.Source != NotifSource {
+			continue
+		}
+		idx, refDate, ok := parseNotifRef(n.SourceRef)
+		if !ok || refDate != today || idx >= len(settings.Windows) {
+			continue
+		}
+		if perWin[idx] >= float64(settings.ThresholdMin) {
+			continue
+		}
+		endT, ok := EffectiveWindowEnd(today, settings.Windows[idx].End, snoozeMap[idx], now.Location())
+		if !ok {
+			continue
+		}
+		body := fmt.Sprintf("精听窗口 %s–%s, 还差 %.1f 分钟",
+			settings.Windows[idx].Start, endT.Format("15:04"),
+			float64(settings.ThresholdMin)-perWin[idx])
+		_ = s.UpdateNotificationBodyByRef(n.SourceRef, body)
 	}
 }

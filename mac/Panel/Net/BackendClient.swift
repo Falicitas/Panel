@@ -56,7 +56,7 @@ protocol BackendClient: Sendable {
     func checkSupplement(id: Int64, date: String?, windowIndex: Int, checked: Bool) async throws
     func pauseSupplement(id: Int64, until: Int64?) async throws -> [Supplement]
     func enableSupplement(id: Int64, enabled: Bool) async throws -> [Supplement]
-    func snoozeSupplement(id: Int64, date: String?, windowIndex: Int) async throws
+    func snoozeSupplement(id: Int64, date: String?, windowIndex: Int, count: Int) async throws
     func reorderSupplements(orderedIDs: [Int64]) async throws -> [Supplement]
 
     // MARK: State
@@ -85,7 +85,7 @@ protocol BackendClient: Sendable {
     func getEnglishAudio(id: Int64) async throws -> EnglishAudioDetail
     func putEnglishSegments(audioID: Int64, segments: [EnglishSegment]) async throws
     func checkEnglishSegment(audioID: Int64, segIdx: Int, checked: Bool, seconds: Double) async throws
-    func snoozeEnglishWindow(idx: Int, date: String?) async throws
+    func snoozeEnglishWindow(idx: Int, date: String?, count: Int) async throws
     func getEnglishSettings() async throws -> EnglishSettings
     func putEnglishSettings(_ es: EnglishSettings) async throws -> EnglishSettings
 }

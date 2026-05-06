@@ -259,10 +259,11 @@ func (s *Server) handleEnableSupplement(w http.ResponseWriter, r *http.Request) 
 }
 
 // POST /api/supplements/{id}/snooze
-// body: {"date": "YYYY-MM-DD?", "window_index": int}
-//   - 把 (id, idx, date) 的 snooze count 加 1
+// body: {"date": "YYYY-MM-DD?", "window_index": int, "count"?: int}
+//   - 把 (id, idx, date) 的 snooze count 加 count (默认 1, 范围 [1,8])
 //   - effective end = original end + count * 30min, GetSupplementsToday 会反映
-//   - 用户在 mac 系统通知点 "延后 30 分钟" 时调
+//   - 用户在 mac 系统通知点 "延后 30 分钟" → count=1; "延后 2 小时" → count=4 (4 个 30min 槽)
+//   - cap 8 防客户端 bug 一次性写超大值 (8*30min = 4h, 单次延 4h 已属边界)
 func (s *Server) handleSnoozeSupplement(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
@@ -272,6 +273,7 @@ func (s *Server) handleSnoozeSupplement(w http.ResponseWriter, r *http.Request) 
 	var p struct {
 		Date        string `json:"date"`
 		WindowIndex int    `json:"window_index"`
+		Count       int    `json:"count"`
 	}
 	if err := decodeJSON(r, &p); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -280,6 +282,7 @@ func (s *Server) handleSnoozeSupplement(w http.ResponseWriter, r *http.Request) 
 	if p.Date == "" {
 		p.Date = dateutil.LogicalToday(time.Now())
 	}
+	cnt := normalizeSnoozeCount(p.Count)
 	key := fmt.Sprintf("%d:%d", id, p.WindowIndex)
 	cur := 0
 	recs, _ := s.store.ListRecords(supplementSnoozeModule, p.Date, p.Date)
@@ -289,13 +292,18 @@ func (s *Server) handleSnoozeSupplement(w http.ResponseWriter, r *http.Request) 
 			break
 		}
 	}
-	next := float64(cur + 1)
+	next := float64(cur + cnt)
 	if _, err := s.store.UpsertRecord(store.Record{
 		Module: supplementSnoozeModule, Date: p.Date, Key: key, ValueNum: &next,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// kick 一次 GenerateNotifications: snooze 后 effective end 推后, 已存在的 panel 通知
+	// body 还是老时段字符串 ("时段 21:00–21:30"). inner loop 看 IsWindowActive (active 区间)
+	// 仍然 true (snooze 让 endT 推后, now 必然仍在 active), INSERT IGNORE 跳过 → 走
+	// UpdateNotificationBodyByRef 把 body 同步到新 endHM. 否则 panel 通知和 chip 时段不一致。
+	s.kickSupplementsRegen()
 	w.WriteHeader(http.StatusNoContent)
 }
 

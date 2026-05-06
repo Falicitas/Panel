@@ -309,6 +309,25 @@ final class AppState {
         }
     }
 
+    /// 把某项的某个 window 当日 snooze count + 1 (30 分钟槽), effective end 同步推后 30min。
+    /// UI 触发 — 跟 mac banner '延后 30 分钟' 同 backend 路径; 用户可点多次累加。
+    /// 实际确认 (二次 confirmationDialog) 由 view 层处理, 这里只调 api。
+    func snoozeSupplementWindow(_ item: SupplementTodayItem, windowIndex: Int) async {
+        guard windowIndex >= 0, windowIndex < item.windows.count else { return }
+        let date = supplementsToday?.date
+        do {
+            try await api.snoozeSupplement(
+                id: item.id,
+                date: date,
+                windowIndex: windowIndex,
+                count: 1
+            )
+            await reloadSupplements()
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     /// 暂停 N 天 (now + days*86400);days = 0 取消暂停。
     func pauseSupplement(_ sp: Supplement, days: Int) async {
         let until: Int64? = days > 0
