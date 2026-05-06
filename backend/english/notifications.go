@@ -154,9 +154,10 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 		if ok {
 			created++
 		} else {
-			// ref 已存在 — windows/threshold 用户改过, body 跟着 sync (跟 supplements 一致,
-			// dismissed_at 不动避免复活用户主动 dismiss 的)
+			// 跟 supplements 同思路: ref 已存在 + 仍 in lead range + 阈值未达 (上面已 guard) →
+			// body sync + undismiss. 阈值达的话上面已 continue, 不会到这。
 			_ = s.UpdateNotificationBodyByRef(ref, body)
+			_ = s.UndismissNotificationByRef(ref)
 		}
 	}
 	return created, nil

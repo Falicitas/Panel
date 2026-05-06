@@ -240,8 +240,11 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 
 	// 当日已勾过的 (id, idx) 集合 — 用于 completion_mode="any" 短路: 只要任一 window 已勾,
 	// 后续不再发该 item 的新通知 (任一即整 item 完成)。
+	// doneWinSet 是 per-window 粒度 ("{id}:{idx}"), 用于 inner loop undismiss 路径 skip
+	// 已勾完成的 window — 已 done 的通知是用户主动完成 dismiss 的, 不该自动复活。
 	doneRecs, _ := s.ListRecords("supplement", today, today)
 	itemAnyDone := map[int64]bool{}
+	doneWinSet := map[string]bool{}
 	for _, rec := range doneRecs {
 		parts := strings.SplitN(rec.Key, ":", 2)
 		spID, perr := strconv.ParseInt(parts[0], 10, 64)
@@ -249,6 +252,7 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 			continue
 		}
 		itemAnyDone[spID] = true
+		doneWinSet[rec.Key] = true
 	}
 
 	// snoozeMap key="{id}:{idx}" → 累计 30min 槽数; 算 effective end 用。
@@ -318,6 +322,14 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 				// 跟 chip 上 GetSupplementsToday 返回的 endHM 严格一致。覆盖 issue-22 修过的
 				// '改 anchor 后 body 没 sync' + 现在的 'snooze 后 body 没 sync' 两个 case。
 				_ = s.UpdateNotificationBodyByRef(ref, body)
+				// 重 active 路径: user 改 windows / snooze 让原已过期 dismissed 的 ref
+				// 又落入 effective active. 通知该回归, 否则 panel/mac 都看不到提醒。
+				// skip 已 done 的 window — 那是用户主动完成 dismiss 的, 不自动复活。
+				// 用户主动点 mac banner '知道了' dismiss 的也会被这里复活 (60s ticker 内),
+				// 这是有意为之的语义: dismiss 只是临时不看, 唯一彻底消除是勾完成 / snooze 出 active。
+				if !doneWinSet[snoozeKey] {
+					_ = s.UndismissNotificationByRef(ref)
+				}
 			}
 		}
 	}
