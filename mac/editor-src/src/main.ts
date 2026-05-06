@@ -1,9 +1,16 @@
 import { Crepe } from '@milkdown/crepe'
+import { editorViewCtx } from '@milkdown/kit/core'
+import { TextSelection } from '@milkdown/kit/prose/state'
 import { replaceAll } from '@milkdown/kit/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/classic.css'
 import '@milkdown/crepe/theme/classic-dark.css'
 import './panel.css'
+
+interface FindResult {
+  count: number
+  current: number
+}
 
 declare global {
   interface Window {
@@ -14,6 +21,11 @@ declare global {
       destroy(): Promise<void>
       scrollToText(text: string): void
       setReadonly(readonly: boolean): void
+      findAll(query: string): FindResult
+      findNext(): FindResult
+      findPrev(): FindResult
+      findClear(): FindResult
+      commitFindCursor(): void
     }
     webkit?: {
       messageHandlers: {
@@ -137,5 +149,165 @@ function flashHighlight(el: HTMLElement | null): void {
   }, 1200)
 }
 
-window.panelEditor = { init, setRaw, getRaw, destroy, scrollToText, setReadonly }
+// ----- cmd+F find ----- (DOM TreeWalker 高亮, 跟 ProseMirror 解耦)
+//
+// 用 <span class="panel-find-mark"> 包文本, .panel-find-active 是当前选中那条。
+// 边界 case: ProseMirror 一旦重建 DOM (用户编辑 / setRaw 等), mark span 全消失;
+// 调用方 (mac DetailView) 在 find bar 打开期间应避免触发 setRaw, 但 readOnly 已
+// 改成 false (issue-29) 允许编辑 — 编辑时 marker 自然丢, 下次 findAll 重新生成。
+
+let findActiveIdx = -1
+
+function findClearMarks(): void {
+  const root = document.getElementById('editor')
+  if (!root) return
+  const marks = root.querySelectorAll('.panel-find-mark')
+  marks.forEach((m) => {
+    const parent = m.parentNode
+    if (!parent) return
+    while (m.firstChild) parent.insertBefore(m.firstChild, m)
+    parent.removeChild(m)
+    if (parent instanceof Element && (parent as Element & { normalize?: () => void }).normalize) {
+      ;(parent as Element & { normalize: () => void }).normalize()
+    }
+  })
+  findActiveIdx = -1
+}
+
+function findHighlightAll(query: string): HTMLElement[] {
+  findClearMarks()
+  if (!query) return []
+  const root = document.getElementById('editor')
+  if (!root) return []
+  const lq = query.toLowerCase()
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const p = node.parentNode as Element | null
+      if (!p) return NodeFilter.FILTER_REJECT
+      if (p.classList && p.classList.contains('panel-find-mark')) return NodeFilter.FILTER_REJECT
+      const tag = (p.tagName || '').toLowerCase()
+      if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+  const targets: Text[] = []
+  let n: Node | null
+  while ((n = walker.nextNode())) {
+    const tn = n as Text
+    if (tn.nodeValue && tn.nodeValue.toLowerCase().includes(lq)) {
+      targets.push(tn)
+    }
+  }
+  const marks: HTMLElement[] = []
+  for (const node of targets) {
+    const text = node.nodeValue ?? ''
+    const lower = text.toLowerCase()
+    const frag = document.createDocumentFragment()
+    let idx = 0
+    while (idx < text.length) {
+      const found = lower.indexOf(lq, idx)
+      if (found < 0) {
+        frag.appendChild(document.createTextNode(text.slice(idx)))
+        break
+      }
+      if (found > idx) {
+        frag.appendChild(document.createTextNode(text.slice(idx, found)))
+      }
+      const mark = document.createElement('span')
+      mark.className = 'panel-find-mark'
+      mark.textContent = text.slice(found, found + lq.length)
+      frag.appendChild(mark)
+      marks.push(mark)
+      idx = found + lq.length
+    }
+    node.parentNode?.replaceChild(frag, node)
+  }
+  return marks
+}
+
+function findGetMarks(): HTMLElement[] {
+  const root = document.getElementById('editor')
+  if (!root) return []
+  return Array.from(root.querySelectorAll('.panel-find-mark')) as HTMLElement[]
+}
+
+function findSetActive(marks: HTMLElement[], idx: number): void {
+  marks.forEach((m) => m.classList.remove('panel-find-active'))
+  if (idx < 0 || idx >= marks.length) return
+  const mark = marks[idx]
+  mark.classList.add('panel-find-active')
+  mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  // 不在这里调 DOM selection.collapse — ProseMirror 监听 selectionchange 会"修正"
+  // DOM 把 mark span 剥掉, 后续 next/prev 立刻 count=0 '无匹配'。同步 cursor 走
+  // commitFindCursor, 仅 findClear 时调一次。
+}
+
+function findAll(query: string): FindResult {
+  const marks = findHighlightAll(query)
+  if (marks.length === 0) {
+    findActiveIdx = -1
+    return { count: 0, current: 0 }
+  }
+  findActiveIdx = 0
+  findSetActive(marks, 0)
+  return { count: marks.length, current: 1 }
+}
+
+function findNext(): FindResult {
+  const marks = findGetMarks()
+  if (marks.length === 0) return { count: 0, current: 0 }
+  findActiveIdx = (findActiveIdx + 1) % marks.length
+  findSetActive(marks, findActiveIdx)
+  return { count: marks.length, current: findActiveIdx + 1 }
+}
+
+function findPrev(): FindResult {
+  const marks = findGetMarks()
+  if (marks.length === 0) return { count: 0, current: 0 }
+  findActiveIdx = (findActiveIdx - 1 + marks.length) % marks.length
+  findSetActive(marks, findActiveIdx)
+  return { count: marks.length, current: findActiveIdx + 1 }
+}
+
+function findClear(): FindResult {
+  // 关闭 find bar 时, 先把 ProseMirror cursor 同步到 active mark 位置
+  // (走 EditorView dispatch 不动 DOM), 然后再 unwrap 所有 mark span。
+  // 这样 ProseMirror 内部 selection 已是 cmd+F 跳到的位置, view sync
+  // 不会滚回 cmd+F 之前的 focus 行。
+  try { commitFindCursor() } catch (_) { /* 静默, 不影响 unwrap */ }
+  findClearMarks()
+  return { count: 0, current: 0 }
+}
+
+/** 把 ProseMirror 的 cursor 同步到 .panel-find-active mark 所在位置。
+ * 通过 EditorView.posAtDOM(node, offset) 把 mark span 对应到 doc position,
+ * 直接 dispatch transaction 设 selection — 走 ProseMirror state 不动 DOM,
+ * 关闭 find bar 后 view sync 到这个 cursor, 不会滚回 cmd+F 之前的位置。 */
+function commitFindCursor(): void {
+  if (!crepe) return
+  const root = document.querySelector('.ProseMirror') as HTMLElement | null
+  if (!root) return
+  const active = root.querySelector('.panel-find-active') as HTMLElement | null
+  if (!active) return
+  crepe.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    let pos: number | null = null
+    try {
+      // mark span 的内部 text node offset 0; side=1 让 pos 落在 mark 文本起点
+      pos = view.posAtDOM(active.firstChild ?? active, 0, 1)
+    } catch (_) {
+      pos = null
+    }
+    if (pos == null) return
+    const tr = view.state.tr.setSelection(
+      TextSelection.create(view.state.doc, pos)
+    )
+    view.dispatch(tr)
+  })
+}
+
+window.panelEditor = {
+  init, setRaw, getRaw, destroy, scrollToText, setReadonly,
+  findAll, findNext, findPrev, findClear, commitFindCursor,
+}
 postToSwift({ type: 'loaded' })

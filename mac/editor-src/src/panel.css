@@ -28,3 +28,29 @@ body.readonly .milkdown .ProseMirror {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
 }
+
+/* cmd+F 文本高亮 — 同时适配 light / dark mode (主 mac 用 dark, fallback 给 light) */
+.panel-find-mark {
+  background-color: rgba(255, 220, 80, 0.45);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-shadow: 0 0 0 1px rgba(180, 140, 0, 0.5);
+}
+.panel-find-mark.panel-find-active {
+  background-color: rgba(255, 140, 0, 0.85);
+  color: #000;
+  box-shadow: 0 0 0 1.5px rgba(220, 90, 0, 1);
+}
+@media (prefers-color-scheme: dark) {
+  .panel-find-mark {
+    background-color: rgba(255, 220, 80, 0.30);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 220, 80, 0.7);
+  }
+  .panel-find-mark.panel-find-active {
+    background-color: rgba(255, 165, 0, 0.95);
+    color: #000;
+    box-shadow: 0 0 0 1.5px rgba(255, 215, 0, 1);
+  }
+}
