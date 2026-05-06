@@ -58,7 +58,14 @@ struct DetailView: View {
                         text: bufferBinding,
                         pageZoom: state.editorPageZoom,
                         scrollText: $bindable.pendingScrollText,
-                        readOnly: false,  // find bar 打开也允许编辑 — user 找到位置后可直接改; mark 被破坏由 setActive 同步 selection 兜底
+                        // find bar 打开时必须 readonly: ProseMirror 持续监听 DOM mutation,
+                        // 见到 .panel-find-mark span 不在 schema 里就异步 reconcile 把它 unwrap,
+                        // 后续 next/prev 调用时 marks 已空 → 立刻 '无匹配'。readonly 模式
+                        // 下 ProseMirror 不 reconcile, mark 才能保留。
+                        // user '找到位置后想编辑' 的需求由 esc 关闭后自然解锁 readOnly 满足,
+                        // cursor 通过 commitFindCursor 同步到 cmd+F 跳到的位置, 关闭 find bar
+                        // 后用户在该位置可继续编辑。
+                        readOnly: showFindBar,
                         findCommand: $findCommand,
                         findResult: $findResult
                     )
