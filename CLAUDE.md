@@ -24,10 +24,18 @@ git checkout dev && git checkout -b issue-N
 git add ... && git commit -m "feat(...): ..."
 ```
 
-**做完 STOP — 不自己 merge 到 dev**。把 commit 留在 issue branch 等用户验证后由用户:
+**做完 STOP — 不自己 merge 到 dev**。把 commit 留在 issue branch 等用户验证后合。
+
+合的命令 (用户执行) — head 已在 issue branch, todolists/ 笔记一并 chore commit:
+
 ```bash
-git checkout dev && git merge --no-ff issue-N
+git add todolists/ && \
+  git commit -m "chore(todolists): snapshot" 2>/dev/null; \
+  git checkout dev && git merge --no-ff issue-N
 ```
+
+无 todolists/ 改动时 commit 静默失败 (2>/dev/null), `;` 不阻断后续 checkout + merge。
+CC 给合命令必须用这格式, **不能**只给 `git merge --no-ff issue-N` 一句。
 
 **同一功能的多个修复留在同一个 issue branch** (不开新 branch):
 - 用户上次纠正过两次 (issue-14/15 拆错, issue-17/18 拆错) — cherry-pick 到原 branch 上
@@ -112,6 +120,36 @@ context 压缩后 LLM 拿不到测试方法 / 容易重复踩坑。
   - `voice.groq_api_key` (英文精听 STT 直连)
 
 ---
+
+## 命令格式 (iTerm2 wrap 防护, 硬规则)
+
+CC 输出的代码块在 iTerm2 / 大多数终端里会按窗口宽度 wrap 成多物理行 — 用户复制
+粘贴时, wrap 后的尾部 token 常被当成下一行命令独立执行 (例如把 `issue-27` 单独
+当命令), 导致行为错乱。
+
+**任何超过 ~80 字符的 shell 命令必须用 `\` 续行**, 每物理行 < 80 字符。
+
+❌ 错误 (单行过长, iTerm2 wrap 后复制易断):
+```bash
+git add todolists/ && git commit -m "chore(todolists): snapshot" 2>/dev/null; git checkout dev && git merge --no-ff issue-N
+```
+
+✅ 正确 (反斜杠续行, wrap 后整段复制仍正确):
+```bash
+git add todolists/ && \
+  git commit -m "chore(todolists): snapshot" 2>/dev/null; \
+  git checkout dev && git merge --no-ff issue-N
+```
+
+✅ 也可 (拆多行执行, 失去 short-circuit 但更直观):
+```bash
+git add todolists/
+git commit -m "chore(todolists): snapshot" 2>/dev/null
+git checkout dev && git merge --no-ff issue-N
+```
+
+适用于所有 CC 输出给用户复制的命令 (curl / sqlite3 / xcodebuild / docker / 等等),
+不限于 git。
 
 ## 验证 SwiftUI 改动
 
