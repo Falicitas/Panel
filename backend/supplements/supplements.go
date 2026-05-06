@@ -157,7 +157,17 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 			continue
 		}
 		sp, ok := spByID[spID]
-		if !ok || winIdx >= len(sp.Windows) {
+		if !ok {
+			// sp 已被删 (DeleteSupplement 已 cascade hard DELETE 通知, 这里是兜底防 race)
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+			continue
+		}
+		if winIdx >= len(sp.Windows) {
+			// 用户 PUT supplement 时 windows 数组缩短 (删了某 window) → 老 ref 永远不会
+			// 再 active, dismiss 干净。bug 复现: PUT 加一个覆盖 now 的 window → 通知出现
+			// → 立刻 PUT 删该 window → 老逻辑 continue (不 dismiss), 通知 stale 留在
+			// 通知栏。
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 			continue
 		}
 		key := fmt.Sprintf("%d:%d", spID, winIdx)
