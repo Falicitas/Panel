@@ -8,36 +8,58 @@ import SwiftUI
 /// 触发逻辑由 ContentView 决定 (focusStart / 22:00 / today key 是否已 set);
 /// 本 view 只关心 stage 状态和 commit 写入。
 ///
-/// 视觉参考 WakeMaskView 的渐变全屏样式。
+/// 视觉跟 WakeMaskView 的 BigButton 一致 (220x160 方形 + icon + 主+副标题), 渐变全屏。
 struct CommitRitualConfig {
     let title: String
-    let stage1Body: String
-    let stage1Button: String
-    let stage2Body: String
-    let stage2Button: String
+    let stage1: Stage
+    let stage2: Stage
     let countdownSec: Int
     /// UserDefaults key 前缀, 实际 key = "{commitKey}-{yyyy-MM-dd}"。
     /// 跨日自然失效 (新日期 key 不存在 → 蒙版重弹)。
     let commitKey: String
+
+    /// 单 stage 配置: body (中部说明), buttonTitle (按钮主标), buttonSubtitle (副标), systemImage (icon)。
+    struct Stage {
+        let body: String
+        let buttonTitle: String
+        let buttonSubtitle: String
+        let systemImage: String
+    }
 }
 
 extension CommitRitualConfig {
     static let focus = CommitRitualConfig(
         title: "进入专注模式",
-        stage1Body: "关闭社交、即时通讯,防止打扰、防止引来打扰",
-        stage1Button: "我准备好",
-        stage2Body: "确认所有社交已关闭?",
-        stage2Button: "确认关闭社交",
+        stage1: .init(
+            body: "关闭社交、即时通讯,防止打扰、防止引来打扰",
+            buttonTitle: "我准备好",
+            buttonSubtitle: "现在去关闭社交",
+            systemImage: "sparkles"
+        ),
+        stage2: .init(
+            body: "确认所有社交已关闭?",
+            buttonTitle: "确认关闭社交",
+            buttonSubtitle: "5 秒后才可点",
+            systemImage: "checkmark.shield"
+        ),
         countdownSec: 5,
         commitKey: "focusRitualCommit"
     )
 
     static let phone = CommitRitualConfig(
         title: "收起白色手机",
-        stage1Body: "把白色 iPhone 14 拿到那个晚上不会再碰的位置",
-        stage1Button: "我去拿了",
-        stage2Body: "已经放到那个地方了吗?",
-        stage2Button: "确认放好",
+        stage1: .init(
+            body: "把白色 iPhone 14 拿到那个晚上不会再碰的位置",
+            buttonTitle: "我去拿了",
+            buttonSubtitle: "起身去放手机",
+            systemImage: "iphone.slash"
+        ),
+        stage2: .init(
+            body: "已经放到那个地方了吗?",
+            buttonTitle: "确认放好",
+            buttonSubtitle: "5 秒后才可点",
+            systemImage: "checkmark.shield"
+        ),
         countdownSec: 5,
         commitKey: "phoneRitualCommit"
     )
@@ -64,29 +86,20 @@ struct CommitRitualView: View {
                 Text(config.title)
                     .font(.system(size: 48, weight: .light))
 
-                Text(stage == 1 ? config.stage1Body : config.stage2Body)
+                Text(currentStage.body)
                     .font(.title2)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.9))
                     .frame(maxWidth: 600)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Button(action: handleButton) {
-                    Text(buttonLabel)
-                        .font(.title2.weight(.medium))
-                        .foregroundStyle(buttonReady ? .white : .white.opacity(0.4))
-                        .frame(width: 360, height: 72)
-                        .background(
-                            buttonReady ? Color.anchorAccent : .white.opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 16)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(.white.opacity(buttonReady ? 0 : 0.2), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!buttonReady)
+                RitualButton(
+                    title: currentStage.buttonTitle,
+                    subtitle: subtitleLabel,
+                    systemImage: currentStage.systemImage,
+                    enabled: buttonReady,
+                    action: handleButton
+                )
                 .padding(.top, 8)
             }
             .foregroundStyle(.white)
@@ -99,14 +112,20 @@ struct CommitRitualView: View {
         }
     }
 
+    private var currentStage: CommitRitualConfig.Stage {
+        stage == 1 ? config.stage1 : config.stage2
+    }
+
     private var buttonReady: Bool {
         stage == 1 || countdown == 0
     }
 
-    private var buttonLabel: String {
-        if stage == 1 { return config.stage1Button }
-        if countdown > 0 { return "\(config.stage2Button) (\(countdown))" }
-        return config.stage2Button
+    /// 倒计时阶段把剩余秒数显示在 subtitle, 结束后回到原 subtitle。stage 1 用原 subtitle。
+    private var subtitleLabel: String {
+        if stage == 2 && countdown > 0 {
+            return "\(countdown) 秒后才可点"
+        }
+        return currentStage.buttonSubtitle
     }
 
     private func handleButton() {
@@ -131,5 +150,39 @@ struct CommitRitualView: View {
     /// 给 ContentView 的 shouldShow 逻辑用 — 当日 commit key 是否已 set。
     static func isCommitted(_ commitKey: String) -> Bool {
         UserDefaults.standard.bool(forKey: "\(commitKey)-\(todayKey())")
+    }
+}
+
+/// 跟 WakeMaskView.BigButton 同款 — 220x160 方形, icon + 主标 + 副标 + 玻璃描边。
+/// 区别: 加 enabled 状态 (false 时整体淡化 0.4, disabled hit testing)。
+private struct RitualButton: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let enabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 36, weight: .light))
+                Text(title)
+                    .font(.title3.weight(.medium))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 220, height: 160)
+            .padding()
+            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+            .opacity(enabled ? 1 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 }
