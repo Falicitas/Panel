@@ -288,7 +288,10 @@ func (s *Server) handleCheckEnglishSegment(w http.ResponseWriter, r *http.Reques
 
 // ---- snooze window ----
 
-// POST /api/english/windows/{idx}/snooze  body: {date?: YYYY-MM-DD}
+// POST /api/english/windows/{idx}/snooze
+// body: {date?: YYYY-MM-DD, count?: int}
+//   - count 默认 1, 范围 [1,8]; 30min/槽 (4 = 2 小时, 8 = 4 小时)
+//   - effective end = original + total_count * 30min
 func (s *Server) handleSnoozeEnglishWindow(w http.ResponseWriter, r *http.Request) {
 	idxStr := r.PathValue("idx")
 	idx, err := strconv.Atoi(idxStr)
@@ -297,12 +300,14 @@ func (s *Server) handleSnoozeEnglishWindow(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var p struct {
-		Date string `json:"date"`
+		Date  string `json:"date"`
+		Count int    `json:"count"`
 	}
 	_ = decodeJSON(r, &p) // body 可空
 	if p.Date == "" {
 		p.Date = dateutil.LogicalToday(time.Now())
 	}
+	cnt := normalizeSnoozeCount(p.Count)
 	key := english.SnoozeKey(idx)
 	cur := 0
 	recs, _ := s.store.ListRecords(english.SnoozeModule, p.Date, p.Date)
@@ -312,7 +317,7 @@ func (s *Server) handleSnoozeEnglishWindow(w http.ResponseWriter, r *http.Reques
 			break
 		}
 	}
-	next := float64(cur + 1)
+	next := float64(cur + cnt)
 	if _, err := s.store.UpsertRecord(store.Record{
 		Module: english.SnoozeModule, Date: p.Date, Key: key, ValueNum: &next,
 	}); err != nil {
@@ -320,6 +325,21 @@ func (s *Server) handleSnoozeEnglishWindow(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// normalizeSnoozeCount 把 client 传的 count 收敛到 [1,8]:
+//   - 0 / 缺省 → 1 (向后兼容老 mac client)
+//   - 1..8 → 不变
+//   - >8 → 8 (cap, 防客户端 bug 一次性 snooze 太久)
+//   - 负数 → 1 (保护性处理)
+func normalizeSnoozeCount(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	if n > 8 {
+		return 8
+	}
+	return n
 }
 
 // ---- settings ----
