@@ -248,9 +248,42 @@ function findAll(query: string): FindResult {
     findActiveIdx = -1
     return { count: 0, current: 0 }
   }
-  findActiveIdx = 0
-  findSetActive(marks, 0)
-  return { count: marks.length, current: 1 }
+  // 从当前 ProseMirror cursor 位置往下找第一个 match — 用 mark 屏幕 top 跟 cursor
+  // 屏幕 top 比较 (跨多 block 也工作); 都在 cursor 之上时 wrap 到第一个 mark。
+  // 行为对齐 vscode/sublime 等 cmd+F: 第二次进入不必从头, 续上之前的位置。
+  let startIdx = 0
+  if (crepe) {
+    crepe.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const cursorPos = view.state.selection.from
+      let cursorTop: number | null = null
+      try {
+        const c = view.coordsAtPos(cursorPos)
+        cursorTop = c.top
+      } catch (_) { cursorTop = null }
+      if (cursorTop == null) return
+      for (let i = 0; i < marks.length; i++) {
+        const r = marks[i].getBoundingClientRect()
+        // mark.top 严格 > cursor.top 表示 mark 在 cursor 下面行;
+        // 同行场景 mark.left > cursor.left 就算下一个。
+        if (r.top > cursorTop + 0.5) {
+          startIdx = i
+          return
+        }
+        if (Math.abs(r.top - cursorTop) <= 0.5) {
+          // 同行: 看 left 区分
+          try {
+            const cc = view.coordsAtPos(cursorPos)
+            if (r.left > cc.left + 0.5) { startIdx = i; return }
+          } catch (_) { /* fallback 保持上面逻辑 */ }
+        }
+      }
+      // 全部 mark 都在 cursor 之上 → wrap 到第一个 (默认 startIdx=0)
+    })
+  }
+  findActiveIdx = startIdx
+  findSetActive(marks, startIdx)
+  return { count: marks.length, current: startIdx + 1 }
 }
 
 function findNext(): FindResult {
