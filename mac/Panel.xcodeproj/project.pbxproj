@@ -25,6 +25,7 @@
 		2ED392B12F27B57113D20D4E /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 784D8DC34515C61BEC0914F6 /* Recorder.swift */; };
 		307B0DE23C7B468B448D8541 /* FinanceForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */; };
 		34415C0BA9E22A6C195DC8C7 /* Records.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6F9936F17C66C82102D617D /* Records.swift */; };
+		34CFD94C244BA7A7787B93E5 /* EnglishSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F1E80F3E943C3E632D1797 /* EnglishSettingsSheet.swift */; };
 		35B4D2D020001D0CB2DAE99E /* SpeechSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 316E0C809704BDE19F6B5D14 /* SpeechSegmenter.swift */; };
 		364C94E5D4E89FA0E05B85C1 /* Finance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EB340428613B213332CFB3E /* Finance.swift */; };
 		390FC385137ADF28255C8BC0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2848561D75BC5D180BEF25 /* ContentView.swift */; };
@@ -107,6 +108,7 @@
 		A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceForms.swift; sourceTree = "<group>"; };
 		A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsContentView.swift; sourceTree = "<group>"; };
 		AF389499A461D89EC2F91FB3 /* MicroProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicroProgress.swift; sourceTree = "<group>"; };
+		B0F1E80F3E943C3E632D1797 /* EnglishSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishSettingsSheet.swift; sourceTree = "<group>"; };
 		B18E8C1E08A00B871A4C9C04 /* RecurringTodo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringTodo.swift; sourceTree = "<group>"; };
 		B68E700AFBBE2CD789E98338 /* PanelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelApp.swift; sourceTree = "<group>"; };
 		B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBar.swift; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 				D754AC7CF099F8B68D14859D /* DetailView.swift */,
 				FBEA95F9C5B5537519499A96 /* EnglishArchiveSheet.swift */,
 				D5C1D248FAE0891DDA297AF0 /* EnglishSegmentRow.swift */,
+				B0F1E80F3E943C3E632D1797 /* EnglishSettingsSheet.swift */,
 				4E695D73E361DCE1AAE1D25B /* EnglishView.swift */,
 				5F40BA67C98CFD3089A55AAA /* FinanceContentView.swift */,
 				5AEB088C6C7D53B17EBEDD6A /* FinanceDetailView.swift */,
@@ -363,6 +366,7 @@
 				7FA40456F313F3E14F6D236F /* English.swift in Sources */,
 				8875EBCEA0E4842F8A9A6707 /* EnglishArchiveSheet.swift in Sources */,
 				8A1B2DF3671C824AA875846C /* EnglishSegmentRow.swift in Sources */,
+				34CFD94C244BA7A7787B93E5 /* EnglishSettingsSheet.swift in Sources */,
 				FA3A289E08F189633F342CE2 /* EnglishView.swift in Sources */,
 				364C94E5D4E89FA0E05B85C1 /* Finance.swift in Sources */,
 				7773F05E45A234AB7EB1928E /* FinanceContentView.swift in Sources */,

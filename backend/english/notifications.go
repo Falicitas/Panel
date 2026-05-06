@@ -150,6 +150,10 @@ func GenerateNotifications(s *store.Store, now time.Time) (int, error) {
 		}
 		if ok {
 			created++
+		} else {
+			// ref 已存在 — windows/threshold 用户改过, body 跟着 sync (跟 supplements 一致,
+			// dismissed_at 不动避免复活用户主动 dismiss 的)
+			_ = s.UpdateNotificationBodyByRef(ref, body)
 		}
 	}
 	return created, nil
@@ -173,7 +177,12 @@ func expireUnfinishedNotifications(s *store.Store, now time.Time, today string, 
 			continue
 		}
 		idx, refDate, ok := parseNotifRef(n.SourceRef)
-		if !ok || refDate != today || idx >= len(settings.Windows) {
+		if !ok || refDate != today {
+			continue
+		}
+		// 用户删过 windows 后 idx 越界 — 老 ref 永远不会再 active, dismiss 干净
+		if idx >= len(settings.Windows) {
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 			continue
 		}
 		// 已达阈值 → 顺手 dismiss (handler 通常已做, 这里是 ticker 兜底)
@@ -185,9 +194,16 @@ func expireUnfinishedNotifications(s *store.Store, now time.Time, today string, 
 		if !ok {
 			continue
 		}
-		if !now.After(endT) {
-			continue // 还没过期
+		// 三类 dismiss case (跟 supplements 的 expire 逻辑对齐):
+		//   (a) 已过期: now > endT
+		//   (b) window 改后退到 lead range 之前: now < leadStart (anchor/window 编辑场景)
+		// 中间 active in lead range 的留着, GenerateNotifications inner loop 会 UPDATE body。
+		leadStart := endT.Add(-LeadDuration)
+		switch {
+		case now.After(endT):
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+		case now.Before(leadStart):
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 		}
-		_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 	}
 }
