@@ -3,11 +3,27 @@ import SwiftUI
 struct FocusCard: View {
     @Environment(AppState.self) private var state
     let focus: FocusResult
+    /// 多 focus 时的当前显示索引。focus.group 变化 (id 用 group hash) 时会重置。
+    @State private var groupIdx: Int = 0
+
+    /// 当前显示的 (text, lineNo, breadcrumbs) — 多 focus 模式从 group[groupIdx] 取,
+    /// 单条 / 无 group 模式从顶层 focus 取。封装一下避免 body 多处分支。
+    private var displayed: (text: String?, lineNo: Int?, breadcrumbs: [String]?) {
+        if let group = focus.group, !group.isEmpty {
+            let idx = min(max(groupIdx, 0), group.count - 1)
+            let item = group[idx]
+            return (item.text, item.lineNo, item.breadcrumbs)
+        }
+        return (focus.text, focus.lineNo, focus.breadcrumbs)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             morningProgressRow
-            if let crumbs = focus.breadcrumbs, !crumbs.isEmpty {
+            if let group = focus.group, group.count >= 2 {
+                groupNav(total: group.count)
+            }
+            if let crumbs = displayed.breadcrumbs, !crumbs.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(Array(crumbs.enumerated()), id: \.offset) { idx, crumb in
                         if idx > 0 {
@@ -21,13 +37,13 @@ struct FocusCard: View {
                     }
                 }
             }
-            Text(focus.text ?? "")
+            Text(displayed.text ?? "")
                 .font(.title.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
-            if let n = focus.lineNo {
+            if let n = displayed.lineNo {
                 Button {
-                    Task { await state.jumpToFocus(focus.text) }
+                    Task { await state.jumpToFocus(displayed.text) }
                 } label: {
                     Text("L\(n)")
                         .font(.body.monospacedDigit())
@@ -47,6 +63,55 @@ struct FocusCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal)
+        // focus.group 变化时 (todolist 重 fetch / 锚定切换 / 用户改 [[[focus]]] 标记)
+        // 重置到第一项, 防 idx 指到旧 group 不存在的位置。
+        .onChange(of: focus.group) { _, _ in groupIdx = 0 }
+    }
+
+    /// 多 focus 切换控件 — chevron.left / 当前页码 (1/3) / chevron.right, 循环。
+    /// 类似 cmd+F 找下一处的语义, 切换时同步 jumpToFocus 滚到该行 editor 上。
+    @ViewBuilder
+    private func groupNav(total: Int) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                groupIdx = (groupIdx - 1 + total) % total
+                jumpToCurrentGroup()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.anchorAccent)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("上一个 focus")
+
+            Text("\(min(groupIdx, total - 1) + 1) / \(total)")
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            Button {
+                groupIdx = (groupIdx + 1) % total
+                jumpToCurrentGroup()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.anchorAccent)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("下一个 focus")
+
+            Spacer()
+        }
+    }
+
+    private func jumpToCurrentGroup() {
+        guard let group = focus.group, !group.isEmpty else { return }
+        let idx = min(max(groupIdx, 0), group.count - 1)
+        let text = group[idx].text
+        Task { await state.jumpToFocus(text) }
     }
 
     /// 晨间进度行:仅 micro 模式且至少有 1 条 morning recurring 时显示。
