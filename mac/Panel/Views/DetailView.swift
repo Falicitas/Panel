@@ -68,12 +68,17 @@ struct DetailView: View {
                 .padding(.vertical, 12)
                 .frame(minWidth: 520)
                 .navigationTitle(title)
+                .transition(.opacity)
             } else if state.contentMode == .micro {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
             } else {
-                EmptyState(selectedName: state.selectedName)
+                EmptyState(kind: detailEmptyKind, selectedName: state.selectedName)
+                    .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: hasContent)
+        .animation(.easeInOut(duration: 0.25), value: detailEmptyKind)
         .overlay(alignment: .bottomTrailing) {
             if isShowingRating {
                 RatingReferencePanel(onClose: { isShowingRating = false })
@@ -318,16 +323,53 @@ struct DetailView: View {
     }
 }
 
+/// 右侧 detail 列在没 content (state.detail == nil 且 contentMode == .todolist) 时
+/// 三态语义:
+///   - loading:        loadAll 还在 / selectedName 已设但 detail 还没拿回来
+///   - failed:         loadAll 已结束但 detail 还是 nil (网络失败 / 名字不存在)
+///   - nothingSelected: 用户没选中任何 todolist
+/// 之前老逻辑只看 selectedName == nil 区分 "未选中" / "加载失败", 启动初 selectedName
+/// 已 set 但 detail 仍 nil 的几百 ms 间隙误显示 "加载失败"。
+enum DetailEmptyKind: Hashable {
+    case loading
+    case failed
+    case nothingSelected
+}
+
+extension DetailView {
+    var detailEmptyKind: DetailEmptyKind {
+        if state.isLoading {
+            return .loading
+        }
+        if state.selectedName != nil && state.detail == nil {
+            // loadAll 已结束 (isLoading=false) 但 detail 仍 nil → 加载失败 (lastError 一般非空)
+            return .failed
+        }
+        return .nothingSelected
+    }
+}
+
 private struct EmptyState: View {
+    let kind: DetailEmptyKind
     let selectedName: String?
+
     var body: some View {
-        ContentUnavailableView {
-            Label(
-                selectedName == nil ? "未选中 todolist" : "todolist 加载失败",
-                systemImage: selectedName == nil ? "list.bullet.rectangle" : "exclamationmark.triangle"
-            )
-        } description: {
-            Text(selectedName == nil ? "在左侧选一个开始" : "")
+        switch kind {
+        case .loading:
+            ProgressView("加载中…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed:
+            ContentUnavailableView {
+                Label("todolist 加载失败", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(selectedName ?? "")
+            }
+        case .nothingSelected:
+            ContentUnavailableView {
+                Label("未选中 todolist", systemImage: "list.bullet.rectangle")
+            } description: {
+                Text("在左侧选一个开始")
+            }
         }
     }
 }
