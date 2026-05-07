@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"time"
 )
 
@@ -228,6 +230,42 @@ func (s *Store) DismissStaleEnglishNotifications(beforeUnix, atUnix int64) (int6
 	}
 	n, _ := res.RowsAffected()
 	return n, nil
+}
+
+// DeleteAudio 物理删除 audio + 关联 segments。用户在历史档案"永久删除"时调用。
+//
+// records 表中 module='english_seg' key='{audio_id}:{idx}' 保留 — 那是当日已积累的
+// 学习时长事实, 不应因 audio 删除而抹掉; orphan key 不影响任何查询。
+//
+// LocalPath 文件在 db 事务 commit 后 best-effort 删除; 文件缺失或删失败只 log,
+// audio 已离开 db, 残留 mp3 不再被任何代码引用。
+//
+// 不存在的 id 返回 sql.ErrNoRows (跟 GetAudio 同语义), handler 翻 404。
+func (s *Store) DeleteAudio(id int64) error {
+	a, err := s.GetAudio(id)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM english_segments WHERE audio_id=?`, id); err != nil {
+		return fmt.Errorf("delete english_segments %d: %w", id, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM english_audios WHERE id=?`, id); err != nil {
+		return fmt.Errorf("delete english_audio %d: %w", id, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete audio %d: %w", id, err)
+	}
+	if a.LocalPath != "" {
+		if err := os.Remove(a.LocalPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("delete audio %d local file %q: %v", id, a.LocalPath, err)
+		}
+	}
+	return nil
 }
 
 // SetAudioArchived atUnix=0 取消归档,>0 标记归档时间。

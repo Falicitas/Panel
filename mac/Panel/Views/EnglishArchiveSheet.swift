@@ -12,6 +12,9 @@ struct EnglishArchiveSheet: View {
     @State private var expandedID: Int64? = nil
     @State private var expandedSegments: [EnglishSegment] = []
     @State private var loadingSegments: Bool = false
+    @State private var pendingDelete: EnglishAudio? = nil
+    @State private var deletingID: Int64? = nil
+    @State private var deleteError: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,38 +55,69 @@ struct EnglishArchiveSheet: View {
         }
         .frame(width: 720, height: 600)
         .task { await loadArchive() }
+        .confirmationDialog(
+            pendingDelete.map { "永久删除「\($0.title)」?" } ?? "永久删除?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { audio in
+            Button("永久删除", role: .destructive) {
+                Task { await deleteAudio(audio) }
+            }
+            Button("取消", role: .cancel) {}
+        } message: { _ in
+            Text("音频文件和字幕将被彻底清除, 已积累的学习时长保留。此操作不可恢复。")
+        }
+        .alert(
+            "删除失败",
+            isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            ),
+            presenting: deleteError
+        ) { _ in
+            Button("好") { deleteError = nil }
+        } message: { msg in
+            Text(msg)
+        }
     }
 
     @ViewBuilder
     private func archiveRow(audio: EnglishAudio) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: expandedID == audio.id ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 14)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(audio.title)
-                        .font(.body.weight(.medium))
-                        .lineLimit(2)
-                    HStack(spacing: 10) {
-                        Text("[\(audio.source.uppercased())]")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                        Text("时长 \(formatMs(audio.durationMs))")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if let archived = audio.archivedAt {
-                            Text("归档 \(formatUnix(archived))")
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: expandedID == audio.id ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 14)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(audio.title)
+                            .font(.body.weight(.medium))
+                            .lineLimit(2)
+                        HStack(spacing: 10) {
+                            Text("[\(audio.source.uppercased())]")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                            Text("时长 \(formatMs(audio.durationMs))")
                                 .font(.caption).foregroundStyle(.secondary)
+                            if let archived = audio.archivedAt {
+                                Text("归档 \(formatUnix(archived))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    Spacer(minLength: 0)
                 }
-                Spacer()
+                .contentShape(Rectangle())
+                .onTapGesture { Task { await toggleExpand(audio) } }
+                deleteButton(for: audio)
             }
-            .contentShape(Rectangle())
             .padding(.vertical, 8)
             .padding(.horizontal, 16)
-            .onTapGesture { Task { await toggleExpand(audio) } }
 
             if expandedID == audio.id {
                 if loadingSegments {
@@ -105,6 +139,24 @@ struct EnglishArchiveSheet: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func deleteButton(for audio: EnglishAudio) -> some View {
+        Button {
+            pendingDelete = audio
+        } label: {
+            if deletingID == audio.id {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "trash")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(deletingID != nil)
+        .help("永久删除")
     }
 
     @ViewBuilder
@@ -169,6 +221,25 @@ struct EnglishArchiveSheet: View {
             }
         } catch {
             // silent
+        }
+    }
+
+    private func deleteAudio(_ audio: EnglishAudio) async {
+        deletingID = audio.id
+        defer { deletingID = nil }
+        // 在播这条 audio 的任意 segment 时先 stop, 避免 mp3 文件被后端删除后 player 拿到陈数据。
+        if player.playingAudioID == audio.id {
+            player.stop()
+        }
+        do {
+            try await APIClient.shared.deleteEnglishAudio(id: audio.id)
+            audios.removeAll { $0.id == audio.id }
+            if expandedID == audio.id {
+                expandedID = nil
+                expandedSegments = []
+            }
+        } catch {
+            deleteError = error.localizedDescription
         }
     }
 

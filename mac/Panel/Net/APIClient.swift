@@ -287,6 +287,12 @@ actor APIClient: BackendClient {
         try await get("/api/english/audios/\(id)")
     }
 
+    /// 永久删除一条英文 audio (历史档案 sheet 二次确认后调用)。
+    /// 后端级联删 segments 和本地 mp3 文件; records 中的练习时长保留。
+    func deleteEnglishAudio(id: Int64) async throws {
+        try await delete("/api/english/audios/\(id)")
+    }
+
     func putEnglishSegments(audioID: Int64, segments: [EnglishSegment]) async throws {
         var req = URLRequest(url: try url("/api/english/audios/\(audioID)/segments"))
         req.httpMethod = "PUT"
