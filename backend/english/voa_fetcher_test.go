@@ -123,7 +123,7 @@ func TestRunFetchAll_LimitsDownloads(t *testing.T) {
 		t.Fatalf("RunFetchAll: %v", err)
 	}
 
-	audios, err := st.ListAudios(false)
+	audios, err := st.ListAudios(false, "")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

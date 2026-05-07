@@ -1069,7 +1069,19 @@
 
   * **CLAUDE.md 不动** (用户原话: 元编程归 CLAUDE, 业务流程归 PRD)
 
-* [ ] **M5 — Sciam 60s 接入** (走 M4 流程, 第一个新源, Topic="science")
+* [x] **M5 — Sciam Science Quickly 接入** (本 commit, 走 M4 流程, 第一个新源 Topic="science")
+  * 注: Sciam "60-Second Science" 已升级为 *Science Quickly* (5-25min/集), feed
+    URL `https://www.scientificamerican.com/sciam/xml/iTunes.cfm?id=science-quickly`,
+    mp3 host `traffic.megaphone.fm`
+  * 实测发现 Sciam 用 192kbps (NPR 用 128kbps), 24min 集 = 33MB 超 Whisper 25MB 上限
+  * 顺手补 file-size cap (`ValidateAudioSize`, ≤25MB), fetcher chain
+    `download → ValidateAudioSize → ValidateAudioEnergy → 入库`; 任一失败标 failed
+  * sciam 放 fetchers 列表第一位 (npr endpoint 偶尔 i/o timeout 会占满 5min runOnce ctx
+    让后续 fetcher 没机会)
+  * 测试沉淀: `TestValidateAudioSize` 5 case (24/25/26/33MB + missing) +
+    `TestRunFetchAll_SizeCap` (small + sciam-33 regression) +
+    `TestSciamFetcher_FetchListsItems` / `_DownloadOne` (integration tag)
+  * 实测验: 1908 sciam metadata 入库, 5 集下载, 其中 2 集 size cap 拒 (24min@192kbps=33MB), 3 集 pending
 
 * [ ] **M6 — 主题源链式扩展** (BBC Science / NPR Up First / Tech podcast, 走 M4 流程, 留空给未来) \[\[\[focus]]]
 
@@ -1109,7 +1121,7 @@
 - [ ] 将 todolist，保健品，听写的真实信息填完。
   * [x] 🌟🌟🌟🌟 保健品。验证什么：把每日要用信息填完。走得通：填完了；走不通：没填完\[\[\[focus]]]。第一轮：跑去弄 CLAUDE.md 了。下一轮弄这个。第二轮：增加了一个“任意完成”的保健品item，杏仁需要这个。应该可以进行正式填写了。第三轮：修复了时间轴的 bug，开始正式填写。第 n 轮：
 
-- [ ] 🌟🌟🌟🌟 完成英文功能推进\[\[\[focus]]]。验证什么：通过 cc 将英文分类完成。走得通：完成无bug；走不通：没完成
+- [ ] 🌟🌟🌟🌟 完成英文功能推进\[\[\[focus]]]。验证什么：通过 cc 将英文分类完成。走得通：完成无bug；走不通：没完成。第一轮：目前已推进到试样的音频，没问题。分类的模态框也做了。
 
 ## (取消) 搜索
 

@@ -14,6 +14,31 @@ import (
 // -50dB 阈值能拉开静音占位与白噪 / 极弱信号的距离。
 const silenceThresholdDB = -50.0
 
+// maxAudioBytes: Groq Whisper API 单文件上限 25MB; mac 端 Transcriber 上传超此值会 413 / 失败。
+// fetcher 下载完后 stat 文件大小超此值即标 failed (跟 silence 同 validation chain)。
+//
+// duration cap (`maxDurationMs` in fetcher.go) 按 128kbps 估算, 但实际 bitrate 不可控
+// (Sciam Science Quickly 用 192kbps, 24min ≈ 33MB 超 25MB), 所以 size cap 是 duration
+// cap 之外的硬保险。
+const maxAudioBytes int64 = 25 * 1024 * 1024
+
+// ValidateAudioSize 检查 mp3 文件大小是否在 Groq Whisper 上限 (25MB) 内。
+// 超出返 error, 让 fetcher 标 segments_status=failed 跳过 ASR 阶段。
+//
+// 跟 ValidateAudioEnergy 平级的 validation gate, fetcher 下载后 chain 调两个。
+// stat 失败时 fail-close (返 error 让 fetcher 处理), 防 file IO 异常掩盖大文件入库。
+func ValidateAudioSize(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat mp3: %w", err)
+	}
+	if info.Size() > maxAudioBytes {
+		mb := info.Size() / (1024 * 1024)
+		return fmt.Errorf("file too large for Whisper (%dMB > %dMB)", mb, maxAudioBytes/(1024*1024))
+	}
+	return nil
+}
+
 // ValidateAudioEnergy 探测 mp3 是否可能是静音占位 (issue: VOA Akamai CDN 全 -90dB 占位坑)。
 // 头 / 中 / 尾各取 ~5s PCM RMS, 三段全部 < -50dB 视为 silent → 返 error。
 // decode 失败时 fail-open 返 nil (合法 mp3 偶发解码失败时不要误杀)。

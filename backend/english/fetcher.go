@@ -18,6 +18,15 @@ type Fetcher interface {
 	DownloadAudio(ctx context.Context, audioURL, destPath string) (int64, error)
 }
 
+// chainValidate 跑 size + energy 两个 validation gate, 任一报错先返。
+// 顺序: size 在前 (省去对超大 mp3 解码的开销), energy 在后。
+func chainValidate(path string) error {
+	if err := ValidateAudioSize(path); err != nil {
+		return err
+	}
+	return ValidateAudioEnergy(path)
+}
+
 // Audio 长度 cap (RSS itunes:duration 解析成 ms 后判断, 入库前 skip).
 //   - 下限 30s: 兼容 Sciam 60-second 这种 ~60-90s 短节目, 同时拒掉 trailer / 5s 推广
 //   - 上限 25min: Groq Whisper 单文件 25MB ≈ 30min, 留 5min buffer 防 STT 超时
@@ -90,11 +99,14 @@ func RunFetchAll(ctx context.Context, st *store.Store, fetchers []Fetcher, dataD
 				log.Printf("english fetch %s: set local_path id=%d: %v", fetcher.Name(), id, err)
 				continue
 			}
-			// audio energy 验证: VOA Akamai CDN 静音占位坑沉淀。
-			// silent 时标 failed + reason, 不删 mp3 (留调试)。decode 失败 fail-open 返 nil。
-			if err := ValidateAudioEnergy(destPath); err != nil {
-				log.Printf("english fetch %s: silent audio id=%d: %v", fetcher.Name(), id, err)
-				if e := st.SetAudioSegmentsStatus(id, store.EnglishStatusFailed, err.Error()); e != nil {
+			// validation chain (任一失败 → 标 failed + continue 下一条):
+			//   1. file size cap: Groq Whisper 25MB 上限 (Sciam 24min @ 192kbps = 33MB > 25MB)
+			//   2. audio energy: VOA Akamai CDN 静音占位坑沉淀 (-90dB 三段)
+			// 失败 audio 不删 mp3 (留调试), 标 segments_status=failed + reason 文本; mac 端
+			// 因 status != "pending" 不会再调 Groq, 跨 session 持久。
+			if validateErr := chainValidate(destPath); validateErr != nil {
+				log.Printf("english fetch %s: validation failed id=%d: %v", fetcher.Name(), id, validateErr)
+				if e := st.SetAudioSegmentsStatus(id, store.EnglishStatusFailed, validateErr.Error()); e != nil {
 					log.Printf("english fetch %s: mark failed id=%d: %v", fetcher.Name(), id, e)
 				}
 				downloaded++
