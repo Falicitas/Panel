@@ -40,12 +40,13 @@ struct EnglishSkipSheet: View {
     private var header: some View {
         HStack {
             Text("选择下一个音频")
-                .font(.headline)
+                .font(.title3.weight(.semibold))
             Spacer()
             Button("取消") {
                 state.cancelSkipSheet()
                 dismiss()
             }
+            .controlSize(.large)
             Button("确认") {
                 guard let id = state.skipSheetCandidate?.audio?.id else { return }
                 Task {
@@ -54,6 +55,7 @@ struct EnglishSkipSheet: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .keyboardShortcut(.defaultAction)
             .disabled(state.skipSheetCandidate?.audio == nil || state.skipSheetIsLoading)
         }
@@ -64,6 +66,7 @@ struct EnglishSkipSheet: View {
     private func topicPicker(state: AppState) -> some View {
         HStack {
             Text("主题")
+                .font(.body)
                 .frame(width: 60, alignment: .leading)
                 .foregroundStyle(.secondary)
             Picker("", selection: Binding(
@@ -77,7 +80,8 @@ struct EnglishSkipSheet: View {
                 }
             }
             .labelsHidden()
-            .frame(maxWidth: 220)
+            .controlSize(.large)
+            .frame(maxWidth: 240)
             Spacer()
         }
     }
@@ -87,34 +91,36 @@ struct EnglishSkipSheet: View {
         if state.skipSheetIsLoading && state.skipSheetCandidate == nil {
             HStack {
                 ProgressView()
-                Text("抽取中…").foregroundStyle(.secondary)
+                Text("抽取中…")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
                 Spacer()
             }
             .padding(.vertical, 24)
         } else if let cand = state.skipSheetCandidate, let audio = cand.audio {
             VStack(alignment: .leading, spacing: 10) {
                 Text(audio.title)
-                    .font(.title3.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                     .lineLimit(3)
                 HStack(spacing: 12) {
                     Text("[\(audio.source.uppercased())]")
-                        .font(.caption.monospaced())
+                        .font(.body.monospaced())
                         .foregroundStyle(.secondary)
                     Text("时长 \(formatDur(audio.durationMs))")
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                     if !audio.topic.isEmpty {
                         Text(topicLabel(audio.topic))
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .font(.body.weight(.medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
                             .background(Color.accentColor.opacity(0.15), in: Capsule())
                     }
                     Spacer()
                 }
                 if !cand.descriptionPreview.isEmpty {
                     Text(cand.descriptionPreview)
-                        .font(.body)
+                        .font(.title3)
                         .foregroundStyle(.primary.opacity(0.85))
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 4)
@@ -127,6 +133,7 @@ struct EnglishSkipSheet: View {
                         Label("再抽一个", systemImage: "shuffle")
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .disabled(state.skipSheetIsLoading)
                 }
                 .padding(.top, 4)
@@ -140,10 +147,10 @@ struct EnglishSkipSheet: View {
             // candidate=nil 表示已抽完所有候选 / fetch 失败
             VStack(alignment: .leading, spacing: 8) {
                 Label("暂无候选", systemImage: "tray")
-                    .font(.headline)
+                    .font(.title3)
                     .foregroundStyle(.secondary)
                 Text("所选主题下没有更多未归档音频。换个主题或等 fetcher 抓更多 (~6 小时一轮)。")
-                    .font(.caption)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
