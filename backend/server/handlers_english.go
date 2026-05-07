@@ -169,6 +169,25 @@ func (s *Server) handleGetEnglishAudio(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, englishAudioDetailResp{Audio: a, Segments: segs})
 }
 
+// DELETE /api/english/audios/{id} — 永久删除 audio (含 segments + 本地 mp3)。
+// 不存在的 id 返 404; records 中 module='english_seg' 的练习记录保留 (DeleteAudio 注释)。
+func (s *Server) handleDeleteEnglishAudio(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.DeleteAudio(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GET /api/english/audios/{id}/file — 流式返回本地 mp3。无 Range 支持。
 func (s *Server) handleGetEnglishAudioFile(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)

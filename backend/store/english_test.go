@@ -1,7 +1,11 @@
 package store
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -149,6 +153,95 @@ func TestSetAudioStatus(t *testing.T) {
 	a, _ = s.GetAudio(id)
 	if a.SegmentsStatus != EnglishStatusRunning || a.SegmentsFailedReason != "" {
 		t.Errorf("after running: status=%q reason=%q", a.SegmentsStatus, a.SegmentsFailedReason)
+	}
+}
+
+func TestDeleteAudio_NotFoundReturnsErrNoRows(t *testing.T) {
+	s := newTestStore(t)
+	err := s.DeleteAudio(999)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("DeleteAudio(unknown) = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestDeleteAudio_RemovesAudioAndSegments(t *testing.T) {
+	s := newTestStore(t)
+	id, _, err := s.InsertAudioIfNew(mkAudio("voa", "del-1"))
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := s.ReplaceSegments(id, []EnglishSegment{
+		{Idx: 0, StartMs: 0, EndMs: 1000, Text: "Hello."},
+		{Idx: 1, StartMs: 1000, EndMs: 2000, Text: "World."},
+	}); err != nil {
+		t.Fatalf("replace segments: %v", err)
+	}
+
+	// 顺手插一条 records, 验证删除后 records 仍然保留。
+	v := 30.0
+	if _, err := s.UpsertRecord(Record{
+		Module: "english_seg", Date: "2026-05-07",
+		Key: fmt.Sprintf("%d:0", id), ValueNum: &v,
+	}); err != nil {
+		t.Fatalf("upsert record: %v", err)
+	}
+
+	if err := s.DeleteAudio(id); err != nil {
+		t.Fatalf("DeleteAudio: %v", err)
+	}
+
+	if _, err := s.GetAudio(id); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("GetAudio(deleted) = %v, want sql.ErrNoRows", err)
+	}
+	segs, err := s.ListSegments(id)
+	if err != nil {
+		t.Fatalf("list segments: %v", err)
+	}
+	if len(segs) != 0 {
+		t.Errorf("ListSegments(deleted) = %d entries, want 0", len(segs))
+	}
+
+	recs, err := s.ListRecords("english_seg", "2026-05-07", "2026-05-07")
+	if err != nil {
+		t.Fatalf("list records: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Errorf("records preserved across DeleteAudio: got %d, want 1", len(recs))
+	}
+}
+
+func TestDeleteAudio_RemovesLocalFile(t *testing.T) {
+	s := newTestStore(t)
+	dir := t.TempDir()
+	mp3 := filepath.Join(dir, "a.mp3")
+	if err := os.WriteFile(mp3, []byte("fake mp3"), 0o644); err != nil {
+		t.Fatalf("write mp3: %v", err)
+	}
+	a := mkAudio("voa", "del-2")
+	a.LocalPath = mp3
+	id, _, err := s.InsertAudioIfNew(a)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	if err := s.DeleteAudio(id); err != nil {
+		t.Fatalf("DeleteAudio: %v", err)
+	}
+	if _, err := os.Stat(mp3); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("local file should be removed; stat err = %v", err)
+	}
+}
+
+func TestDeleteAudio_MissingLocalFileIsBestEffort(t *testing.T) {
+	s := newTestStore(t)
+	a := mkAudio("voa", "del-3")
+	a.LocalPath = "/tmp/panel-test-nonexistent-dir/never.mp3"
+	id, _, err := s.InsertAudioIfNew(a)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := s.DeleteAudio(id); err != nil {
+		t.Errorf("DeleteAudio with missing local file should not error, got %v", err)
 	}
 }
 

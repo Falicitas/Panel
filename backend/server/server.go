@@ -82,6 +82,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/english/audios", s.handleListEnglishAudios)
 	mux.HandleFunc("GET /api/english/audios/candidate", s.handleEnglishCandidate)
 	mux.HandleFunc("GET /api/english/audios/{id}", s.handleGetEnglishAudio)
+	mux.HandleFunc("DELETE /api/english/audios/{id}", s.handleDeleteEnglishAudio)
 	mux.HandleFunc("GET /api/english/audios/{id}/file", s.handleGetEnglishAudioFile)
 	mux.HandleFunc("POST /api/english/audios/{id}/skip", s.handleSkipEnglishAudio)
 	mux.HandleFunc("PUT /api/english/audios/{id}/segments", s.handlePutEnglishSegments)
