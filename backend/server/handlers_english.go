@@ -198,6 +198,140 @@ func (s *Server) handleGetEnglishAudioFile(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ---- candidate / skip (Phase 14 M1: 模态框抽奖 + 跳过) ----
+
+type englishCandidateResp struct {
+	Audio              *store.EnglishAudio    `json:"audio,omitempty"`
+	Segments           []store.EnglishSegment `json:"segments"`
+	DescriptionPreview string                 `json:"description_preview"`
+}
+
+// GET /api/english/audios/candidate?topic=&exclude=A,B,C&current=N
+//
+// 模态框"抽一个 audio" 数据源。topic 为空不过滤;current/exclude 都是排除 ID。
+// 不归档当前 audio (归档动作走 POST /skip, 用户确认后才归档)。
+func (s *Server) handleEnglishCandidate(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	topic := strings.TrimSpace(q.Get("topic"))
+	excludeIDs := parseInt64CSV(q.Get("exclude"))
+	if cur, err := strconv.ParseInt(strings.TrimSpace(q.Get("current")), 10, 64); err == nil && cur > 0 {
+		excludeIDs = append(excludeIDs, cur)
+	}
+
+	a, err := english.PickCandidate(s.store, topic, excludeIDs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	resp := englishCandidateResp{Segments: []store.EnglishSegment{}}
+	if a != nil {
+		resp.Audio = a
+		resp.DescriptionPreview = truncateRunes(a.Description, 120)
+		segs, err := s.store.ListSegments(a.ID)
+		if err == nil {
+			resp.Segments = segs
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+type englishSkipReq struct {
+	Topic            string `json:"topic"`
+	SelectedAudioID  int64  `json:"selected_audio_id"`
+}
+
+type englishSkipResp struct {
+	ArchivedID         int64                  `json:"archived_id"`
+	NextAudio          *store.EnglishAudio    `json:"next_audio,omitempty"`
+	Segments           []store.EnglishSegment `json:"segments"`
+	DescriptionPreview string                 `json:"description_preview"`
+}
+
+// POST /api/english/audios/{id}/skip body: {topic?, selected_audio_id}
+//
+// 归档 path id 的 audio + 切到 selected_audio_id (用户在模态框已经选好)。
+// selected_audio_id 必填 (== 0 视为客户端 bug, 返 400)。
+func (s *Server) handleSkipEnglishAudio(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var req englishSkipReq
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.SelectedAudioID <= 0 {
+		writeError(w, http.StatusBadRequest, errors.New("selected_audio_id required"))
+		return
+	}
+	// 验 selected 真存在 + 未归档 (客户端模态框可能停留太久, 期间被归档了)
+	sel, err := s.store.GetAudio(req.SelectedAudioID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, fmt.Errorf("selected audio %d not found", req.SelectedAudioID))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if sel.ArchivedAt != nil {
+		writeError(w, http.StatusConflict, fmt.Errorf("selected audio %d already archived", req.SelectedAudioID))
+		return
+	}
+
+	if err := s.store.SetAudioArchived(id, time.Now().Unix()); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	segs, err := s.store.ListSegments(sel.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, englishSkipResp{
+		ArchivedID:         id,
+		NextAudio:          &sel,
+		Segments:           segs,
+		DescriptionPreview: truncateRunes(sel.Description, 120),
+	})
+}
+
+// truncateRunes 按 rune 数截断字符串, 防中英混排截到半个 rune (UTF-8 多字节)。
+func truncateRunes(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+// parseInt64CSV 解析 "1,2,3" 形式 query 参数。空值或无效条目静默丢弃。
+func parseInt64CSV(s string) []int64 {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		v, err := strconv.ParseInt(p, 10, 64)
+		if err != nil || v <= 0 {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
 // PUT /api/english/audios/{id}/segments  body: [{idx, start_ms, end_ms, text}, ...]
 // mac ASR 完成后回写;事务替换全部段 + 把 segments_status 设为 ready。
 func (s *Server) handlePutEnglishSegments(w http.ResponseWriter, r *http.Request) {

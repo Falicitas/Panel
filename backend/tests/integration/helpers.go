@@ -178,3 +178,60 @@ func mealRef(key, date string) string {
 func quote(s string) string {
 	return strings.ReplaceAll(s, "\n", "\\n")
 }
+
+// seedEnglishAudioOpts 控制 seedEnglishAudio 的可选字段, 默认行为接近 "已下完未归档"。
+type seedEnglishAudioOpts struct {
+	Source      string
+	Ref         string
+	Title       string
+	Description string
+	Topic       string
+	DurationMs  int64
+	PublishedAt int64
+	LocalPath   string // 空字符串 → 显式置 ""(模拟"没下完", 候选会跳过)
+	Archived    int64  // > 0 → 写 archived_at, 0 → 未归档
+}
+
+// seedEnglishAudio 把一个 audio 塞进 db; 返回插入 id。失败 t.Fatal。
+// 用于测试构造场景: candidate / skip / lifecycle 等。
+func (e *testEnv) seedEnglishAudio(o seedEnglishAudioOpts) int64 {
+	e.t.Helper()
+	if o.Source == "" {
+		o.Source = "npr"
+	}
+	if o.Ref == "" {
+		e.t.Fatalf("seedEnglishAudio: Ref required")
+	}
+	if o.Title == "" {
+		o.Title = "Title " + o.Ref
+	}
+	if o.PublishedAt == 0 {
+		o.PublishedAt = 1700000000
+	}
+	if o.DurationMs == 0 {
+		o.DurationMs = 600_000 // 10min default
+	}
+	a := store.EnglishAudio{
+		Source:      o.Source,
+		SourceRef:   o.Ref,
+		Title:       o.Title,
+		Description: o.Description,
+		PublishedAt: o.PublishedAt,
+		DurationMs:  o.DurationMs,
+		AudioURL:    "http://example.test/" + o.Ref + ".mp3",
+		LocalPath:   o.LocalPath,
+		FetchedAt:   o.PublishedAt + 10,
+		Topic:       o.Topic,
+	}
+	id, _, err := e.store.InsertAudioIfNew(a)
+	if err != nil {
+		e.t.Fatalf("seedEnglishAudio %s: %v", o.Ref, err)
+	}
+	// InsertAudioIfNew 已处理 LocalPath ("" → NULL, 非空 → 字符串), 不需二次 set。
+	if o.Archived > 0 {
+		if err := e.store.SetAudioArchived(id, o.Archived); err != nil {
+			e.t.Fatalf("seedEnglishAudio %s archive: %v", o.Ref, err)
+		}
+	}
+	return id
+}
