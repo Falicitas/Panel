@@ -62,29 +62,33 @@ extension CommitRitualConfig {
         commitKey: "focusRitualCommit"
     )
 
-    static let phone = CommitRitualConfig(
-        title: "睡前 4 项",
-        stage1: .init(
-            body: "全部做完再按",
-            bodyItems: [
-                "把白色 iPhone 14 放到那个晚上不会再碰的位置",
-                "已洗完澡",
-                "已吃锌镁片",
-                "十点之后不碰工作内容、不聊任何工作相关",
-            ],
-            buttonTitle: "都做完了",
-            buttonSubtitle: "起身去把这 4 项做完",
-            systemImage: "moon.stars"
-        ),
-        stage2: .init(
-            body: "确认 4 项都做完了?",
-            buttonTitle: "确认入睡",
-            buttonSubtitle: "5 秒后才可点",
-            systemImage: "checkmark.shield"
-        ),
-        countdownSec: 5,
-        commitKey: "phoneRitualCommit"
-    )
+    static let phone: CommitRitualConfig = {
+        let items = [
+            "把白色 iPhone 14 放到那个晚上不会再碰的位置",
+            "已洗完澡",
+            "已吃锌镁片",
+            "十点之后不碰工作内容、不聊任何工作相关",
+        ]
+        return CommitRitualConfig(
+            title: "睡前 4 项",
+            stage1: .init(
+                body: "全部做完再按",
+                bodyItems: items,
+                buttonTitle: "都做完了",
+                buttonSubtitle: "起身去把这 4 项做完",
+                systemImage: "moon.stars"
+            ),
+            stage2: .init(
+                body: "再核对一次",
+                bodyItems: items,
+                buttonTitle: "确认入睡",
+                buttonSubtitle: "5 秒后才可点",
+                systemImage: "checkmark.shield"
+            ),
+            countdownSec: 5,
+            commitKey: "phoneRitualCommit"
+        )
+    }()
 }
 
 struct CommitRitualView: View {
@@ -132,27 +136,12 @@ struct CommitRitualView: View {
     @ViewBuilder
     private var bodySection: some View {
         if let items = currentStage.bodyItems {
-            VStack(spacing: 20) {
+            VStack(spacing: 18) {
                 Text(currentStage.body)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.7))
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                        HStack(alignment: .firstTextBaseline, spacing: 14) {
-                            Text("\(idx + 1)")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.95))
-                                .frame(width: 26, height: 26)
-                                .background(Circle().fill(.white.opacity(0.12)))
-                                .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 1))
-                            Text(item)
-                                .font(.title3)
-                                .foregroundStyle(.white.opacity(0.92))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .frame(maxWidth: 540, alignment: .leading)
+                    .font(.system(size: 15, weight: .regular))
+                    .tracking(1)
+                    .foregroundStyle(.white.opacity(0.55))
+                checklistCard(items: items)
             }
         } else {
             Text(currentStage.body)
@@ -162,6 +151,34 @@ struct CommitRitualView: View {
                 .frame(maxWidth: 600)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// 玻璃卡片包 4 项 checklist — 与 RitualButton 视觉语言一致 (white opacity bg + 描边)。
+    private func checklistCard(items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                HStack(alignment: .firstTextBaseline, spacing: 18) {
+                    Text("\(idx + 1)")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(.white.opacity(0.14)))
+                        .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 1))
+                    Text(item)
+                        .font(.system(size: 19, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.vertical, 28)
+        .padding(.horizontal, 36)
+        .frame(maxWidth: 580, alignment: .leading)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(.white.opacity(0.18), lineWidth: 1)
+        )
     }
 
     private var currentStage: CommitRitualConfig.Stage {
