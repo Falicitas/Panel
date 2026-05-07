@@ -35,6 +35,9 @@ go test ./tests/integration/ -run TestSupplement_SnoozeBodySync -v
 | `TestSupplement_ReactivateSkipDone` | issue-25 `4c271a4` | 已勾完成的 window 不被 inner loop 自动复活(尊重用户主动 dismiss) |
 | `TestSupplement_AnyModeAllDismiss` | issue-21 `dec40cb` | `completion_mode="any"` 勾任一 → 整 item 当日通知 dismiss |
 | `TestSupplement_PauseSkipsActiveNotif` | (基础) | pause 后 inner loop 看 IsActive=false → 通知不复活 |
+| `TestSupplement_PauseDismissesActiveNotif` | issue-34 | active 时段 pause → expire 函数 dismiss 已挂着的通知 (老 bug: 只 skip 不 dismiss) |
+| `TestSupplement_PutDisableDismissesActiveNotif` | issue-34 | PUT update enabled=false → 同 dismiss 路径 (handleEnable disable 走硬删, PUT 不触发 cascade) |
+| `TestSupplement_UnpauseUndismissesIfStillActive` | issue-34 防御 | 暂停 → 取消暂停若仍 active → 通知 undismiss 复活 |
 
 ## 待补 case (后续 issue 增量)
 

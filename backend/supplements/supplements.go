@@ -162,6 +162,15 @@ func expireUnfinishedSupplementNotifications(s *store.Store, now time.Time, toda
 			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
 			continue
 		}
+		// 暂停 / 禁用 → 通知不该挂在通知栏。
+		// 复现 (issue-34): user 在 active 时段中选 "暂停一天" → POST /pause until=明天.
+		// 老逻辑只让 inner loop 看 IsActive=false 跳过, active 通知挂在那里没人 dismiss.
+		// PUT update enabled=false 同病 (handleEnableSupplement disable 是硬 DELETE,
+		// 但 PUT 走 UpdateSupplement 不触发 cascade), 一并兜底。
+		if !sp.IsActive(now.Unix()) {
+			_ = s.DismissNotificationByRef(n.SourceRef, now.Unix())
+			continue
+		}
 		if winIdx >= len(sp.Windows) {
 			// 用户 PUT supplement 时 windows 数组缩短 (删了某 window) → 老 ref 永远不会
 			// 再 active, dismiss 干净。bug 复现: PUT 加一个覆盖 now 的 window → 通知出现
