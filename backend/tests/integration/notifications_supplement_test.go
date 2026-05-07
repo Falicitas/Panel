@@ -253,6 +253,94 @@ func TestSupplement_PauseSkipsActiveNotif(t *testing.T) {
 	e.assertNotifDismissed(ref, true)
 }
 
+// TestSupplement_PauseDismissesActiveNotif: issue-34
+// 复现路径 (user 报):
+//   1. 食物 item (杏仁) window active → 通知 INSERT (dismissed_at = NULL)
+//   2. user 在 mac UI 选 "暂停一天" → POST /pause until=明天
+//   3. 通知应被自动 dismiss, 通知栏不该再挂这个 active 时段
+// 老 bug: expireUnfinishedSupplementNotifications 仅处理 (a) 已过期 (b) 锚点退到 window 之前
+//
+//	(c) winIdx 越界 (d) sp 不存在 (e) 引用未触发餐. 不处理 paused 状态.
+//	GenerateNotifications inner loop 看 IsActive=false 直接 continue, 已存在的
+//	active 通知没人 dismiss, 一直挂着.
+//
+// 修法: expire 函数加 sp.IsActive(now)=false 分支 → DismissNotificationByRef.
+// 同时也兜底了 PUT update enabled=false 路径 (handleEnableSupplement disable
+// 是硬 DELETE 通知, PUT 走 UpdateSupplement 不会触发 cascade, 老逻辑有同样的
+// 通知 stale 问题).
+func TestSupplement_PauseDismissesActiveNotif(t *testing.T) {
+	e := newTestEnv(t)
+	id := createTestSupplement(t, e, "杏仁", []store.Window{
+		{Start: hmFromNow(-5), End: hmFromNow(5)},
+	}, "all")
+	ref := supplementRef(id, 0, e.today)
+	// 创建时 active → 通知应 INSERT 且未 dismissed
+	e.assertNotifDismissed(ref, false)
+
+	// pause 1 天
+	until := time.Now().AddDate(0, 0, 1).Unix()
+	status, raw := e.post("/api/supplements/"+itoa(id)+"/pause",
+		map[string]any{"until": until})
+	e.mustOK("POST pause", "pause", status, raw)
+
+	// kick 后 expire 函数应看到 sp.IsActive=false → dismiss 通知
+	e.assertNotifDismissed(ref, true)
+}
+
+// TestSupplement_PutDisableDismissesActiveNotif: issue-34 同源
+// PUT update sp 把 enabled=false (跟 POST /enable disable 不是同一路径) 时,
+// 老逻辑只让 inner loop 看 IsActive=false 跳过, 不 dismiss 已存在的 active 通知.
+// 修法 (expire 函数 IsActive 分支) 同时覆盖此 case.
+func TestSupplement_PutDisableDismissesActiveNotif(t *testing.T) {
+	e := newTestEnv(t)
+	id := createTestSupplement(t, e, "维C", []store.Window{
+		{Start: hmFromNow(-5), End: hmFromNow(5)},
+	}, "all")
+	ref := supplementRef(id, 0, e.today)
+	e.assertNotifDismissed(ref, false)
+
+	// PUT 把 enabled 改成 false (走 handleUpdateSupplement, 不走 disable 硬删路径)
+	body := map[string]any{
+		"name": "维C", "type": "supplement",
+		"windows":         []store.Window{{Start: hmFromNow(-5), End: hmFromNow(5)}},
+		"notes":           "", "dose": "", "enabled": false,
+		"completion_mode": "all",
+	}
+	status, raw := e.put("/api/supplements/"+itoa(id), body)
+	e.mustOK("PUT", "PUT sp", status, raw)
+
+	e.assertNotifDismissed(ref, true)
+}
+
+// TestSupplement_UnpauseUndismissesIfStillActive: issue-34
+// 暂停 → 取消暂停后, 若 window 仍在 active 区间, 通知应 undismiss 复活
+// (跟 inner loop UndismissNotificationByRef 路径联动).
+// 防御性测试: 确保 issue-34 fix (expire 里 IsActive=false dismiss) 没把
+// "短暂暂停后再恢复" 路径搞坏 — 通知不该永久 dismissed.
+func TestSupplement_UnpauseUndismissesIfStillActive(t *testing.T) {
+	e := newTestEnv(t)
+	id := createTestSupplement(t, e, "杏仁", []store.Window{
+		{Start: hmFromNow(-5), End: hmFromNow(5)},
+	}, "all")
+	ref := supplementRef(id, 0, e.today)
+	e.assertNotifDismissed(ref, false)
+
+	// pause → dismiss
+	until := time.Now().AddDate(0, 0, 1).Unix()
+	status, raw := e.post("/api/supplements/"+itoa(id)+"/pause",
+		map[string]any{"until": until})
+	e.mustOK("POST pause", "pause", status, raw)
+	e.assertNotifDismissed(ref, true)
+
+	// unpause (until=null) → kick regen → inner loop 看 IsActive=true
+	// → CreateNotificationIdempotent 跳过 (ref 存在) → UpdateBody +
+	//   UndismissNotificationByRef → 通知应复活
+	status, raw = e.post("/api/supplements/"+itoa(id)+"/pause",
+		map[string]any{"until": nil})
+	e.mustOK("POST unpause", "unpause", status, raw)
+	e.assertNotifDismissed(ref, false)
+}
+
 // --- helpers ---
 
 func itoa(n int64) string {
