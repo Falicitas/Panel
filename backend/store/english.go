@@ -89,7 +89,15 @@ func scanAudio(r rowScanner) (EnglishAudio, error) {
 	return a, nil
 }
 
-// ListAudios archived=false 列出未归档 (按 published_at DESC),true 列出已归档 (按 archived_at DESC)。
+// ListAudios archived=false 列出未归档,true 列出已归档。
+//
+// 排序规则:
+//   - archived=true: ORDER BY archived_at DESC
+//   - archived=false: ORDER BY COALESCE(last_played_at, 0) DESC, published_at DESC
+//     (last_played_at 优先 = 用户主动 /skip 选过的 audio 顶到首位; 没动过的 fallback
+//     按 published_at 最新优先。修复 issue-32 M5 bug: skip 后 /today 命中 NPR 最新一条
+//     而不是 user 选的 sciam, 因为 NPR.published_at > sciam.published_at)
+//
 // topic="" 不过滤; 非空 case-insensitive 匹配 topic 列。
 func (s *Store) ListAudios(archived bool, topic string) ([]EnglishAudio, error) {
 	var (
@@ -109,7 +117,7 @@ func (s *Store) ListAudios(archived bool, topic string) ([]EnglishAudio, error) 
 	if archived {
 		q += ` ORDER BY archived_at DESC`
 	} else {
-		q += ` ORDER BY published_at DESC`
+		q += ` ORDER BY COALESCE(last_played_at, 0) DESC, published_at DESC`
 	}
 	rows, err := s.db.Query(q, args...)
 	if err != nil {

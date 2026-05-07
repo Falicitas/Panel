@@ -281,7 +281,15 @@ func (s *Server) handleSkipEnglishAudio(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.store.SetAudioArchived(id, time.Now().Unix()); err != nil {
+	now := time.Now().Unix()
+	if err := s.store.SetAudioArchived(id, now); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	// 让 ListAudios 排序把 selected 顶到首位 (handleEnglishToday 取 [0] 作 currentAudio)。
+	// 不更新这里, mac reloadEnglishToday 会取 published_at DESC 最新者 — 但 db 里
+	// NPR/Sciam 混合时, 最新 published_at 不一定是 user 选的 → bug regression.
+	if err := s.store.SetAudioLastPlayedAt(sel.ID, now); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

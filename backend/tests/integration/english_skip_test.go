@@ -159,6 +159,59 @@ func TestEnglishSkip_ArchiveAndReturnNext(t *testing.T) {
 	}
 }
 
+// TestEnglishSkip_TodayCommitsToSelected — Phase 14 M5 bug regression:
+// db 里有 published_at 比 selected 还新的 audio (NPR vs Sciam 混合场景), /skip 后
+// /today 必须命中 user 选的 selected, 而不是 published_at 最新那条。
+//
+// 修复: handleSkipEnglishAudio 加 SetAudioLastPlayedAt(selected, now) +
+// ListAudios 未归档 ORDER BY COALESCE(last_played_at, 0) DESC, published_at DESC。
+func TestEnglishSkip_TodayCommitsToSelected(t *testing.T) {
+	e := newTestEnv(t)
+
+	// 模拟 user 实测场景: cur (sciam old) → 选 sel (sciam mid) → 但 npr 最新 published 比 sel 更新
+	idCur := e.seedEnglishAudio(seedEnglishAudioOpts{
+		Ref: "sciam-cur", Topic: "science", PublishedAt: 1700000100, LocalPath: "/x/cur.mp3",
+	})
+	idSel := e.seedEnglishAudio(seedEnglishAudioOpts{
+		Ref: "sciam-sel", Topic: "science", PublishedAt: 1700000200, LocalPath: "/x/sel.mp3", Description: "selected",
+	})
+	// 关键: 这条 published_at 最新, 修复前 /today 会取它而不是 sel
+	e.seedEnglishAudio(seedEnglishAudioOpts{
+		Ref: "npr-newest", Topic: "finance", PublishedAt: 1700000999, LocalPath: "/x/npr.mp3",
+	})
+
+	// 初始 /today 应该是 npr-newest (last_played_at 全 NULL → 按 published_at DESC)
+	status, raw := e.get("/api/english/today")
+	e.mustOK("GET", "/today initial", status, raw)
+	var todayInitial struct {
+		CurrentAudio *struct{ ID int64 } `json:"current_audio"`
+	}
+	_ = json.Unmarshal(raw, &todayInitial)
+	if todayInitial.CurrentAudio == nil {
+		t.Fatalf("initial /today: no current_audio")
+	}
+
+	// /skip cur → sel
+	status, raw = e.post("/api/english/audios/"+intStr(idCur)+"/skip",
+		map[string]any{"selected_audio_id": idSel, "topic": "science"})
+	e.mustOK("POST", "/skip", status, raw)
+
+	// 关键断言: 修复后 /today 应该命中 sel (last_played_at = now 顶位), 而不是 npr-newest
+	status, raw = e.get("/api/english/today")
+	e.mustOK("GET", "/today after skip", status, raw)
+	var todayAfter struct {
+		CurrentAudio *struct{ ID int64 } `json:"current_audio"`
+	}
+	_ = json.Unmarshal(raw, &todayAfter)
+	if todayAfter.CurrentAudio == nil {
+		t.Fatalf("after /skip: /today no current_audio")
+	}
+	if todayAfter.CurrentAudio.ID != idSel {
+		t.Errorf("after /skip: current_audio.id = %d, want %d (sel); npr-newest published_at 更新但不应抢位",
+			todayAfter.CurrentAudio.ID, idSel)
+	}
+}
+
 func TestEnglishSkip_ValidationErrors(t *testing.T) {
 	e := newTestEnv(t)
 
