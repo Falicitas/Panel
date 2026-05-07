@@ -53,6 +53,14 @@ struct EnglishView: View {
                 EnglishSettingsSheet(initial: es).environment(state)
             }
         }
+        .sheet(isPresented: Binding(
+            get: { state.showSkipSheet },
+            set: { newValue in
+                if !newValue { state.cancelSkipSheet() }
+            }
+        )) {
+            EnglishSkipSheet().environment(state)
+        }
         .toolbar {
             ToolbarItem { JumpToFocusButton() }
         }
@@ -114,7 +122,19 @@ struct EnglishView: View {
     @ViewBuilder
     private func audioSection(today: EnglishToday) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("当前音频").font(.headline)
+            HStack {
+                Text("当前音频").font(.headline)
+                Spacer()
+                if today.currentAudio != nil {
+                    Button {
+                        state.openSkipSheet()
+                    } label: {
+                        Label("跳过", systemImage: "forward.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("归档当前音频, 选下一个 (按主题抽奖)")
+                }
+            }
             if let a = today.currentAudio {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(a.title).font(.title3.weight(.medium)).lineLimit(2)

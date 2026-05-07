@@ -51,6 +51,16 @@ final class AppState {
     var englishToday: EnglishToday?
     /// 英文练习 - settings (windows / threshold)
     var englishSettings: EnglishSettings?
+    /// 跳过模态框: 是否显示 (绑给 .sheet)。主动点跳过 / 自动归档触发都走这条。
+    var showSkipSheet: Bool = false
+    /// 模态框当前候选 audio (含 segments / description preview)。fetch 中或抽完时为 nil。
+    var skipSheetCandidate: EnglishCandidateResp?
+    /// 模态框当前选中的 topic (空串 = "全部" 不过滤)。
+    var skipSheetTopic: String = ""
+    /// 已"再抽"过的 audio ID 列表; 累积传给 server 防重抽到同一条。
+    var skipSheetExcludeIDs: [Int64] = []
+    /// fetch candidate 中标识, UI 显示 spinner。
+    var skipSheetIsLoading: Bool = false
     var recordsTab: RecordsTab = .grip
     var bashTranscript: [BashHistoryEntry] = []
     var bashHistory: [BashHistoryEntry] = []
@@ -496,7 +506,8 @@ final class AppState {
     /// 切换某 segment 的勾选状态。
     /// 勾上 → POST checked=true, seconds = (endMs - startMs) / 1000 (>= 1s 防 0)
     /// 取消 → POST checked=false (后端 DeleteRecord)
-    /// 后端会自动: 重算 window minutes / dismiss-undismiss notif / maybeArchive。
+    /// 后端会自动: 重算 window minutes / dismiss-undismiss notif。
+    /// (M2 起后端不再自动归档, 改成 mac 检测全勾完弹跳过模态框。)
     func toggleEnglishSegment(audioID: Int64, segment: EnglishSegment, currentlyDone: Bool) async {
         let secs = max(1.0, Double(segment.endMs - segment.startMs) / 1000.0)
         do {
@@ -508,9 +519,90 @@ final class AppState {
             )
             await reloadEnglishToday()
             self.lastError = nil
+            // 全勾完 → 弹跳过模态框 (取代 backend 自动归档)
+            if let today = englishToday,
+               let audio = today.currentAudio,
+               audio.id == audioID,
+               !today.segments.isEmpty,
+               today.doneSegIdx.count >= today.segments.count {
+                openSkipSheet()
+            }
         } catch {
             self.lastError = error.localizedDescription
         }
+    }
+
+    // MARK: - English Skip Sheet
+
+    /// 打开跳过模态框 (主动点跳过 / 自动归档触发都走这条)。
+    /// 默认 topic = current audio 的 topic, 重置 exclude, 异步 fetch 第一个候选。
+    func openSkipSheet() {
+        skipSheetTopic = englishToday?.currentAudio?.topic ?? ""
+        skipSheetCandidate = nil
+        skipSheetExcludeIDs = []
+        showSkipSheet = true
+        Task { await fetchSkipCandidate() }
+    }
+
+    /// 用当前 sheet 状态 (topic + exclude + currentID) fetch 一个候选。
+    /// 失败把 candidate 置 nil + 显示 lastError。
+    func fetchSkipCandidate() async {
+        skipSheetIsLoading = true
+        defer { skipSheetIsLoading = false }
+        let curID = englishToday?.currentAudio?.id
+        do {
+            let r = try await api.candidateEnglishAudio(
+                topic: skipSheetTopic,
+                excludeIDs: skipSheetExcludeIDs,
+                currentID: curID
+            )
+            skipSheetCandidate = r
+            self.lastError = nil
+        } catch {
+            skipSheetCandidate = nil
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 用户改 topic — push 到 state, 重置 exclude (新 topic 不背老 exclude), refetch。
+    func setSkipSheetTopic(_ topic: String) async {
+        skipSheetTopic = topic
+        skipSheetExcludeIDs = []
+        await fetchSkipCandidate()
+    }
+
+    /// "再抽" — 把当前候选加进 excludeIDs, refetch 同 topic 下次新一条。
+    func rerollSkipCandidate() async {
+        if let curID = skipSheetCandidate?.audio?.id {
+            skipSheetExcludeIDs.append(curID)
+        }
+        await fetchSkipCandidate()
+    }
+
+    /// 用户确认切到 selected. POST /skip + 关 sheet + reload today。
+    func confirmSkipToAudio(selectedAudioID: Int64) async {
+        guard let curID = englishToday?.currentAudio?.id else { return }
+        do {
+            _ = try await api.skipEnglishAudio(
+                audioID: curID,
+                selectedAudioID: selectedAudioID,
+                topic: skipSheetTopic
+            )
+            showSkipSheet = false
+            skipSheetCandidate = nil
+            skipSheetExcludeIDs = []
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 取消模态框 — 不归档, 重置 sheet state。
+    func cancelSkipSheet() {
+        showSkipSheet = false
+        skipSheetCandidate = nil
+        skipSheetExcludeIDs = []
     }
 
     // MARK: - Records

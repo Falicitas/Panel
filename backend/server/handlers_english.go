@@ -415,8 +415,9 @@ func (s *Server) handleCheckEnglishSegment(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// 自动归档判断: audio 所有 segments 跨日累计是否都勾过
-	maybeArchiveAudio(s.store, p.AudioID, now.Unix())
+	// Phase 14 M2 起 server 不再自动归档 — mac 端检测全勾完会弹"跳过模态框",
+	// 用户选下一个 audio 后才走 POST /api/english/audios/{id}/skip 归档。
+	// maybeArchiveAudio 函数本身保留(未来 fallback / 其他入口可能用)。
 
 	w.WriteHeader(http.StatusNoContent)
 }

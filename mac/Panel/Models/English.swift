@@ -18,9 +18,10 @@ struct EnglishAudio: Codable, Identifiable, Hashable, Sendable {
     var fetchedAt: Int64
     var lastPlayedAt: Int64?
     var archivedAt: Int64?
+    var topic: String  // free-text: finance/tech/science/current_affairs/general/""
 
     enum CodingKeys: String, CodingKey {
-        case id, source, title, description, transcript
+        case id, source, title, description, transcript, topic
         case sourceRef = "source_ref"
         case publishedAt = "published_at"
         case durationMs = "duration_ms"
@@ -115,4 +116,43 @@ struct EnglishToday: Codable, Hashable, Sendable {
 struct EnglishAudioDetail: Codable, Hashable, Sendable {
     let audio: EnglishAudio
     let segments: [EnglishSegment]
+}
+
+/// 后端 GET /api/english/audios/candidate?topic=&exclude=&current= 响应。
+/// audio == nil 表示候选已抽完 (UI 显示空状态)。
+struct EnglishCandidateResp: Codable, Hashable, Sendable {
+    let audio: EnglishAudio?
+    let segments: [EnglishSegment]
+    let descriptionPreview: String
+
+    enum CodingKeys: String, CodingKey {
+        case audio, segments
+        case descriptionPreview = "description_preview"
+    }
+}
+
+/// 后端 POST /api/english/audios/{id}/skip 请求 body。
+struct EnglishSkipReq: Codable, Sendable {
+    let topic: String
+    let selectedAudioID: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case topic
+        case selectedAudioID = "selected_audio_id"
+    }
+}
+
+/// 后端 POST /api/english/audios/{id}/skip 响应。
+struct EnglishSkipResp: Codable, Hashable, Sendable {
+    let archivedID: Int64
+    let nextAudio: EnglishAudio?
+    let segments: [EnglishSegment]
+    let descriptionPreview: String
+
+    enum CodingKeys: String, CodingKey {
+        case segments
+        case archivedID = "archived_id"
+        case nextAudio = "next_audio"
+        case descriptionPreview = "description_preview"
+    }
 }

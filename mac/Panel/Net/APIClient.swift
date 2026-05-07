@@ -343,6 +343,60 @@ actor APIClient: BackendClient {
         try await put("/api/english/settings", body: es)
     }
 
+    /// 模态框抽奖 — 在 topic 内取候选 (排除 currentID + excludeIDs)。
+    /// 不归档当前 audio (归档动作走 skipEnglishAudio).
+    /// audio == nil 表示候选已抽完。
+    func candidateEnglishAudio(
+        topic: String,
+        excludeIDs: [Int64],
+        currentID: Int64?
+    ) async throws -> EnglishCandidateResp {
+        var items: [URLQueryItem] = []
+        let topicTrim = topic.trimmingCharacters(in: .whitespaces)
+        if !topicTrim.isEmpty {
+            items.append(URLQueryItem(name: "topic", value: topicTrim))
+        }
+        if !excludeIDs.isEmpty {
+            items.append(URLQueryItem(
+                name: "exclude",
+                value: excludeIDs.map(String.init).joined(separator: ",")
+            ))
+        }
+        if let cur = currentID, cur > 0 {
+            items.append(URLQueryItem(name: "current", value: String(cur)))
+        }
+        var path = "/api/english/audios/candidate"
+        if !items.isEmpty {
+            var comp = URLComponents()
+            comp.queryItems = items
+            if let q = comp.percentEncodedQuery {
+                path += "?" + q
+            }
+        }
+        return try await get(path)
+    }
+
+    /// 跳过当前 audio + 切到 selected (用户在模态框已选好)。
+    /// selected_audio_id 必填; 后端返回 selected 的详情。
+    func skipEnglishAudio(
+        audioID: Int64,
+        selectedAudioID: Int64,
+        topic: String
+    ) async throws -> EnglishSkipResp {
+        var req = URLRequest(url: try url("/api/english/audios/\(audioID)/skip"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(EnglishSkipReq(
+            topic: topic,
+            selectedAudioID: selectedAudioID
+        ))
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "skip english audio \(audioID) failed (status \((resp as? HTTPURLResponse)?.statusCode ?? -1))")
+        }
+        return try decoder.decode(EnglishSkipResp.self, from: data)
+    }
+
     // MARK: - HTTP helpers
 
     private func encode(_ s: String) -> String {
