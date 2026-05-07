@@ -92,19 +92,31 @@ CC 用 `pwd` 判断当前位置: 含 `panel-pool-` 在池里, 等于 `/Users/kin
 6. 池又回到 pool-N == 最新 dev, 准备下一轮
 
 CC 在池里 `git branch --show-current`:
+
 - 输出 `pool-N` → 在停车位, 准备起新 issue
 - 输出 `issue-N` → 正在推进 issue
 - **不会**输出 `dev` (池里永远碰不到 dev)
+
+### 池子里的两个会话
+
+每个池目录 (panel-pool-N) 用户已经开了两个 shell 会话:
+
+- CC 会话 — Claude Code 进程, 跑 git 推进 / 改文件 / 跑测试
+- 用户会话 — 普通 bash, 用户手动执行 build & run / merge / 任意命令
+
+两个会话的 cwd 完全独立 — CC 自己 `cd backend && go test` 不会影响用户那个
+会话的 cwd。CC 输出给用户复制粘贴的命令一律按「用户当前在池子根目录」假设,
+**永远不**加 `git -C` / 多余 `cd` / 绝对路径前缀来「兜底 cwd」。
 
 ### 联调验证规则
 
 任何时刻**最多一个 worktree** 在跑 backend (端口 8089 独占) 和 mac app (Panel.app
 全局单例)。
 
-- 多池干活推进时: 全部只 build 不跑服务 (`go build` / `xcodebuild`)
-- 所有池 STOP 等审查时: 挑一个池就地启服务联调
-- 切池验证前必须 `pkill -f panel-backend && pkill -9 -f Panel.app` 确认上一个池
-  的服务完全停掉
+- CC **不跑 rebuild.sh / 不启 Panel.app**, build & run 都给用户。STOP 时给启动
+  指令 (从 worktree 根跑, 按本次改动层选): `./backend/rebuild.sh` /
+  `./mac/rebuild.sh` / 二者 `&&` 串联
+- 切池验证前用户先 `pkill -f panel-backend && pkill -9 -f Panel.app` 停上一个池
 
 ### Worktree 文件共享
 
