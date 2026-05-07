@@ -462,7 +462,7 @@ final class AppState {
     /// 同时只跑 1 个 audio 的 ASR; 防 tick / 启动重复触发同一 audio。
     private var asrInProgressIDs: Set<Int64> = []
     /// 本 session 内 ASR 失败的 audio.id, 不再自动重试 (避免烧钱循环)。
-    /// 用户重启 panel 才会清空。重启后若 backend 仍是 pending 且未 fail, 会重试。
+    /// (M3 起 backend.segmentsStatus=='failed' 也会拦, 跨重启也不重试。)
     private var asrFailedIDs: Set<Int64> = []
 
     func reloadEnglishToday() async {
@@ -477,6 +477,8 @@ final class AppState {
     /// 当前 audio 若 status=pending 且 local 文件存在 + 本 session 没失败过, 后台启动转写,
     /// 完成后 PUT segments 回 backend + 刷新 today。失败把 audio.id 加进 asrFailedIDs,
     /// tick 后续不再重试 (防止无限失败循环烧钱)。
+    /// 严格判断 status == "pending" — backend 已标 'failed' (静音占位 / ASR 失败) 或
+    /// 'running' / 'ready' 都跳过, 重启后也不重试 ('failed' 跨 session 留住状态)。
     func ensureSegmentsForCurrentAudio() {
         guard let today = englishToday,
               let audio = today.currentAudio,

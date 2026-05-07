@@ -18,6 +18,15 @@ type Fetcher interface {
 	DownloadAudio(ctx context.Context, audioURL, destPath string) (int64, error)
 }
 
+// Audio 长度 cap (RSS itunes:duration 解析成 ms 后判断, 入库前 skip).
+//   - 下限 30s: 兼容 Sciam 60-second 这种 ~60-90s 短节目, 同时拒掉 trailer / 5s 推广
+//   - 上限 25min: Groq Whisper 单文件 25MB ≈ 30min, 留 5min buffer 防 STT 超时
+//   - DurationMs == 0 接受 (RSS itunes:duration 偶尔解析失败, 让 ASR 阶段暴露)
+const (
+	minDurationMs int64 = 30_000
+	maxDurationMs int64 = 1_500_000
+)
+
 // RunFetchAll 串行调每个 fetcher:
 //   - Fetch 列出所有候选;每条都做 InsertAudioIfNew (元数据全入库,UI 看得到)
 //   - 但每轮最多只下载 maxDownloadsPerRun 条 mp3 (本地缺失的优先)
@@ -37,6 +46,13 @@ func RunFetchAll(ctx context.Context, st *store.Store, fetchers []Fetcher, dataD
 		for _, m := range items {
 			if err := ctx.Err(); err != nil {
 				return err
+			}
+			// 长度 cap: 入库前过滤超出 [minDur, maxDur] 的 audio (DurationMs==0 接受)。
+			// 不进 db, 让"为什么没抓 X" 跟普通 RSS 没出现统一处理 (debug 看 log)。
+			if m.DurationMs != 0 && (m.DurationMs < minDurationMs || m.DurationMs > maxDurationMs) {
+				log.Printf("english fetch %s: skip ref=%q dur=%dms (out of [%d, %d])",
+					fetcher.Name(), m.SourceRef, m.DurationMs, minDurationMs, maxDurationMs)
+				continue
 			}
 			id, _, err := st.InsertAudioIfNew(store.EnglishAudio{
 				Source:      m.Source,
