@@ -100,6 +100,10 @@ xcodebuild -scheme Panel -configuration Debug -derivedDataPath build build
 pkill -9 -f "Panel.app/Contents/MacOS/Panel"
 open /Users/kinesis/panel/mac/build/Build/Products/Debug/Panel.app
 
+# Icon 改完 — 编辑 mac/design/Icon-3d.svg 后跑这个一键
+# (SVG → 1024 PNG → 10 size 进 Asset Catalog → rebuild + 重启)
+./mac/deploy-icon.sh
+
 # 测试
 cd /Users/kinesis/panel/backend && go test ./... -race
 ```
