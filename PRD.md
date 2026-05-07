@@ -175,6 +175,71 @@ balance = 初始值 + Σ(手动收入) − Σ(月末结算的所有支出)
 
 不做。Panel 用熟 1-2 周后再评估。
 
+### 10. 英文练习 (精听)
+
+**目的**: 拉取美国英文音频源, ASR 拆成句子级 segments, 用户勾选累计时长, 任一时段窗口达
+10min 即整日"完成", 全部勾完归入历史档案可重听。
+
+**核心流程**:
+
+- **抓取**: backend Go 6h cron (`main.go:runEnglishFetchLoop`) 串行调每个注册的 fetcher,
+  每个 fetcher 解析 RSS feed → 候选 audio metadata (`AudioMeta`); 长度 ∈ [30s, 25min]
+  才入库 (`backend/english/fetcher.go:RunFetchAll`); 每轮限 5 条下载 + 1s 礼貌限速
+- **静音检测**: 下载后调 `ValidateAudioEnergy` (Go go-mp3, 头/中/尾各 5s PCM RMS); 三段
+  全 < -50dB 判 silent → 标 `segments_status=failed` + reason; 不删 mp3 留调试 (沉淀
+  VOA Akamai CDN -90dB 占位坑)
+- **ASR**: mac 打开 audio 触发 Groq Whisper Large V3 直连 (词级 timestamp, 18.5s/11min,
+  $0.018/集); SpeechSegmenter 拆句 (标点 / 静音 gap > 0.6s / 强切 ≥12 词 + 缩写合并)
+- **窗口**: `english_settings.windows_json` 多个时段 (默认 07:30-09:00 / 21:00-22:30),
+  任一窗口达 `threshold_min` 阈值整日完成; 可 snooze 30min/槽 [1, 8]
+- **通知**: lead 15min 弹 banner, source="english", source_ref=`english:window:{idx}:date:{d}`,
+  达阈值 → DismissNotificationByRef, 跌破 → UndismissNotificationByRef (沿用 supplements
+  套路)
+
+**跳过 / 模态框**:
+
+- 当前音频卡右上"跳过"按钮 = 完成所有段落的等价操作; 两种触发场景走完全相同流程:
+  1. 用户主动点跳过
+  2. 当前 audio 所有 segment 全勾完, mac `toggleEnglishSegment` 检测到自动调起
+- 模态框 (`mac/Panel/Views/EnglishSkipSheet.swift`):
+  - 顶部 topic Picker (全部 / 金融 / 科技 / 时事 / 自然科学 / 综合)
+  - 主体候选卡: title + [SOURCE] + 时长 + topic chip + description preview (~120 字)
+  - "再抽一个" → 把当前候选 ID 加进 `excludeIDs` 列表 + refetch (后端 PickCandidate
+    跳过 excludeIDs)
+  - "取消" 不归档当前 audio; "确认" → POST /skip 归档当前 + 切到 selected
+- 主题分类: free-text (后端不做 enum 校验), 当前可选值 finance / tech / current_affairs
+  / science / general; 加新 topic 不需 schema migrate
+- **breaking 注意** (vs Phase 13): server `handleCheckEnglishSegment` 不再自动调
+  `maybeArchiveAudio`; 归档**只**通过模态框确认走 POST /skip
+
+**新源接入流程** (硬规则, 用户偏好"先听样本再纳入"):
+
+1. CC 起 issue branch, 写新 fetcher (仿 `backend/english/npr_fetcher.go`, RSS allowlist
+   涵盖整条 redirect chain + Topic 字段必填), **暂不**注册到 `main.go` fetchers 列表
+2. 跑 `go test -tags=integration -v -run Test<Source>Fetcher_FetchListsItems ./english/`
+   拉 RSS, log top 5 audio meta (title, duration, audio_url)
+3. 跑 `go test -tags=integration -v -run Test<Source>Fetcher_DownloadOne` 下第 1 条 mp3
+   到 tempdir, 输出绝对路径 + ValidateAudioEnergy 结果
+4. **STOP** — 用户人工耳朵听 mp3 (`afplay <path>` 或 finder open), 验声音质量 + 主题
+   对位 + 长度合理 (在 [30s, 25min] 区间)
+5. 用户口头 ok → main.go fetchers 列表加 fetcher 实例 + 提 PR
+6. 失败的源在 PR 加注释 "rejected: <reason>", fetcher 文件保留**不**注册 (历史教训
+   沉淀, 避免下个 LLM 重复评估同一个失败源)
+
+**已知坑**:
+
+- VOA Akamai CDN 全静音 (mp3 看起来 30min 实际 -90dB 占位): 静音检测 fetcher 层拦
+- 28min Whisper 中断 (Groq 25MB 上限): fetcher 层 `[30s, 25min]` cap 直接拒
+- Description 文本可能很长 (NPR 描述 > 500 字): mac 模态框前端 truncate 到 ~120 rune +
+  "…"; 真不够直观再考虑 LLM 摘要提取
+
+**当前 active 源**:
+
+- NPR The Indicator from Planet Money (Topic="finance", 9-11min/集, ~10MB)
+- VOA Learning English (Topic="general") — 已禁用 (Akamai 静音坑), 静音检测上线后可考虑回挂
+
+**详细 plan**: `~/.claude/plans/linked-petting-emerson.md` (Phase 14)
+
 ## 技术架构
 
 ### 后端

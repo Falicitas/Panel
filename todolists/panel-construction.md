@@ -1028,40 +1028,55 @@
 
 * [x] **M0 — DB topic 字段 + audio energy 静音检测** (`afa7e54`)
   * `english_audios.topic TEXT NOT NULL DEFAULT ''` (free-text 不做 enum) + 老数据 backfill (npr→'finance', voa→'general')
+
   * `ListAudios` 改签名 `(archived bool, topic string)`, case-insensitive 过滤; `?topic=` query 透传
+
   * Fetcher 透传 Topic (npr="finance", voa="general"); AudioMeta 加 Topic 字段
+
   * `english/energy.go ValidateAudioEnergy`: hajimehoshi/go-mp3 decode 头/中/尾 各 5s PCM, RMS 三段全 < -50dB 判 silent → 标 segments\_status=failed (沉淀 VOA Akamai CDN -90dB 占位坑)
+
   * 测试沉淀: `TestListAudios_TopicFilter` 6 case + `energy_test.go` 3 case (testdata silent.mp3 + voiced.mp3 用 ffmpeg 合成 32KB)
 
 * [x] **M1 — candidate + skip API** (`5196480`)
   * `english/picker.go PickCandidate(s, topic, excludeIDs)`: 主动跳和自动归档共用一处选择 (排除 archived / LocalPath="" / excludeIDs / topic 不匹配, 按 published\_at DESC)
+
   * `GET /api/english/audios/candidate?topic=&exclude=&current=` 返 `{audio, segments, description_preview}` (audio=null 表示候选已抽完)
+
   * `POST /api/english/audios/{id}/skip` body `{topic, selected_audio_id}`: 归档当前 + 返 selected 详情; selected 不存在 / 已归档 → 404 / 409
+
   * 集成测试 `english_skip_test.go`: 链式 exclude (3 抽到 nil) + description preview 截 120 rune + skip 归档 db 状态机断言 + 校验错误三连
 
 * [x] **M2 — Mac 跳过模态框 + breaking 改自动归档** (`5b891aa`)
-  * audioSection 标题行右侧加"跳过"按钮 (forward.fill); 新 `EnglishSkipSheet` view: 顶部 topic Picker (全部/金融/科技/时事/自然科学/综合) + 候选卡 (title + [SOURCE] + 时长 + topic chip + description preview) + "再抽一个" + "取消" / "确认" header
+  * audioSection 标题行右侧加"跳过"按钮 (forward.fill); 新 `EnglishSkipSheet` view: 顶部 topic Picker (全部/金融/科技/时事/自然科学/综合) + 候选卡 (title + \[SOURCE] + 时长 + topic chip + description preview) + "再抽一个" + "取消" / "确认" header
+
   * AppState 加 sheet state (showSkipSheet / candidate / topic / excludeIDs / loading) + 6 个方法 (open / fetch / setTopic / reroll / confirm / cancel)
+
   * BackendClient/APIClient 加 candidateEnglishAudio + skipEnglishAudio
+
   * Models: EnglishAudio 加 topic; 新 EnglishCandidateResp / EnglishSkipReq / EnglishSkipResp
+
   * **Breaking change** vs Phase 13: server `handleCheckEnglishSegment` 移除 `maybeArchiveAudio` 自动调用 (函数本身保留作 fallback); mac `toggleEnglishSegment` 末尾检测 `doneSegIdx.count >= segments.count` → 调 openSkipSheet, 跟主动"跳过"按钮走同流程
 
-* [ ] **M3 — 长度 cap + Mac asrFailedIDs 信任 backend + 集成测试 lifecycle**
+* [x] **M3 — 长度 cap + Mac asrFailedIDs 信任 backend + 集成测试 lifecycle** (`18ca246`)
   * fetcher.go 加 `minDurationMs=30_000 / maxDurationMs=1_500_000` (30s 兼容 Sciam 60-second; 25min 给 Whisper 25MB 留 buffer); RSS itunes:duration=0 接受
-  * mac asrFailedIDs 改成「先看 backend.segmentsStatus=='failed' 不再调 Groq」, 重启不再重试已 failed
-  * 集成测试 `english_lifecycle_test.go` (建 audio + 全勾 → 验证不自动归档 → POST /skip 归档) + `english_silence_test.go` (testdata/silent.mp3 → status=failed)
 
-* [ ] **M4 — PRD.md 加 "10. 英文练习" 模块章节 + 新源接入流程**
-  * 数据源 / 核心流程 / 跳过模态框 / 已知坑 + 新源接入 6 步流程 (CC 起 issue → 写 fetcher → integration test 抓 1 集 → STOP 用户人耳听 → 注册到 main.go → 失败留注释)
+  * mac `ensureSegmentsForCurrentAudio` 已有 `segmentsStatus == "pending"` guard 天然拦掉 backend 标 failed 的 audio (重启后也不再调 Groq); 注释明确这点
+
+  * 测试沉淀: `fetcher_test.go TestRunFetchAll_DurationCap` + `english_lifecycle_test.go` (FullCheck\_NoAutoArchive + LifecycleSkipPath) + `english_silence_test.go` (SilenceMarksFailed + VoicedPasses)
+
+* [x] **M4 — PRD.md 加 "10. 英文练习" 模块章节 + 新源接入流程** (本 commit)
+  * 数据源 / 核心流程 (抓取/静音检测/ASR/窗口/通知) / 跳过模态框 (含 breaking 提示) / 已知坑 / 当前 active 源 + 新源接入 6 步流程
+
   * **CLAUDE.md 不动** (用户原话: 元编程归 CLAUDE, 业务流程归 PRD)
 
 * [ ] **M5 — Sciam 60s 接入** (走 M4 流程, 第一个新源, Topic="science")
 
-* [ ] **M6 — 主题源链式扩展** (BBC Science / NPR Up First / Tech podcast, 走 M4 流程, 留空给未来)
+* [ ] **M6 — 主题源链式扩展** (BBC Science / NPR Up First / Tech podcast, 走 M4 流程, 留空给未来) \[\[\[focus]]]
 
 下面项已被 issue-32 覆盖或重排:
 
 * ~~Scientific American 60s 第二个源~~ → issue-32 M5
+
 * ~~长 audio (>25MB / >30 min) 整段 ASR 限制~~ → fetcher 入库 cap 由 issue-32 M3 覆盖; 整段 ASR > 25MB 自动分段仍留 Phase 2
 
 仍留 Phase 1 / 2 备忘 (跟 issue-32 无重叠):
@@ -1094,7 +1109,7 @@
 - [ ] 将 todolist，保健品，听写的真实信息填完。
   * [x] 🌟🌟🌟🌟 保健品。验证什么：把每日要用信息填完。走得通：填完了；走不通：没填完\[\[\[focus]]]。第一轮：跑去弄 CLAUDE.md 了。下一轮弄这个。第二轮：增加了一个“任意完成”的保健品item，杏仁需要这个。应该可以进行正式填写了。第三轮：修复了时间轴的 bug，开始正式填写。第 n 轮：
 
-- [ ] 122
+- [ ] 🌟🌟🌟🌟 完成英文功能推进\[\[\[focus]]]。验证什么：通过 cc 将英文分类完成。走得通：完成无bug；走不通：没完成
 
 ## (取消) 搜索
 
