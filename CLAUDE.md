@@ -16,11 +16,13 @@
 
 ## Git 工作流 (硬规则)
 
-每个 feat/fix/refactor/docs 推进**走 issue 分支**, **不直接 commit 到 dev**。
+主 repo (`/Users/kinesis/panel/`) HEAD 永远在 dev, **不起 issue 分支**;
+CC 在池里 (`panel-pool-N`) 推 issue 分支。每个 feat/fix/refactor/docs 推进
+**走 issue 分支**, **不直接 commit 到 dev**。
 
 ```bash
-# 起分支 (N 单调递增, 看 git branch 找下一个空号)
-git checkout dev && git checkout -b issue-N
+# 起分支 (在池里执行, N 单调递增, 看 git branch 找下一个空号)
+git checkout -b issue-N
 
 # 在 issue-N 上做改动 + commit (一个推进可多 commit)
 git add ... && git commit -m "feat(...): ..."
@@ -30,21 +32,27 @@ git add ... && git commit -m "feat(...): ..."
 
 ### 合 issue 到 dev 的命令格式 (硬规则)
 
-CC 给用户的合并命令**必须**是下面这个完整格式:
+CC 给用户的合并命令**必须**分两步 (池里没法 checkout dev, dev 被主 repo 独占):
 
 ```bash
+# Step 1: 池里 snapshot todolists
 git add todolists/ && \
-  git commit -m "chore(todolists): snapshot" 2>/dev/null; \
-  git checkout dev && git merge --no-ff issue-N
+  git commit -m "chore(todolists): snapshot" 2>/dev/null
 ```
 
-无 todolists/ 改动时 commit 静默失败 (`2>/dev/null`), `;` 不阻断后续 checkout + merge。
+```bash
+# Step 2: 用户切到主 repo merge
+cd /Users/kinesis/panel && \
+  git merge --no-ff issue-N
+```
 
-❌ 不要给: `git merge --no-ff issue-N` (丢失 todolists snapshot)
-✅ 必须给: 上面的完整三段式
+无 todolists/ 改动时 commit 静默失败 (`2>/dev/null`)。
+
+❌ 不要给单步 `git merge --no-ff issue-N` (丢失 snapshot + 忘 cd 主 repo)
+✅ 必须给: 上面的两步
 
 `chore(todolists): snapshot` **不是 issue 终点** — 之后仍可在 issue branch 继续加
-fix/docs/test 等 commit, 合时同一条命令覆盖 (snapshot 步骤幂等, 无新改动 silent skip)。
+fix/docs/test 等 commit, 合时同样两步 (snapshot 步骤幂等, 无新改动 silent skip)。
 
 ### 新 issue vs 留原 branch (硬规则)
 
@@ -105,24 +113,6 @@ worktree 之间共享 `.git/` 和 `.gitignore` 规则, working tree 文件独立
 - `todolists/` — 每池独立笔记, merge 时各池带各池的 snapshot
 - `data/` — 已 gitignore, 各池独立 SQLite, 测试用 `t.TempDir()`
 - API key: 存 macOS UserDefaults `com.kinesis.panel`, 跟 worktree 无关
-
-### 池里 Merge 流程 (覆盖前面单 worktree 版本)
-
-CC 在池里推完 issue, 给用户的命令分两步 (因为池里碰不到 dev):
-
-```bash
-# Step 1 (在当前池里执行)
-git add todolists/ && \
-  git commit -m "chore(todolists): snapshot" 2>/dev/null
-```
-
-```bash
-# Step 2 (用户切到主 repo 执行)
-cd /Users/kinesis/panel && \
-  git merge --no-ff issue-N
-```
-
-主 repo HEAD 永远在 dev, **不在主 repo 起 issue 分支**。
 
 ### 冲突处理
 
