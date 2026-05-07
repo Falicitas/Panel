@@ -14,6 +14,7 @@ func TestPickCandidate(t *testing.T) {
 		pub       int64
 		localPath string // 空 = 没下完
 		archived  int64
+		failed    bool // status=failed (size cap / silence / ASR 失败)
 	}
 	mk := func(s seed) store.EnglishAudio {
 		return store.EnglishAudio{
@@ -87,6 +88,15 @@ func TestPickCandidate(t *testing.T) {
 			wantRef: "b",
 		},
 		{
+			name: "status=failed 跳过 (size cap 拒 / silence / ASR 失败)",
+			seeds: []seed{
+				{ref: "a", topic: "finance", pub: 1700000300, localPath: "/x/a.mp3", failed: true},
+				{ref: "b", topic: "finance", pub: 1700000200, localPath: "/x/b.mp3"},
+			},
+			topic:   "finance",
+			wantRef: "b",
+		},
+		{
 			name: "topic 不匹配返 nil",
 			seeds: []seed{
 				{ref: "a", topic: "finance", pub: 1700000300, localPath: "/x/a.mp3"},
@@ -137,6 +147,11 @@ func TestPickCandidate(t *testing.T) {
 				if sd.archived > 0 {
 					if err := s.SetAudioArchived(id, sd.archived); err != nil {
 						t.Fatalf("archive %s: %v", sd.ref, err)
+					}
+				}
+				if sd.failed {
+					if err := s.SetAudioSegmentsStatus(id, store.EnglishStatusFailed, "test failure"); err != nil {
+						t.Fatalf("set failed %s: %v", sd.ref, err)
 					}
 				}
 			}
