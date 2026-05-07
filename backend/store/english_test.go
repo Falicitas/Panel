@@ -157,7 +157,7 @@ func TestSetAudioArchivedAndListing(t *testing.T) {
 	id1, _, _ := s.InsertAudioIfNew(mkAudio("voa", "ref-1"))
 	id2, _, _ := s.InsertAudioIfNew(mkAudio("voa", "ref-2"))
 
-	active, err := s.ListAudios(false)
+	active, err := s.ListAudios(false, "")
 	if err != nil {
 		t.Fatalf("list active: %v", err)
 	}
@@ -168,11 +168,11 @@ func TestSetAudioArchivedAndListing(t *testing.T) {
 	if err := s.SetAudioArchived(id1, 1700000099); err != nil {
 		t.Fatalf("archive: %v", err)
 	}
-	active, _ = s.ListAudios(false)
+	active, _ = s.ListAudios(false, "")
 	if len(active) != 1 || active[0].ID != id2 {
 		t.Errorf("after archive id1, active=%v want id2 only", active)
 	}
-	archived, _ := s.ListAudios(true)
+	archived, _ := s.ListAudios(true, "")
 	if len(archived) != 1 || archived[0].ID != id1 {
 		t.Errorf("archived list = %v, want [id1]", archived)
 	}
@@ -292,6 +292,114 @@ func TestComputeWindowMinutes(t *testing.T) {
 	}
 	if _, ok := got[2]; ok {
 		t.Errorf("got unexpected key 2 in result")
+	}
+}
+
+func TestListAudios_TopicFilter(t *testing.T) {
+	s := newTestStore(t)
+
+	// 4 个 audio 覆盖 3 种 topic + 1 个空 topic;published_at 各异看排序。
+	mk := func(source, ref, topic string, pub int64) EnglishAudio {
+		a := mkAudio(source, ref)
+		a.Topic = topic
+		a.PublishedAt = pub
+		return a
+	}
+	type want struct {
+		topic    string
+		wantRefs []string // 按 published_at DESC 排
+	}
+	type seedAudio struct {
+		audio    EnglishAudio
+		archived int64 // 0 = 未归档, > 0 = archived_at
+	}
+	cases := []struct {
+		name  string
+		seeds []seedAudio
+		query want
+	}{
+		{
+			name: "topic=finance 只回 npr",
+			seeds: []seedAudio{
+				{mk("npr", "npr-1", "finance", 1700000300), 0},
+				{mk("voa", "voa-1", "general", 1700000200), 0},
+				{mk("sciam60", "sci-1", "science", 1700000400), 0},
+			},
+			query: want{topic: "finance", wantRefs: []string{"npr-1"}},
+		},
+		{
+			name: "topic=science 只回 sciam",
+			seeds: []seedAudio{
+				{mk("npr", "npr-1", "finance", 1700000300), 0},
+				{mk("sciam60", "sci-1", "science", 1700000400), 0},
+				{mk("sciam60", "sci-2", "science", 1700000500), 0},
+			},
+			query: want{topic: "science", wantRefs: []string{"sci-2", "sci-1"}},
+		},
+		{
+			name: "topic 空串 不过滤 (按 pub DESC)",
+			seeds: []seedAudio{
+				{mk("npr", "npr-1", "finance", 1700000300), 0},
+				{mk("voa", "voa-1", "general", 1700000400), 0},
+			},
+			query: want{topic: "", wantRefs: []string{"voa-1", "npr-1"}},
+		},
+		{
+			name: "topic 大小写不敏感",
+			seeds: []seedAudio{
+				{mk("npr", "npr-1", "finance", 1700000300), 0},
+			},
+			query: want{topic: "FINANCE", wantRefs: []string{"npr-1"}},
+		},
+		{
+			name: "已归档不返",
+			seeds: []seedAudio{
+				{mk("npr", "npr-1", "finance", 1700000300), 1700000999},
+				{mk("npr", "npr-2", "finance", 1700000400), 0},
+			},
+			query: want{topic: "finance", wantRefs: []string{"npr-2"}},
+		},
+		{
+			name: "topic=tech 没有匹配回空",
+			seeds: []seedAudio{
+				{mk("npr", "npr-1", "finance", 1700000300), 0},
+			},
+			query: want{topic: "tech", wantRefs: []string{}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s2 := newTestStore(t)
+			for _, sa := range tc.seeds {
+				id, _, err := s2.InsertAudioIfNew(sa.audio)
+				if err != nil {
+					t.Fatalf("seed %s: %v", sa.audio.SourceRef, err)
+				}
+				if sa.archived > 0 {
+					if err := s2.SetAudioArchived(id, sa.archived); err != nil {
+						t.Fatalf("archive %s: %v", sa.audio.SourceRef, err)
+					}
+				}
+			}
+			got, err := s2.ListAudios(false, tc.query.topic)
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			gotRefs := make([]string, len(got))
+			for i, a := range got {
+				gotRefs[i] = a.SourceRef
+			}
+			if len(gotRefs) != len(tc.query.wantRefs) {
+				t.Fatalf("len = %d, want %d (got=%v)", len(gotRefs), len(tc.query.wantRefs), gotRefs)
+			}
+			for i, want := range tc.query.wantRefs {
+				if gotRefs[i] != want {
+					t.Errorf("idx %d: got %q, want %q (full=%v)", i, gotRefs[i], want, gotRefs)
+				}
+			}
+			_ = s
+		})
 	}
 }
 

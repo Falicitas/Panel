@@ -19,7 +19,7 @@ const (
 
 type EnglishAudio struct {
 	ID                   int64  `json:"id"`
-	Source               string `json:"source"`     // "voa" | "sciam60" | ...
+	Source               string `json:"source"`     // "voa" | "npr" | "sciam60" | ...
 	SourceRef            string `json:"source_ref"` // 源端 GUID
 	Title                string `json:"title"`
 	Description          string `json:"description"`
@@ -33,6 +33,7 @@ type EnglishAudio struct {
 	FetchedAt            int64  `json:"fetched_at"`
 	LastPlayedAt         *int64 `json:"last_played_at,omitempty"`
 	ArchivedAt           *int64 `json:"archived_at,omitempty"`
+	Topic                string `json:"topic"` // free-text: finance/tech/science/current_affairs/general/""
 }
 
 type EnglishSegment struct {
@@ -57,7 +58,7 @@ type EnglishSettings struct {
 
 const audioCols = `id, source, source_ref, title, description, published_at, duration_ms,
 	audio_url, local_path, transcript, segments_status, segments_failed_reason,
-	fetched_at, last_played_at, archived_at`
+	fetched_at, last_played_at, archived_at, topic`
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -69,7 +70,8 @@ func scanAudio(r rowScanner) (EnglishAudio, error) {
 	var lastPlayed, archivedAt sql.NullInt64
 	err := r.Scan(&a.ID, &a.Source, &a.SourceRef, &a.Title, &a.Description,
 		&a.PublishedAt, &a.DurationMs, &a.AudioURL, &localPath, &a.Transcript,
-		&a.SegmentsStatus, &a.SegmentsFailedReason, &a.FetchedAt, &lastPlayed, &archivedAt)
+		&a.SegmentsStatus, &a.SegmentsFailedReason, &a.FetchedAt, &lastPlayed, &archivedAt,
+		&a.Topic)
 	if err != nil {
 		return EnglishAudio{}, err
 	}
@@ -87,19 +89,39 @@ func scanAudio(r rowScanner) (EnglishAudio, error) {
 	return a, nil
 }
 
-// ListAudios archived=false 列出未归档 (按 published_at DESC),true 列出已归档 (按 archived_at DESC)。
-func (s *Store) ListAudios(archived bool) ([]EnglishAudio, error) {
-	var q string
+// ListAudios archived=false 列出未归档,true 列出已归档。
+//
+// 排序规则:
+//   - archived=true: ORDER BY archived_at DESC
+//   - archived=false: ORDER BY COALESCE(last_played_at, 0) DESC, published_at DESC
+//     (last_played_at 优先 = 用户主动 /skip 选过的 audio 顶到首位; 没动过的 fallback
+//     按 published_at 最新优先。修复 issue-32 M5 bug: skip 后 /today 命中 NPR 最新一条
+//     而不是 user 选的 sciam, 因为 NPR.published_at > sciam.published_at)
+//
+// topic="" 不过滤; 非空 case-insensitive 匹配 topic 列。
+func (s *Store) ListAudios(archived bool, topic string) ([]EnglishAudio, error) {
+	var (
+		q    string
+		args []any
+	)
+	base := `SELECT ` + audioCols + ` FROM english_audios WHERE `
 	if archived {
-		q = `SELECT ` + audioCols + ` FROM english_audios
-		      WHERE archived_at IS NOT NULL ORDER BY archived_at DESC`
+		q = base + `archived_at IS NOT NULL`
 	} else {
-		q = `SELECT ` + audioCols + ` FROM english_audios
-		      WHERE archived_at IS NULL ORDER BY published_at DESC`
+		q = base + `archived_at IS NULL`
 	}
-	rows, err := s.db.Query(q)
+	if topic != "" {
+		q += ` AND LOWER(topic) = LOWER(?)`
+		args = append(args, topic)
+	}
+	if archived {
+		q += ` ORDER BY archived_at DESC`
+	} else {
+		q += ` ORDER BY COALESCE(last_played_at, 0) DESC, published_at DESC`
+	}
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list english_audios archived=%v: %w", archived, err)
+		return nil, fmt.Errorf("list english_audios archived=%v topic=%q: %w", archived, topic, err)
 	}
 	defer rows.Close()
 	out := []EnglishAudio{}
@@ -152,10 +174,12 @@ func (s *Store) InsertAudioIfNew(a EnglishAudio) (int64, bool, error) {
 	res, err := s.db.Exec(`
 		INSERT INTO english_audios
 			(source, source_ref, title, description, published_at, duration_ms,
-			 audio_url, local_path, transcript, segments_status, segments_failed_reason, fetched_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 audio_url, local_path, transcript, segments_status, segments_failed_reason,
+			 fetched_at, topic)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.Source, a.SourceRef, a.Title, a.Description, a.PublishedAt, a.DurationMs,
-		a.AudioURL, localPath, a.Transcript, a.SegmentsStatus, a.SegmentsFailedReason, a.FetchedAt,
+		a.AudioURL, localPath, a.Transcript, a.SegmentsStatus, a.SegmentsFailedReason,
+		a.FetchedAt, a.Topic,
 	)
 	if err != nil {
 		return 0, false, fmt.Errorf("insert english_audio: %w", err)

@@ -88,4 +88,6 @@ protocol BackendClient: Sendable {
     func snoozeEnglishWindow(idx: Int, date: String?, count: Int) async throws
     func getEnglishSettings() async throws -> EnglishSettings
     func putEnglishSettings(_ es: EnglishSettings) async throws -> EnglishSettings
+    func candidateEnglishAudio(topic: String, excludeIDs: [Int64], currentID: Int64?) async throws -> EnglishCandidateResp
+    func skipEnglishAudio(audioID: Int64, selectedAudioID: Int64, topic: String) async throws -> EnglishSkipResp
 }

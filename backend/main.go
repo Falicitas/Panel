@@ -139,10 +139,18 @@ func runEnglishFetchLoop(ctx context.Context, st *store.Store, englishDir string
 		log.Printf("english mkdir %s: %v", englishDir, err)
 		return
 	}
-	// MVP 主源 = NPR Indicator (经济新闻 9-11min, mp3 真有声, ≤25MB 适配 Groq Whisper)。
-	// VOA Akamai CDN mp3 全静音 (issue-11 调研发现 -90dB 占位), 暂不注册;
-	// Phase 1 加 audio energy 探测后再考虑回挂 VOA + Sciam 作多源轮播。
-	fetchers := []english.Fetcher{english.NewNPRFetcher()}
+	// 当前 active 源 (顺序 = 优先级, RunFetchAll 串行调用):
+	//   - Scientific American Science Quickly (Topic="science", 5-25min, ~7-30MB
+	//     注: 长集 24min @192kbps = 33MB > 25MB 会被 fetcher size cap 拒)
+	//   - NPR Indicator (Topic="finance", 9-11min, ~10MB)
+	// 顺序考虑: sciam RSS 1923 集累积下来候选多; npr 偶尔 endpoint i/o timeout
+	// (Google Cloud IP 不稳), 放第二位避免 timeout 占满 runOnce 5min ctx 让 sciam 没机会。
+	// VOA Akamai 静音坑 (issue-11) — Phase 14 M0 加 ValidateAudioEnergy 后理论能拦, 但
+	// 先观察 npr + sciam 多源够不够用, 不急回挂。
+	fetchers := []english.Fetcher{
+		english.NewSciamFetcher(),
+		english.NewNPRFetcher(),
+	}
 	runOnce := func() {
 		runCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()

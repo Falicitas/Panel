@@ -108,6 +108,7 @@ func (f *NPRFetcher) Fetch(ctx context.Context) ([]AudioMeta, error) {
 			PublishedAt: pubUnix,
 			DurationMs:  dur.Milliseconds(),
 			AudioURL:    item.Enclosure.URL,
+			Topic:       "finance",
 		})
 	}
 	return out, nil
