@@ -206,6 +206,12 @@ func (s *Store) migrate() error {
 		// completion_mode: "all"(默认 -> 所有 window 都勾才算 item 完成) | "any"(任一 window 勾上即算)。
 		// 老数据补列默认 'all', 行为不变。
 		{"supplements.completion_mode", `ALTER TABLE supplements ADD COLUMN completion_mode TEXT NOT NULL DEFAULT 'all'`},
+		// english_audios.topic: 音频主题分类 (free-text, 例: finance/tech/science/current_affairs/general)。
+		// 老数据默认空串 = "未分类"。fetcher 写入新数据时会带上 source 默认 topic。
+		{"english_audios.topic", `ALTER TABLE english_audios ADD COLUMN topic TEXT NOT NULL DEFAULT ''`},
+		// 一次性 backfill: 老 npr / voa audio 没 topic, 按 source 默认值补; 仅 topic='' 行受影响, 幂等。
+		{"english_audios.topic_backfill_npr", `UPDATE english_audios SET topic='finance' WHERE source='npr' AND topic=''`},
+		{"english_audios.topic_backfill_voa", `UPDATE english_audios SET topic='general' WHERE source='voa' AND topic=''`},
 	} {
 		if _, err := s.db.Exec(alter.sql); err != nil {
 			if !isDuplicateColumnErr(err) {

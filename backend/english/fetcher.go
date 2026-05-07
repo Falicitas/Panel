@@ -47,6 +47,7 @@ func RunFetchAll(ctx context.Context, st *store.Store, fetchers []Fetcher, dataD
 				DurationMs:  m.DurationMs,
 				AudioURL:    m.AudioURL,
 				FetchedAt:   time.Now().Unix(),
+				Topic:       m.Topic,
 			})
 			if err != nil {
 				log.Printf("english fetch %s: insert ref=%q: %v", fetcher.Name(), m.SourceRef, err)
@@ -71,6 +72,23 @@ func RunFetchAll(ctx context.Context, st *store.Store, fetchers []Fetcher, dataD
 			}
 			if err := st.SetAudioLocalPath(id, destPath); err != nil {
 				log.Printf("english fetch %s: set local_path id=%d: %v", fetcher.Name(), id, err)
+				continue
+			}
+			// audio energy 验证: VOA Akamai CDN 静音占位坑沉淀。
+			// silent 时标 failed + reason, 不删 mp3 (留调试)。decode 失败 fail-open 返 nil。
+			if err := ValidateAudioEnergy(destPath); err != nil {
+				log.Printf("english fetch %s: silent audio id=%d: %v", fetcher.Name(), id, err)
+				if e := st.SetAudioSegmentsStatus(id, store.EnglishStatusFailed, err.Error()); e != nil {
+					log.Printf("english fetch %s: mark failed id=%d: %v", fetcher.Name(), id, e)
+				}
+				downloaded++
+				if politeDelay > 0 {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(politeDelay):
+					}
+				}
 				continue
 			}
 			downloaded++

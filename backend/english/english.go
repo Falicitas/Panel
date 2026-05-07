@@ -7,11 +7,12 @@ package english
 // AudioMeta 是 fetcher 输出的"音频条目"中间形式。
 // 调用 store.InsertAudioIfNew 入库时映射为 store.EnglishAudio。
 type AudioMeta struct {
-	Source      string // "voa" | "sciam60" | ...
+	Source      string // "voa" | "npr" | "sciam60" | ...
 	SourceRef   string // 源端唯一 ID (RSS GUID / item URL)
 	Title       string
 	Description string
 	PublishedAt int64 // unix sec
 	DurationMs  int64
 	AudioURL    string // 远程 mp3 URL
+	Topic       string // free-text 主题分类 (finance/tech/science/current_affairs/general/...)
 }

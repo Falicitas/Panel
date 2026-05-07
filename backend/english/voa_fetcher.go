@@ -107,6 +107,7 @@ func (f *VOAFetcher) Fetch(ctx context.Context) ([]AudioMeta, error) {
 			PublishedAt: pubUnix,
 			DurationMs:  dur.Milliseconds(),
 			AudioURL:    item.Enclosure.URL,
+			Topic:       "general",
 		})
 	}
 	return out, nil

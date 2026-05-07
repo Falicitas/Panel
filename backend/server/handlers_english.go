@@ -106,8 +106,8 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 当前推荐 audio = 最新未归档
-	audios, err := s.store.ListAudios(false)
+	// 当前推荐 audio = 最新未归档 (M0: today 不按 topic 过滤, 主动跳音频在 M1 走 candidate API)
+	audios, err := s.store.ListAudios(false, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -127,11 +127,12 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 
 // ---- 列表 / 详情 / 文件流 ----
 
-// GET /api/english/audios?archived=true|false (默认 false)
+// GET /api/english/audios?archived=true|false&topic=<free-text> (默认 archived=false, topic 不过滤)
 func (s *Server) handleListEnglishAudios(w http.ResponseWriter, r *http.Request) {
 	archived := strings.EqualFold(r.URL.Query().Get("archived"), "true") ||
 		r.URL.Query().Get("archived") == "1"
-	audios, err := s.store.ListAudios(archived)
+	topic := strings.TrimSpace(r.URL.Query().Get("topic"))
+	audios, err := s.store.ListAudios(archived, topic)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
