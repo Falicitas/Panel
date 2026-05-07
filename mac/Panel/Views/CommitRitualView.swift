@@ -19,11 +19,27 @@ struct CommitRitualConfig {
     let commitKey: String
 
     /// 单 stage 配置: body (中部说明), buttonTitle (按钮主标), buttonSubtitle (副标), systemImage (icon)。
+    /// bodyItems 非 nil 时, body 充当列表上方的引导句, items 渲染成编号 checklist。
     struct Stage {
         let body: String
+        let bodyItems: [String]?
         let buttonTitle: String
         let buttonSubtitle: String
         let systemImage: String
+
+        init(
+            body: String,
+            bodyItems: [String]? = nil,
+            buttonTitle: String,
+            buttonSubtitle: String,
+            systemImage: String
+        ) {
+            self.body = body
+            self.bodyItems = bodyItems
+            self.buttonTitle = buttonTitle
+            self.buttonSubtitle = buttonSubtitle
+            self.systemImage = systemImage
+        }
     }
 }
 
@@ -47,16 +63,22 @@ extension CommitRitualConfig {
     )
 
     static let phone = CommitRitualConfig(
-        title: "收起白色手机",
+        title: "睡前 4 项",
         stage1: .init(
-            body: "把白色 iPhone 14 拿到那个晚上不会再碰的位置",
-            buttonTitle: "我去拿了",
-            buttonSubtitle: "起身去放手机",
-            systemImage: "iphone.slash"
+            body: "全部做完再按",
+            bodyItems: [
+                "把白色 iPhone 14 放到那个晚上不会再碰的位置",
+                "已洗完澡",
+                "已吃锌镁片",
+                "十点之后不碰工作内容、不聊任何工作相关",
+            ],
+            buttonTitle: "都做完了",
+            buttonSubtitle: "起身去把这 4 项做完",
+            systemImage: "moon.stars"
         ),
         stage2: .init(
-            body: "已经放到那个地方了吗?",
-            buttonTitle: "确认放好",
+            body: "确认 4 项都做完了?",
+            buttonTitle: "确认入睡",
             buttonSubtitle: "5 秒后才可点",
             systemImage: "checkmark.shield"
         ),
@@ -86,12 +108,7 @@ struct CommitRitualView: View {
                 Text(config.title)
                     .font(.system(size: 48, weight: .light))
 
-                Text(currentStage.body)
-                    .font(.title2)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.9))
-                    .frame(maxWidth: 600)
-                    .fixedSize(horizontal: false, vertical: true)
+                bodySection
 
                 RitualButton(
                     title: currentStage.buttonTitle,
@@ -109,6 +126,41 @@ struct CommitRitualView: View {
             if stage == 2 && countdown > 0 {
                 countdown -= 1
             }
+        }
+    }
+
+    @ViewBuilder
+    private var bodySection: some View {
+        if let items = currentStage.bodyItems {
+            VStack(spacing: 20) {
+                Text(currentStage.body)
+                    .font(.title3)
+                    .foregroundStyle(.white.opacity(0.7))
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            Text("\(idx + 1)")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.95))
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(.white.opacity(0.12)))
+                                .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 1))
+                            Text(item)
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.92))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .frame(maxWidth: 540, alignment: .leading)
+            }
+        } else {
+            Text(currentStage.body)
+                .font(.title2)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(maxWidth: 600)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
