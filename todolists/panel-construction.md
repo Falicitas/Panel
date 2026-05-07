@@ -1020,7 +1020,51 @@
 
 * [x] **issue-12 — 通知 jump english + stale 跨日清理 + 标点率 98%**: NotificationBar.handleJump 加 english 分支 → AppState.jumpToEnglish 切 tab; backend english.GenerateNotifications 入口加 DismissStaleEnglishNotifications (与 supplements 同模式); maxTokensPerSentence 30→40 让 .!? 主导切句, audio 25 实测 41/42 段以 .!? 结尾。
 
-* [ ] Scientific American 60s 第二个源 (Phase 1)
+***
+
+### issue-32 — 多主题源 + 跳过模态框 + 静音坑沉淀
+
+完整 plan: `~/.claude/plans/linked-petting-emerson.md`. 推进基线 (用户原话): 音频源单一 (只有 NPR finance), 想科技/金融/时事/自然科学多主题; 跳过按钮 = 完成所有段落的等价, 弹模态框选下一个; 不要塞 CLAUDE.md, 流程类内容落 PRD.md。
+
+* [x] **M0 — DB topic 字段 + audio energy 静音检测** (`afa7e54`)
+  * `english_audios.topic TEXT NOT NULL DEFAULT ''` (free-text 不做 enum) + 老数据 backfill (npr→'finance', voa→'general')
+  * `ListAudios` 改签名 `(archived bool, topic string)`, case-insensitive 过滤; `?topic=` query 透传
+  * Fetcher 透传 Topic (npr="finance", voa="general"); AudioMeta 加 Topic 字段
+  * `english/energy.go ValidateAudioEnergy`: hajimehoshi/go-mp3 decode 头/中/尾 各 5s PCM, RMS 三段全 < -50dB 判 silent → 标 segments\_status=failed (沉淀 VOA Akamai CDN -90dB 占位坑)
+  * 测试沉淀: `TestListAudios_TopicFilter` 6 case + `energy_test.go` 3 case (testdata silent.mp3 + voiced.mp3 用 ffmpeg 合成 32KB)
+
+* [x] **M1 — candidate + skip API** (`5196480`)
+  * `english/picker.go PickCandidate(s, topic, excludeIDs)`: 主动跳和自动归档共用一处选择 (排除 archived / LocalPath="" / excludeIDs / topic 不匹配, 按 published\_at DESC)
+  * `GET /api/english/audios/candidate?topic=&exclude=&current=` 返 `{audio, segments, description_preview}` (audio=null 表示候选已抽完)
+  * `POST /api/english/audios/{id}/skip` body `{topic, selected_audio_id}`: 归档当前 + 返 selected 详情; selected 不存在 / 已归档 → 404 / 409
+  * 集成测试 `english_skip_test.go`: 链式 exclude (3 抽到 nil) + description preview 截 120 rune + skip 归档 db 状态机断言 + 校验错误三连
+
+* [x] **M2 — Mac 跳过模态框 + breaking 改自动归档** (`5b891aa`)
+  * audioSection 标题行右侧加"跳过"按钮 (forward.fill); 新 `EnglishSkipSheet` view: 顶部 topic Picker (全部/金融/科技/时事/自然科学/综合) + 候选卡 (title + [SOURCE] + 时长 + topic chip + description preview) + "再抽一个" + "取消" / "确认" header
+  * AppState 加 sheet state (showSkipSheet / candidate / topic / excludeIDs / loading) + 6 个方法 (open / fetch / setTopic / reroll / confirm / cancel)
+  * BackendClient/APIClient 加 candidateEnglishAudio + skipEnglishAudio
+  * Models: EnglishAudio 加 topic; 新 EnglishCandidateResp / EnglishSkipReq / EnglishSkipResp
+  * **Breaking change** vs Phase 13: server `handleCheckEnglishSegment` 移除 `maybeArchiveAudio` 自动调用 (函数本身保留作 fallback); mac `toggleEnglishSegment` 末尾检测 `doneSegIdx.count >= segments.count` → 调 openSkipSheet, 跟主动"跳过"按钮走同流程
+
+* [ ] **M3 — 长度 cap + Mac asrFailedIDs 信任 backend + 集成测试 lifecycle**
+  * fetcher.go 加 `minDurationMs=30_000 / maxDurationMs=1_500_000` (30s 兼容 Sciam 60-second; 25min 给 Whisper 25MB 留 buffer); RSS itunes:duration=0 接受
+  * mac asrFailedIDs 改成「先看 backend.segmentsStatus=='failed' 不再调 Groq」, 重启不再重试已 failed
+  * 集成测试 `english_lifecycle_test.go` (建 audio + 全勾 → 验证不自动归档 → POST /skip 归档) + `english_silence_test.go` (testdata/silent.mp3 → status=failed)
+
+* [ ] **M4 — PRD.md 加 "10. 英文练习" 模块章节 + 新源接入流程**
+  * 数据源 / 核心流程 / 跳过模态框 / 已知坑 + 新源接入 6 步流程 (CC 起 issue → 写 fetcher → integration test 抓 1 集 → STOP 用户人耳听 → 注册到 main.go → 失败留注释)
+  * **CLAUDE.md 不动** (用户原话: 元编程归 CLAUDE, 业务流程归 PRD)
+
+* [ ] **M5 — Sciam 60s 接入** (走 M4 流程, 第一个新源, Topic="science")
+
+* [ ] **M6 — 主题源链式扩展** (BBC Science / NPR Up First / Tech podcast, 走 M4 流程, 留空给未来)
+
+下面项已被 issue-32 覆盖或重排:
+
+* ~~Scientific American 60s 第二个源~~ → issue-32 M5
+* ~~长 audio (>25MB / >30 min) 整段 ASR 限制~~ → fetcher 入库 cap 由 issue-32 M3 覆盖; 整段 ASR > 25MB 自动分段仍留 Phase 2
+
+仍留 Phase 1 / 2 备忘 (跟 issue-32 无重叠):
 
 * [ ] 历史档案 sheet 时间显示精度 + 搜索 (Phase 1)
 
@@ -1029,8 +1073,6 @@
 * [ ] 缓存清理 cron (未归档 14 天 / 半归档 30 天 / 已归档永久,Phase 1)
 
 * [ ] sentencesPerSegment / playbackPaddingMs / chunkSec 做成 Settings 可配 (Phase 1)
-
-* [ ] 长 audio (>25MB / >30 min) 整段 ASR 限制 → Phase 1 整段也分段拼 fullText
 
 * [ ] NPR Up First / The Indicator (podcast RSS,Phase 2)
 
@@ -1044,15 +1086,15 @@
 
 * [x] 🌟🌟🌟🌟 验证什么：推进食物保健品功能至结束。走得通：结束；走不通：没结束。第一轮：修正了一些看到的 bug。先让 cc 修正好字体、通知、统计的问题后，通知到 mac 上。第二轮：修正好了，大概。先让他完成 todolist 的 focus，然后解决签名漂移问题。\[\[\[focus]]]。第三轮：focus 和签名漂移都解决了。目前要解决的还有版面上的一些问题。不过都解决了后，姑且可以认为保健品做完了。然后改财务去吧。有三个可弄的。1️⃣提醒通知改为结束15分钟前。可以dismiss，或者延后30分钟（同样在结束15分钟前再次提醒），可以无限延。所以可能会导致时间轴重叠，这个没事，允许重叠。2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。4️⃣超过10点后，todolist蒙版不让推进度。第四轮：目前仅修正了顶上交界处的 border，那个保健品的黑边 gap 暂时修正不了。第五轮：1️⃣快收尾了。已经收尾。开始第二个板块。后面的板块迁到下面。
 
-- [ ] 🌟🌟🌟🌟 todolist 新增一个字段（之前有个 \[\[\[skip]]]）。优先级当然还是锚定的文档才出现在聚焦卡片上。目前我的痛点是，有时候要专注完成的 todoitem
-  &#x20;在很后面，我不可能给前面都打上 \[\[\[skip]]]。所以在前面的基础上，加一个，这个可以让我专注后面的todoitem。\[\[\[focus]]]。
+- [x] 🌟🌟🌟🌟 todolist 新增一个字段（之前有个 \[\[\[skip]]]）。优先级当然还是锚定的文档才出现在聚焦卡片上。目前我的痛点是，有时候要专注完成的 todoitem
+  &#x20;在很后面，我不可能给前面都打上 \[\[\[skip]]]。所以在前面的基础上，加一个，这个可以让我专注后面的todoitem。
 
 - [ ] 🌟🌟🌟🌟 2️⃣增加英文练习板块。这个板块的通知比较特殊，同样可以设置时间轴，也有一样的通知机制。但是多段仅完成一段就算完成。英文练习板块很长，是新的功能。3️⃣财务完成前面的再做。在晚上提醒完成录入。4️⃣超过10点后，todolist蒙版不让推进度。验证什么：完成 phase 13；走得通：完成；走不通：没完成。第一轮：在 cc 推进中，无可验证内容。继续推进。第二轮：M0-M7 全完成，端到端联调通过 (fire / snooze / 跨阈值 dismiss)。VOA mp3 静音问题留 Phase 1。第三轮（5.3号不知多少轮后）：2️⃣完成，3️⃣不做。做个4️⃣。另外我发现打开设置时，窗口没有在前面显示，这个是bug，正常都是bring to front。`<保健品/食品项,对应时间片>`。第四轮：他在增加全局跳转聚焦行功能，没做完。这一轮让他做。要增加一个 item 复制功能，不然要填一堆 breakfast 参数。第五轮：全局跳转 ok，增加一个 item 复制 ok。
 
 - [ ] 将 todolist，保健品，听写的真实信息填完。
-  * [ ] 🌟🌟🌟🌟 保健品。验证什么：把每日要用信息填完。走得通：填完了；走不通：没填完\[\[\[focus]]]。第一轮：跑去弄 CLAUDE.md 了。下一轮弄这个。第二轮：增加了一个“任意完成”的保健品item，杏仁需要这个。应该可以进行正式填写了。第三轮：修复了时间轴的 bug，开始正式填写。第 n 轮：
+  * [x] 🌟🌟🌟🌟 保健品。验证什么：把每日要用信息填完。走得通：填完了；走不通：没填完\[\[\[focus]]]。第一轮：跑去弄 CLAUDE.md 了。下一轮弄这个。第二轮：增加了一个“任意完成”的保健品item，杏仁需要这个。应该可以进行正式填写了。第三轮：修复了时间轴的 bug，开始正式填写。第 n 轮：
 
-  * [ ] 1221
+- [ ] 122
 
 ## (取消) 搜索
 
