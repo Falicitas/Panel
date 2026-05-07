@@ -65,7 +65,7 @@ extension CommitRitualConfig {
     static let phone: CommitRitualConfig = {
         let items = [
             "把白色 iPhone 14 放到那个晚上不会再碰的位置",
-            "已洗完澡",
+            "已洗完澡且刷完牙",
             "已吃锌镁片",
             "十点之后不碰工作内容、不聊任何工作相关",
         ]
