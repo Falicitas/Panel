@@ -45,7 +45,7 @@
 
 把规则写进 CLAUDE.md,池里 CC 被压缩后也能 follow。
 
-* [ ] 🌟🌟🌟🌟 🤖 主 repo 起 `issue-N` 分支(N 看 git branch 取空号),把下面这块加到 CLAUDE.md(放在「数据保护」之后,「常用命令」之前)：。验证什么：将CLAUDE.md和下面的很好的融合。走得通：融合了；走不通：没融合。第一轮：目前在联调部分说明清楚，大概下一回合能结束这个。
+* [x] 🌟🌟🌟🌟 🤖 主 repo 起 `issue-N` 分支(N 看 git branch 取空号),把下面这块加到 CLAUDE.md(放在「数据保护」之后,「常用命令」之前)：。验证什么：将CLAUDE.md和下面的很好的融合。走得通：融合了；走不通：没融合。第一轮：目前在联调部分说明清楚，大概下一回合能结束这个。
 
 ````
 ## Worktree 并行约束(硬规则)
@@ -118,11 +118,11 @@ cd /Users/kinesis/panel && \
 
 ````
 
-* [ ] 在原「合 issue 到 dev 的命令格式」章节加一行说明:`> 注:此格式用于单 worktree 模式。worktree 并行模式见下方「Worktree 并行约束」。`
+* [x] 在原「合 issue 到 dev 的命令格式」章节加一行说明:`> 注:此格式用于单 worktree 模式。worktree 并行模式见下方「Worktree 并行约束」。`
 
-* [ ] commit 这次 CLAUDE.md 改动 — `docs(meta): add worktree 并行约束`
+* [x] commit 这次 CLAUDE.md 改动 — `docs(meta): add worktree 并行约束`
 
-* [ ] STOP 等用户验证,验过后按硬规则两步合 issue 到 dev
+* [x] STOP 等用户验证,验过后按硬规则两步合 issue 到 dev
   * 🔍 这次还是单 worktree 模式合(主 repo 起的 issue 分支),下一个 Phase 起才走池
 
 ***
@@ -131,19 +131,19 @@ cd /Users/kinesis/panel && \
 
 挑一个**纯 mac UI 改动**的小 issue,完整跑一遍池内流程。
 
-* [ ] 池 1 开 CC 会话 — 终端窗口 A:`cd /Users/kinesis/panel-pool-1 && claude`
+* [x] 池 1 开 CC 会话 — 终端窗口 A:`cd /Users/kinesis/panel-pool-1 && claude`
 
-* [ ] 池 1 开 bash 终端 — 终端窗口 B:`cd /Users/kinesis/panel-pool-1`
+* [x] 池 1 开 bash 终端 — 终端窗口 B:`cd /Users/kinesis/panel-pool-1`
 
-* [ ] 池 1 当前在 pool-1,起 issue 分支 — CC 跑 `git checkout -b issue-N`
+* [x] 池 1 当前在 pool-1,起 issue 分支 — CC 跑 `git checkout -b issue-N`
   * 🔍 此时 pool-1 == dev,从 pool-1 起 issue 等于从 dev 起
 
-* [ ] CC 推进 issue,期间观察:
+* [x] CC 推进 issue,期间观察:
   * CC `pwd` 识别在池里,只 build 不主动启服务 ✓
 
   * bash 终端 `git status` 实时看到 CC 改动 ✓
 
-* [ ] CC STOP 后,池 1 就地启服务联调:
+* [x] CC STOP 后,池 1 就地启服务联调:
 
 ```
 cd backend && \
@@ -158,12 +158,12 @@ cd ../mac && \
 
 ```
 
-* [ ] 验过后两步 merge:Step 1 池 1 snapshot,Step 2 主 repo merge
+* [x] 验过后两步 merge:Step 1 池 1 snapshot,Step 2 主 repo merge
 
-* [ ] **池 1 回停车位** — `git checkout pool-1 && git merge dev --ff-only`
+* [x] **池 1 回停车位** — `git checkout pool-1 && git merge dev --ff-only`
   * 🔍 切回 pool-1 而不是 dev(dev 被主 repo 独占),然后 fast-forward 让 pool-1 跟上刚 merge 的最新 dev
 
-* [ ] `git log -1 --oneline` 应看到刚才 merge 的 commit
+* [x] `git log -1 --oneline` 应看到刚才 merge 的 commit
 
 ***
 
@@ -171,49 +171,51 @@ cd ../mac && \
 
 两个池同时推 issue,体会并行节奏 + 串行 merge。**池子只负责分支推进,冲突全部在主 repo 解。**
 
-* [ ] 挑两个**互不干扰**的 issue:一个 mac UI,一个 backend pure logic
+* [x] 挑两个**互不干扰**的 issue:一个 mac UI,一个 backend pure logic
 
-* [ ] 池 1 在 pool-1 上起 issue 分支,池 2 在 pool-2 上起 issue 分支
+* [x] 池 1 在 pool-1 上起 issue 分支,池 2 在 pool-2 上起 issue 分支
 
-* [ ] 两个 CC 会话同时跑
+* [x] 两个 CC 会话同时跑
 
-* [ ] 两个池都 STOP 后,挑池 1 启服务联调
+* [x] 两个池都 STOP 后,挑池 1 启服务联调
 
-* [ ] 池 1 验过 → 两步 merge → `pkill -f panel-backend && pkill -9 -f Panel.app`
+* [x] 池 1 验过 → 两步 merge → `pkill -f panel-backend && pkill -9 -f Panel.app`
 
-* [ ] **池 1 回停车位** — `git checkout pool-1 && git merge dev --ff-only`
+* [x] **池 1 回停车位** — `git checkout pool-1 && git merge dev --ff-only`
 
-* [ ] 池 2 启服务联调(此时池 2 还在它的 issue 分支上,基于老 dev)
+* [x] 池 2 启服务联调(此时池 2 还在它的 issue 分支上,基于老 dev)
 
-* [ ] 池 2 验过 → 主 repo merge:
+* [x] 池 2 验过 → 主 repo merge:
 
   * 无冲突 → 直接合上
 
   * 有冲突 → 在主 repo 就地解,池 2 不动
 
-* [ ] **池 2 回停车位** — `git checkout pool-2 && git merge dev --ff-only`
+* [x] **池 2 回停车位** — `git checkout pool-2 && git merge dev --ff-only`
 
-* [ ] 冲突文件记一下,作为「哪些 issue 适合并行」的判断依据
+* [x] 冲突文件记一下,作为「哪些 issue 适合并行」的判断依据
 
 ***
 
 ## Phase 5 — 日常维护 (\~10min,持续)
 
-* [ ] 池子用完一轮回停车位 — `git checkout pool-N && git merge dev --ff-only`
+* [x] 池子用完一轮回停车位 — `git checkout pool-N && git merge dev --ff-only`
 
-* [ ] 已 merge 的 issue 分支删掉 — 在主 repo `git branch -d issue-N`
+* [x] 已 merge 的 issue 分支删掉 — 在主 repo `git branch -d issue-N`
 
-* [ ] **不要删 pool-N 分支** — 删了池子下次起新 issue 没起点
+* [x] **不要删 pool-N 分支** — 删了池子下次起新 issue 没起点
 
-* [ ] 💡 长期不用的池整体回收 — `git worktree remove ../panel-pool-N`,然后 `git branch -D pool-N`(占位分支也清掉)
+* [x] 💡 长期不用的池整体回收 — `git worktree remove ../panel-pool-N`,然后 `git branch -D pool-N`(占位分支也清掉)
 
-* [ ] 💡 池里 `mac/build/` 各自独立占空间,定期 `rm -rf mac/build/`
+* [x] 💡 池里 `mac/build/` 各自独立占空间,定期 `rm -rf mac/build/`
 
 ***
 
 ## 品味校准 (\~5min,跑 1\~2 周后回来填)
 
-* [ ] 生死判断 — worktree 并行有没有真的提速?提了多少?还是 context 切换变慢了?
+* [x] 生死判断 — worktree 并行有没有真的提速?提了多少?还是 context 切换变慢了?
+
+  真提速了吧。爽推
 
 * [ ] 需求真伪 — 你真需要 4 池吗,还是 2 池就够?瓶颈是 CC 速度还是脑力切换?
 

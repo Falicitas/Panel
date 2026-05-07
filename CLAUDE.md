@@ -32,7 +32,7 @@ git add ... && git commit -m "feat(...): ..."
 
 ### 合 issue 到 dev 的命令格式 (硬规则)
 
-CC 给用户的合并命令**必须**分两步 (池里没法 checkout dev, dev 被主 repo 独占):
+CC 给用户的合并命令**必须**分三步 (池里没法 checkout dev, dev 被主 repo 独占):
 
 ```bash
 # Step 1: 池里 snapshot todolists
@@ -46,13 +46,20 @@ cd /Users/kinesis/panel && \
   git merge --no-ff issue-N
 ```
 
+```bash
+# Step 3: 池回停车位 (fast-forward 到刚合的 dev)
+cd /Users/kinesis/panel-pool-N && \
+ git checkout pool-N && \
+ git merge dev --ff-only
+```
+
 无 todolists/ 改动时 commit 静默失败 (`2>/dev/null`)。
 
-❌ 不要给单步 `git merge --no-ff issue-N` (丢失 snapshot + 忘 cd 主 repo)
-✅ 必须给: 上面的两步
+❌ 不要给单步 `git merge --no-ff issue-N` (丢失 snapshot + 忘 cd 主 repo + 池停在 issue 分支)
+✅ 必须给: 上面的三步
 
 `chore(todolists): snapshot` **不是 issue 终点** — 之后仍可在 issue branch 继续加
-fix/docs/test 等 commit, 合时同样两步 (snapshot 步骤幂等, 无新改动 silent skip)。
+fix/docs/test 等 commit, 合时同样三步 (snapshot 步骤幂等, 无新改动 silent skip)。
 
 ### 新 issue vs 留原 branch (硬规则)
 
