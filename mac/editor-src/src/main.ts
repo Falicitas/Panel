@@ -360,29 +360,33 @@ postToSwift({ type: 'loaded' })
 //
 // sidebar 隐藏 / 主窗口 resize / 全屏切换等让 WKWebView 容器变宽时, CSS 立刻
 // reflow 让文档变矮, 但 scroller 的 scrollTop 还停在旧位置 → 滚到 doc 末之外,
-// 视觉上一片空白。直到用户碰滚轮浏览器才 clamp。这里主动监听 resize, 下一帧
-// (等 reflow 完成) 把 scrollTop clamp 到 max 内。不动 cursor / selection —
-// cursor 在末尾时 max 位置正好让其底部贴视口底, 自然可见。
+// 视觉上一片空白。直到用户碰滚轮浏览器才 clamp。这里主动监听 resize,
+// 把候选 scroller 的 scrollTop clamp 回 max。不动 cursor / selection。
 //
-// scroller 候选: documentElement / #editor / .milkdown / .ProseMirror。
-// 非真 scroller 时 scrollHeight-clientHeight<=0, clamp 自动 no-op。
+// scroller 发现: documentElement / body / #editor / #editor 子树里任何
+// scrollTop>0 的元素 (Crepe 真滚动容器 class 不在静态白名单里 — 长文档实测
+// .milkdown / .ProseMirror 都不是真 scroller, 所以走「在滚的就当 scroller」)。
+//
+// 时序: rAF 一帧 + 80ms 延后双 clamp。ProseMirror / Crepe 内部 layout 可能跨
+// 多帧异步, 单 rAF 偶尔抓到的还是旧 scrollHeight, clamp 失效。
 let resizeClampInstalled = false
 
 function clampEditorScrollers(): void {
-  const els: HTMLElement[] = []
-  const docScroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
-  els.push(docScroller)
-  const root = document.getElementById('editor')
-  if (root) {
-    els.push(root)
-    root.querySelectorAll('.milkdown, .ProseMirror').forEach((el) => els.push(el as HTMLElement))
-  }
-  for (const el of els) {
+  const clampOne = (el: HTMLElement): void => {
     const max = el.scrollHeight - el.clientHeight
     if (max > 0 && el.scrollTop > max) {
       el.scrollTop = max
     }
   }
+  const docScroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
+  if (docScroller) clampOne(docScroller)
+  if (document.body) clampOne(document.body)
+  const root = document.getElementById('editor')
+  if (!root) return
+  clampOne(root)
+  root.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    if (el.scrollTop > 0) clampOne(el)
+  })
 }
 
 function setupResizeClamp(): void {
@@ -394,6 +398,7 @@ function setupResizeClamp(): void {
     raf = requestAnimationFrame(() => {
       raf = null
       clampEditorScrollers()
+      window.setTimeout(clampEditorScrollers, 80)
     })
   }
   window.addEventListener('resize', onResize)
