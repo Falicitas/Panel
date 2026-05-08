@@ -1,14 +1,17 @@
 import SwiftUI
 
-/// 晚 10 点 (硬编码) 后 todolist 蒙版, 强制脱离工作进入睡眠。
-/// 没有 toggle / 没有 settings 入口 — 改 cutoffHour 需要 rebuild Panel.app, 即用户原话
+/// 22:00 ~ 次日 06:00 (硬编码) 期间 todolist 蒙版, 强制脱离工作进入睡眠。
+/// 没有 toggle / 没有 settings 入口 — 改时间需要 rebuild Panel.app, 即用户原话
 /// "除非重新打包改硬编码否则解除不了"。
 enum SleepGuard {
     /// 蒙版起效小时 (本地时区, 0-23)。改这里需要 rebuild。
     static let cutoffHour: Int = 22
+    /// 蒙版解除小时 (本地时区, 0-23)。22:00 ~ 次日 wakeHour:00 都显示。
+    static let wakeHour: Int = 6
 
     static func isActive(now: Date = Date()) -> Bool {
-        Calendar.current.component(.hour, from: now) >= cutoffHour
+        let hour = Calendar.current.component(.hour, from: now)
+        return hour >= cutoffHour || hour < wakeHour
     }
 }
 
@@ -25,7 +28,7 @@ struct SleepGuardOverlay: View {
                         Image(systemName: "moon.stars.fill")
                             .font(.system(size: 64))
                             .foregroundStyle(.white.opacity(0.75))
-                        Text("已晚 \(SleepGuard.cutoffHour) 点, 请休息")
+                        Text("夜间锁定中, 请休息")
                             .font(.title.weight(.semibold))
                             .foregroundStyle(.white)
                         Text("明天再继续 todolist")
