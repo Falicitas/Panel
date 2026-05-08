@@ -152,9 +152,16 @@ function flashHighlight(el: HTMLElement | null): void {
 // ----- cmd+F find ----- (DOM TreeWalker 高亮, 跟 ProseMirror 解耦)
 //
 // 用 <span class="panel-find-mark"> 包文本, .panel-find-active 是当前选中那条。
-// 边界 case: ProseMirror 一旦重建 DOM (用户编辑 / setRaw 等), mark span 全消失;
-// 调用方 (mac DetailView) 在 find bar 打开期间应避免触发 setRaw, 但 readOnly 已
-// 改成 false (issue-29) 允许编辑 — 编辑时 marker 自然丢, 下次 findAll 重新生成。
+// find bar 打开期间 mac DetailView 把 editor 切 readonly, ProseMirror 不 reconcile
+// DOM, panel-find-mark span 才不会被异步 unwrap (否则 findNext 时 marks 已空 →
+// '无匹配')。
+//
+// fenced code block (```...```) 跳过: Crepe 用 CodeMirror 6 渲染代码块, CM 内部
+// MutationObserver 即使 readonly 下也会异步把外部插入的 mark span 剥掉, findAll
+// 同步算的 marks.length 看着非零, 下一帧 findNext getMarks() 时已被吞 → '无匹配'。
+// 整段 .cm-editor 子树 acceptNode REJECT, 行为变成 fenced code 不参与 cmd+F (比
+// 旧的'虚假匹配数 → enter 后无匹配'稳定)。inline code (单 ` 包) 用 ProseMirror
+// mark 渲染, 不在 .cm-editor 里, 仍能搜。
 
 let findActiveIdx = -1
 
@@ -187,6 +194,7 @@ function findHighlightAll(query: string): HTMLElement[] {
       if (p.classList && p.classList.contains('panel-find-mark')) return NodeFilter.FILTER_REJECT
       const tag = (p.tagName || '').toLowerCase()
       if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT
+      if (typeof p.closest === 'function' && p.closest('.cm-editor')) return NodeFilter.FILTER_REJECT
       return NodeFilter.FILTER_ACCEPT
     }
   })
