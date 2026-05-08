@@ -26,6 +26,10 @@ clamp `scrollTop` → 视口落在 doc 末尾之外, 出现一大片空白。修
 
 ## 根因
 
+实际是两层叠加:
+
+### 第 1 层: scrollTop 不会自动 clamp (基础原因)
+
 - `NavigationSplitView` 列宽变化不会让 SwiftUI 重新调用
   `MilkDownEditor.updateNSView` (没有 binding 变化), JS 拿不到 Swift 侧通知
 - WKWebView 自己接收到了 SwiftUI 的 frame resize, 浏览器 reflow, 但
@@ -33,18 +37,44 @@ clamp `scrollTop` → 视口落在 doc 末尾之外, 出现一大片空白。修
 - ProseMirror 内部有 ResizeObserver 但只关心自己的 viewport tracking, 不动
   外层 scroller 的 `scrollTop`
 
+### 第 2 层: HTML.scrollHeight 比内容真实底偏大 (关键原因)
+
+诊断走过两版假设才挖到真根因:
+
+- **v1 假设**: 真 scroller 在 `.milkdown` / `.ProseMirror` 候选里 → clamp 不
+  生效, 长文档仍空白
+- **v2 假设**: 真 scroller 在 `#editor` 子树某个 `scrollTop>0` 元素 → clamp
+  仍不生效。dump 一遍才发现:
+
+```
+HTML  sh: 29865  ch: 1260   st: 28605    ← 真 scroller, 已 clamp 到 max
+.milkdown  sh: 29865  ch: 25966          ← 实际渲染高度只有 25966
+```
+
+- 真 scroller 是 `documentElement` (HTML); `body` / `#editor` 都 `height:100%`
+  锁死 viewport 大小, `.milkdown` 溢出顶大 HTML 让它接收滚动
+- 但 `documentElement.scrollHeight` 会被 ProseMirror 末尾的 phantom 元素
+  (`overflow:visible` 子元素 / caret 占位) 撑大, 实测比 `.milkdown` 实际
+  渲染底多 3899px
+- 所以 v2 的 clamp **生效了** (把 scrollTop 压到 28605), 但 28605 这个 max
+  本身就是错的 — 视口落在 `[28605, 29865]` 这段没真实内容的空区
+
 ## 修复要点
 
 `main.ts` IIFE 末尾 `setupResizeClamp()`:
 
-- `window.addEventListener('resize')` + `ResizeObserver(document.body)` 双路监听
-  (单走 window resize 在 sidebar collapse 场景下不一定 fire)
-- 触发后 `requestAnimationFrame` 一帧 (等 reflow 完成 `scrollHeight` 才是新值)
-- 候选 scroller: `document.scrollingElement` / `#editor` / `.milkdown` /
-  `.ProseMirror`, 全部 clamp 一遍 (非真 scroller `scrollHeight - clientHeight <= 0`,
-  自动 no-op)
-- **不动 cursor / selection** — cursor 在末尾时 max 位置正好让其底部贴视口底,
-  自然可见; cursor 不在末尾时也不该被强行拉到视口里抢用户视线
+- `window.addEventListener('resize')` + `ResizeObserver(document.body)` 双路
+  监听 (单走 window resize 在 sidebar collapse 场景下不一定 fire)
+- 触发后 `requestAnimationFrame` 一帧 + `setTimeout(80ms)` 双 clamp, 兜底
+  ProseMirror / Crepe 内部异步 layout
+- `documentElement` 的 max 用 `.milkdown.getBoundingClientRect().bottom +
+  scrollTop - innerHeight` 算 (实际内容底页面坐标减视口高度), **不能** 用
+  `scrollHeight - clientHeight` (会偏大撑进空区)
+- 其他 scroller (`body` / `#editor` / `#editor` 子树里 `scrollTop>0` 的) 仍走
+  `scrollHeight - clientHeight` clamp, 实测都是 no-op, 留作 Crepe 升级换
+  内部 scroller 时的兜底
+- **不动 cursor / selection** — cursor 在末尾时 max 位置正好让 `.milkdown`
+  底贴视口底, 自然可见; cursor 不在末尾时也不该被强行拉到视口里抢用户视线
 
 ## 不处理的边界
 

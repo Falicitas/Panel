@@ -358,17 +358,24 @@ postToSwift({ type: 'loaded' })
 
 // ----- 容器 resize 时 clamp scrollTop -----
 //
-// sidebar 隐藏 / 主窗口 resize / 全屏切换等让 WKWebView 容器变宽时, CSS 立刻
-// reflow 让文档变矮, 但 scroller 的 scrollTop 还停在旧位置 → 滚到 doc 末之外,
-// 视觉上一片空白。直到用户碰滚轮浏览器才 clamp。这里主动监听 resize,
-// 把候选 scroller 的 scrollTop clamp 回 max。不动 cursor / selection。
+// sidebar 隐藏 / 主窗口拖宽 / 全屏切换等让 WKWebView 变宽时, CSS reflow 让文
+// 档变矮但 scroller 的 scrollTop 停在旧位置 → 落到没真实内容的空区出现一片
+// 空白, 直到用户碰滚轮浏览器才修正。这里监听 resize 主动 clamp。不动 cursor
+// / selection。
 //
-// scroller 发现: documentElement / body / #editor / #editor 子树里任何
-// scrollTop>0 的元素 (Crepe 真滚动容器 class 不在静态白名单里 — 长文档实测
-// .milkdown / .ProseMirror 都不是真 scroller, 所以走「在滚的就当 scroller」)。
+// 真 scroller 是 documentElement (body / #editor 都 height:100% 锁死 viewport,
+// .milkdown 溢出顶大 HTML 让它接收滚动)。
 //
-// 时序: rAF 一帧 + 80ms 延后双 clamp。ProseMirror / Crepe 内部 layout 可能跨
-// 多帧异步, 单 rAF 偶尔抓到的还是旧 scrollHeight, clamp 失效。
+// max 不能直接用 documentElement.scrollHeight — ProseMirror 末尾 phantom 元素
+// (overflow:visible 子元素) 会撑大 scrollHeight 远超 .milkdown 实际渲染底
+// (实测 sh 29865 vs .milkdown ch 25966 差 3899px), clamp 到 scrollHeight-
+// clientHeight 反而把视口拉进空白。改用 .milkdown 实际底页面坐标减 innerHeight
+// 算 max。
+//
+// 兜底: body / #editor / 子树里 scrollTop>0 的元素仍走 scrollHeight clamp,
+// 实测都是 no-op, 留作 Crepe 升级换内部 scroller 时的兜底。
+//
+// 时序: rAF 一帧 + 80ms 延后双 clamp, 兜底 ProseMirror / Crepe 异步 layout。
 let resizeClampInstalled = false
 
 function clampEditorScrollers(): void {
