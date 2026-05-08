@@ -372,20 +372,37 @@ postToSwift({ type: 'loaded' })
 let resizeClampInstalled = false
 
 function clampEditorScrollers(): void {
-  const clampOne = (el: HTMLElement): void => {
-    const max = el.scrollHeight - el.clientHeight
+  const clampTo = (el: HTMLElement, max: number): void => {
     if (max > 0 && el.scrollTop > max) {
       el.scrollTop = max
+    } else if (max <= 0 && el.scrollTop > 0) {
+      el.scrollTop = 0
     }
   }
+  const clampToScrollHeight = (el: HTMLElement): void => {
+    clampTo(el, el.scrollHeight - el.clientHeight)
+  }
+
+  // documentElement / body 的 scrollHeight 比真渲染高度大 — ProseMirror 末尾
+  // 留 phantom space (实测 .milkdown clientHeight 25966 vs HTML scrollHeight
+  // 29865, 差了 3899px), clamp 到 scrollHeight-clientHeight 反而把视口拉进
+  // 这段空白。改用 .milkdown 的真实底 (页面绝对坐标) 减视口高算 max。
   const docScroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
-  if (docScroller) clampOne(docScroller)
-  if (document.body) clampOne(document.body)
+  const milk = document.querySelector<HTMLElement>('.milkdown')
+  if (docScroller) {
+    if (milk) {
+      const milkDocBottom = milk.getBoundingClientRect().bottom + docScroller.scrollTop
+      clampTo(docScroller, Math.max(0, Math.ceil(milkDocBottom - window.innerHeight)))
+    } else {
+      clampToScrollHeight(docScroller)
+    }
+  }
+  if (document.body) clampToScrollHeight(document.body)
   const root = document.getElementById('editor')
   if (!root) return
-  clampOne(root)
+  clampToScrollHeight(root)
   root.querySelectorAll<HTMLElement>('*').forEach((el) => {
-    if (el.scrollTop > 0) clampOne(el)
+    if (el.scrollTop > 0) clampToScrollHeight(el)
   })
 }
 
