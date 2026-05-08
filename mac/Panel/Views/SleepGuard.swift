@@ -28,7 +28,7 @@ struct SleepGuardOverlay: View {
                         Image(systemName: "moon.stars.fill")
                             .font(.system(size: 64))
                             .foregroundStyle(.white.opacity(0.75))
-                        Text("已晚 \(SleepGuard.cutoffHour) 点, 请休息")
+                        Text("夜间锁定中, 请休息")
                             .font(.title.weight(.semibold))
                             .foregroundStyle(.white)
                         Text("明天再继续 todolist")
