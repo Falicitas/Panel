@@ -363,3 +363,78 @@ window.panelEditor = {
   findAll, findNext, findPrev, findClear, commitFindCursor,
 }
 postToSwift({ type: 'loaded' })
+
+// ----- 容器 resize 时 clamp scrollTop -----
+//
+// sidebar 隐藏 / 主窗口拖宽 / 全屏切换等让 WKWebView 变宽时, CSS reflow 让文
+// 档变矮但 scroller 的 scrollTop 停在旧位置 → 落到没真实内容的空区出现一片
+// 空白, 直到用户碰滚轮浏览器才修正。这里监听 resize 主动 clamp。不动 cursor
+// / selection。
+//
+// 真 scroller 是 documentElement (body / #editor 都 height:100% 锁死 viewport,
+// .milkdown 溢出顶大 HTML 让它接收滚动)。
+//
+// max 不能直接用 documentElement.scrollHeight — ProseMirror 末尾 phantom 元素
+// (overflow:visible 子元素) 会撑大 scrollHeight 远超 .milkdown 实际渲染底
+// (实测 sh 29865 vs .milkdown ch 25966 差 3899px), clamp 到 scrollHeight-
+// clientHeight 反而把视口拉进空白。改用 .milkdown 实际底页面坐标减 innerHeight
+// 算 max。
+//
+// 兜底: body / #editor / 子树里 scrollTop>0 的元素仍走 scrollHeight clamp,
+// 实测都是 no-op, 留作 Crepe 升级换内部 scroller 时的兜底。
+//
+// 时序: rAF 一帧 + 80ms 延后双 clamp, 兜底 ProseMirror / Crepe 异步 layout。
+let resizeClampInstalled = false
+
+function clampEditorScrollers(): void {
+  const clampTo = (el: HTMLElement, max: number): void => {
+    if (max > 0 && el.scrollTop > max) {
+      el.scrollTop = max
+    } else if (max <= 0 && el.scrollTop > 0) {
+      el.scrollTop = 0
+    }
+  }
+  const clampToScrollHeight = (el: HTMLElement): void => {
+    clampTo(el, el.scrollHeight - el.clientHeight)
+  }
+
+  // documentElement / body 的 scrollHeight 比真渲染高度大 — ProseMirror 末尾
+  // 留 phantom space (实测 .milkdown clientHeight 25966 vs HTML scrollHeight
+  // 29865, 差了 3899px), clamp 到 scrollHeight-clientHeight 反而把视口拉进
+  // 这段空白。改用 .milkdown 的真实底 (页面绝对坐标) 减视口高算 max。
+  const docScroller = (document.scrollingElement ?? document.documentElement) as HTMLElement
+  const milk = document.querySelector<HTMLElement>('.milkdown')
+  if (docScroller) {
+    if (milk) {
+      const milkDocBottom = milk.getBoundingClientRect().bottom + docScroller.scrollTop
+      clampTo(docScroller, Math.max(0, Math.ceil(milkDocBottom - window.innerHeight)))
+    } else {
+      clampToScrollHeight(docScroller)
+    }
+  }
+  if (document.body) clampToScrollHeight(document.body)
+  const root = document.getElementById('editor')
+  if (!root) return
+  clampToScrollHeight(root)
+  root.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    if (el.scrollTop > 0) clampToScrollHeight(el)
+  })
+}
+
+function setupResizeClamp(): void {
+  if (resizeClampInstalled) return
+  resizeClampInstalled = true
+  let raf: number | null = null
+  const onResize = (): void => {
+    if (raf != null) return
+    raf = requestAnimationFrame(() => {
+      raf = null
+      clampEditorScrollers()
+      window.setTimeout(clampEditorScrollers, 80)
+    })
+  }
+  window.addEventListener('resize', onResize)
+  new ResizeObserver(onResize).observe(document.body)
+}
+
+setupResizeClamp()
