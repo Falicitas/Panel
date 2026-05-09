@@ -9,14 +9,41 @@ import SwiftUI
 /// 本 view 只关心 stage 状态和 commit 写入。
 ///
 /// 视觉跟 WakeMaskView 的 BigButton 一致 (220x160 方形 + icon + 主+副标题), 渐变全屏。
+
+/// commit key 的「日」如何算:
+/// - `.calendar`: 自然日 yyyy-MM-dd, 0 点跨日视为新一日 (key 失效, 蒙版重弹)
+/// - `.sleepNight`: 22:00~次日06:00 算同一夜, 用 pre-midnight 日期, 跨 0 点不失效
+///   (h < SleepGuard.wakeHour 视为前一日的 sleep night)
+enum CommitRitualDayKind: Sendable {
+    case calendar
+    case sleepNight
+}
+
 struct CommitRitualConfig {
     let title: String
     let stage1: Stage
     let stage2: Stage
     let countdownSec: Int
-    /// UserDefaults key 前缀, 实际 key = "{commitKey}-{yyyy-MM-dd}"。
-    /// 跨日自然失效 (新日期 key 不存在 → 蒙版重弹)。
+    /// UserDefaults key 前缀, 实际 key = "{commitKey}-{dayKey}"。
     let commitKey: String
+    /// 决定 dayKey 怎么算 — 自然日 vs 睡眠夜。default .calendar。
+    let dayKind: CommitRitualDayKind
+
+    init(
+        title: String,
+        stage1: Stage,
+        stage2: Stage,
+        countdownSec: Int,
+        commitKey: String,
+        dayKind: CommitRitualDayKind = .calendar
+    ) {
+        self.title = title
+        self.stage1 = stage1
+        self.stage2 = stage2
+        self.countdownSec = countdownSec
+        self.commitKey = commitKey
+        self.dayKind = dayKind
+    }
 
     /// 单 stage 配置: body (中部说明), buttonTitle (按钮主标), buttonSubtitle (副标), systemImage (icon)。
     /// bodyItems 非 nil 时, body 充当列表上方的引导句, items 渲染成编号 checklist。
@@ -86,7 +113,8 @@ extension CommitRitualConfig {
                 systemImage: "checkmark.shield"
             ),
             countdownSec: 5,
-            commitKey: "phoneRitualCommit"
+            commitKey: "phoneRitualCommit",
+            dayKind: .sleepNight
         )
     }()
 }
@@ -203,22 +231,35 @@ struct CommitRitualView: View {
             countdown = config.countdownSec
             return
         }
-        // 阶段 2 完成 → 写今日 commit key, 触发 ContentView shouldShow* 重新计算 → 移除蒙版
-        let key = "\(config.commitKey)-\(Self.todayKey())"
+        // 阶段 2 完成 → 写当日 commit key, 触发 ContentView shouldShow* 重新计算 → 移除蒙版
+        let key = "\(config.commitKey)-\(Self.dayKey(for: config.dayKind))"
         UserDefaults.standard.set(true, forKey: key)
         onComplete()
     }
 
-    /// 跨日 key, 用本地时区的 yyyy-MM-dd。次日日期变 → key 不存在 → 蒙版重弹。
-    static func todayKey() -> String {
+    /// 按 dayKind 算「日」字符串, 决定 commit key 何时失效。
+    /// - calendar: yyyy-MM-dd 自然日, 0 点跨日 key 失效 → 蒙版重弹
+    /// - sleepNight: h < SleepGuard.wakeHour 算前一日, 0~6 点跨日 key 不失效
+    static func dayKey(for kind: CommitRitualDayKind, now: Date = Date()) -> String {
+        let cal = Calendar.current
+        let base: Date
+        switch kind {
+        case .calendar:
+            base = now
+        case .sleepNight:
+            let hour = cal.component(.hour, from: now)
+            base = hour < SleepGuard.wakeHour
+                ? cal.date(byAdding: .day, value: -1, to: now) ?? now
+                : now
+        }
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        return f.string(from: base)
     }
 
-    /// 给 ContentView 的 shouldShow 逻辑用 — 当日 commit key 是否已 set。
-    static func isCommitted(_ commitKey: String) -> Bool {
-        UserDefaults.standard.bool(forKey: "\(commitKey)-\(todayKey())")
+    /// 给 ContentView 的 shouldShow 逻辑用 — 当日/当夜 commit key 是否已 set。
+    static func isCommitted(_ config: CommitRitualConfig) -> Bool {
+        UserDefaults.standard.bool(forKey: "\(config.commitKey)-\(dayKey(for: config.dayKind))")
     }
 }
 
