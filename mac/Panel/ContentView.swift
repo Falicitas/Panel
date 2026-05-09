@@ -50,14 +50,13 @@ struct ContentView: View {
         return ds.modeSetAt == 0
     }
 
-    /// 22:00 后弹白色手机 ritual, 当日已 commit (UserDefaults today key set) 则不弹。
-    /// 跟 SleepGuard.cutoffHour=22 对齐, 用户晚 10 点结束工作的 30min-1h 缓冲期内强制承诺收手机。
+    /// 22:00 ~ 次日 06:00 弹白色手机 ritual, 当日已 commit (UserDefaults today key set) 则不弹。
+    /// 时间窗复用 SleepGuard.isActive() — 跟黑色蒙版同生同灭, 跨 0 点不消失, 直到 commit。
     private var shouldShowPhoneRitual: Bool {
         let _ = state.timeTick
         let _ = ritualTick
-        let h = Calendar.current.component(.hour, from: Date())
-        guard h >= 22 else { return false }
-        return !CommitRitualView.isCommitted(CommitRitualConfig.phone.commitKey)
+        guard SleepGuard.isActive() else { return false }
+        return !CommitRitualView.isCommitted(CommitRitualConfig.phone)
     }
 
     /// 17:00 (focusStart, 用户可调) 后到 sleepStart 之间弹专注 ritual,
@@ -71,7 +70,7 @@ struct ContentView: View {
         let focusMin = Self.parseHHMM(ss.focusStart)
         let sleepMin = Self.parseHHMM(ss.sleepStart)
         guard nowMin >= focusMin && nowMin < sleepMin else { return false }
-        return !CommitRitualView.isCommitted(CommitRitualConfig.focus.commitKey)
+        return !CommitRitualView.isCommitted(CommitRitualConfig.focus)
     }
 
     /// "HH:MM" → minutes 0..1439, 解析失败返 0 (让条件保守不触发)。
