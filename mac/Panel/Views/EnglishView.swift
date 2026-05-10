@@ -208,24 +208,25 @@ struct EnglishView: View {
     @ViewBuilder
     private func wholeAudioPlayer(audio: EnglishAudio) -> some View {
         if !audio.localPath.isEmpty, audio.durationMs > 0 {
-            let playing = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            let bound = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            let playing = bound && !player.paused
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 12) {
                     Button {
-                        toggleWholePlay(audio: audio, playing: playing)
+                        toggleWholePlay(audio: audio, bound: bound, playing: playing)
                     } label: {
                         Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
                             .font(.system(size: 28))
                             .foregroundStyle(playing ? Color.orange : Color.accentColor)
                     }
                     .buttonStyle(.plain)
-                    .help("整段播放 (无字幕)")
+                    .help(playing ? "暂停" : (bound ? "继续" : "整段播放 (无字幕)"))
                     Text("整段播放")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
-                if playing {
+                if bound {
                     MiniPlayerControls()
                 }
             }
@@ -234,9 +235,14 @@ struct EnglishView: View {
         }
     }
 
-    private func toggleWholePlay(audio: EnglishAudio, playing: Bool) {
+    /// pause / resume 三态: 在播 → pause; 已绑定但暂停 → resume; 未绑定 → play 从 0 开始。
+    private func toggleWholePlay(audio: EnglishAudio, bound: Bool, playing: Bool) {
         if playing {
-            player.stop()
+            player.pause()
+            return
+        }
+        if bound {
+            player.resume()
             return
         }
         let url = URL(fileURLWithPath: audio.localPath)

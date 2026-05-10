@@ -20,10 +20,11 @@ struct EnglishReviewRow: View {
     private static let playbackPaddingMs: Int = 0
 
     var body: some View {
-        let playing = player.isPlaying(audioID: audio.id, segIdx: item.segment.idx)
+        let bound = player.isPlaying(audioID: audio.id, segIdx: item.segment.idx)
+        let playing = bound && !player.paused
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 12) {
-                playButton(playing: playing)
+                playButton(bound: bound, playing: playing)
                 Text("\(item.segment.idx + 1).")
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -34,7 +35,7 @@ struct EnglishReviewRow: View {
                 finishButton
             }
             stageMetaRow
-            if playing {
+            if bound {
                 HStack(spacing: 0) {
                     Spacer().frame(width: 36 + 12 + 24)
                     MiniPlayerControls()
@@ -89,9 +90,9 @@ struct EnglishReviewRow: View {
     }
 
     @ViewBuilder
-    private func playButton(playing: Bool) -> some View {
+    private func playButton(bound: Bool, playing: Bool) -> some View {
         Button {
-            togglePlay(playing: playing)
+            togglePlay(bound: bound, playing: playing)
         } label: {
             Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
                 .font(.system(size: 24))
@@ -99,7 +100,7 @@ struct EnglishReviewRow: View {
         }
         .buttonStyle(.plain)
         .disabled(audio.localPath.isEmpty)
-        .help(audio.localPath.isEmpty ? "本地 mp3 不存在" : "播放此句")
+        .help(audio.localPath.isEmpty ? "本地 mp3 不存在" : (playing ? "暂停" : (bound ? "继续" : "播放此句")))
     }
 
     @ViewBuilder
@@ -182,9 +183,14 @@ struct EnglishReviewRow: View {
         }
     }
 
-    private func togglePlay(playing: Bool) {
+    /// pause / resume 三态: 在播 → pause 保留位置; 已绑定但暂停 → resume; 未绑定 → play 段头。
+    private func togglePlay(bound: Bool, playing: Bool) {
         if playing {
-            player.stop()
+            player.pause()
+            return
+        }
+        if bound {
+            player.resume()
             return
         }
         let url = URL(fileURLWithPath: audio.localPath)

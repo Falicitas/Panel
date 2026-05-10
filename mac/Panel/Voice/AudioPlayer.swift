@@ -111,15 +111,18 @@ final class SegmentPlayer {
 
     /// 0.1s 轮询 currentTime → 更新进度 + 检测 endSec 边界 (loop 或 stop)。
     ///
+    /// 只在 p.isPlaying 真在播时更新 currentSec + 检查边界。pause / 系统 interruption
+    /// 让 p.isPlaying=false 时直接 no-op, 保留 currentSec 让 resume 接着上次位置播,
+    /// 避免 AVAudioPlayer 内部 currentTime 重置时 UI 进度条被反向覆盖回 0。
+    ///
     /// 不再用 dispatch-after 兜底 stop — 旧版按 segDur*1.5+5s 强制 stop, rate 改慢
-    /// / AVAudioPlayer audio session 被打断 / 系统级 pause 等场景下会在段没播完时
-    /// 提前触发 stop, 表现为「播一半进度突然回到 0」。timer 是 main runloop 稳定调度,
-    /// 漏触发的极端场景 cost 远小于"无故打断用户"的 cost。
+    /// / audio session 被打断 / 系统级 pause 等场景下会在段没播完时提前触发 stop。
     private func startProgressTimer() {
         progressTimer?.invalidate()
         let t = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let p = self.player else { return }
+                guard p.isPlaying else { return }
                 self.currentSec = p.currentTime
                 if p.currentTime >= self.endSec {
                     if self.loop {
