@@ -3,33 +3,63 @@ import SwiftUI
 /// 段播放进度条 + 循环按钮 + 倍速 menu。挂在已 isPlaying(audioID, segIdx) 的位置下方。
 /// 不持有 player 状态, 只读 SegmentPlayer 当前 currentSec / startSec / endSec。
 /// seek / loop / rate 通过 SegmentPlayer 直接改 (单例)。
+///
+/// 传 placeholder 时支持「未播放也常驻显示」: player 不在播本段则 slider 静态显示
+/// 段长 + 禁用, rate picker 始终可用 (rate 是单例全局态), 让用户进页面就能预设倍速。
 struct MiniPlayerControls: View {
     @Environment(SegmentPlayer.self) private var player
+
+    let placeholder: Placeholder?
+
+    struct Placeholder {
+        let audioID: Int64
+        let segIdx: Int
+        let lengthSec: Double
+    }
+
+    init(placeholder: Placeholder? = nil) {
+        self.placeholder = placeholder
+    }
 
     /// 拖 slider 时锁定 currentSec 不被 timer 反向覆盖。
     @State private var dragging: Bool = false
     @State private var dragValue: Double = 0
 
-    private static let rateOptions: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    private static let rateOptions: [Float] = [
+        0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5
+    ]
 
     var body: some View {
         @Bindable var player = player
+        let live = isLive
+        let totalSec: Double = live
+            ? max(0, player.endSec - player.startSec)
+            : (placeholder?.lengthSec ?? 0)
+        let curRel: Double = live ? max(0, displaySec - player.startSec) : 0
+
         HStack(spacing: 10) {
-            Text(formatSec(displaySec - player.startSec))
+            Text(formatSec(curRel))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 40, alignment: .trailing)
 
             Slider(
                 value: Binding(
-                    get: { dragging ? dragValue : displaySec },
+                    get: {
+                        guard live else { return 0 }
+                        return dragging ? dragValue : displaySec
+                    },
                     set: { newVal in
+                        guard live else { return }
                         dragValue = newVal
                         if !dragging { player.seek(to: newVal) }
                     }
                 ),
-                in: player.startSec...max(player.endSec, player.startSec + 0.1),
+                in: live
+                    ? player.startSec...max(player.endSec, player.startSec + 0.1)
+                    : 0...max(0.1, totalSec),
                 onEditingChanged: { editing in
+                    guard live else { return }
                     if editing {
                         dragging = true
                         dragValue = displaySec
@@ -39,8 +69,9 @@ struct MiniPlayerControls: View {
                     }
                 }
             )
+            .disabled(!live)
 
-            Text(formatSec(player.endSec - player.startSec))
+            Text(formatSec(totalSec))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 40, alignment: .leading)
@@ -65,6 +96,11 @@ struct MiniPlayerControls: View {
             .help("播放倍速")
         }
         .padding(.vertical, 4)
+    }
+
+    private var isLive: Bool {
+        guard let p = placeholder else { return true }
+        return player.isPlaying(audioID: p.audioID, segIdx: p.segIdx)
     }
 
     private var displaySec: Double {
