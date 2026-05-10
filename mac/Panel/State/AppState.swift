@@ -176,7 +176,15 @@ final class AppState {
             self.englishSettings = engS
             self.selectedName = a.name
             if let name = a.name {
-                self.detail = try await api.getTodolist(name: name)
+                if let d = try? await api.getTodolist(name: name) {
+                    self.detail = d
+                } else {
+                    // anchor 指向的文件已不存在 (Finder 改名/删除); 静默清掉, 不弹错
+                    self.detail = nil
+                    self.selectedName = nil
+                    self.anchor = nil
+                    _ = try? await api.setAnchor(name: nil)
+                }
             } else {
                 self.detail = nil
             }
