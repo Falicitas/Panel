@@ -36,8 +36,20 @@ enum Transcriber {
     /// OpenRouter 的 STT API 把 timestamp_granularities 字段 strip 掉了, 必须直连 Groq 才能拿。
     static let groqSTTEndpoint = URL(string: "https://api.groq.com/openai/v1/audio/transcriptions")!
     /// chat/completions 路径下用,加"简体中文"提示因为 Gemini Flash 偶有繁体倾向。
-    /// STT 专用模型不需要 prompt (它就是干这个的)。
     static let chatPrompt = "Transcribe the audio verbatim. For Chinese content, output Simplified Chinese (简体中文) only."
+    /// STT 专用 endpoint (whisper / gpt-4o-transcribe) 的 prompt 字段语义是"示例文本",
+    /// 模型会模仿其风格(简繁、专有名词写法、标点)。短中文音频常因上下文不足切到繁体,
+    /// 给一段简体示例即可稳定引导。中英混合场景英文部分不受中文 prompt 影响。
+    ///
+    /// 注意: OpenRouter 把顶层 `prompt` 字段 strip 掉了 (跟 timestamp_granularities
+    /// 同样的行为, 实证), 必须放进 `provider.options.<slug>.prompt` 才透传到底层 provider。
+    static let sttPromptZh = "以下是普通话录音,中英文混合。中文部分使用简体中文,例如这样的文字。"
+
+    /// 从 OpenRouter model slug (如 "openai/gpt-4o-transcribe") 切出 provider slug ("openai"),
+    /// 用于 provider.options.<slug> passthrough。无 slash 时 fallback "openai"。
+    private static func providerSlug(forModel model: String) -> String {
+        String(model.split(separator: "/").first ?? "openai")
+    }
     static let timeoutSec: TimeInterval = 120
 
     static func transcribe(audioFile: URL) async throws -> String {
@@ -70,7 +82,8 @@ enum Transcriber {
             "model": "openai/gpt-4o-transcribe",
             "input_audio": ["data": b64, "format": format],
             "response_format": "verbose_json",
-            "timestamp_granularities": ["word"]
+            "timestamp_granularities": ["word"],
+            "provider": ["options": ["openai": ["prompt": sttPromptZh]]]
         ]
         var req = URLRequest(url: sttEndpoint, timeoutInterval: timeoutSec)
         req.httpMethod = "POST"
@@ -131,9 +144,11 @@ enum Transcriber {
     // MARK: - STT 专用 endpoint
 
     private static func viaSTT(model: String, audioBase64: String, key: String) async throws -> String {
+        let slug = providerSlug(forModel: model)
         let body: [String: Any] = [
             "model": model,
-            "input_audio": ["data": audioBase64, "format": "m4a"]
+            "input_audio": ["data": audioBase64, "format": "m4a"],
+            "provider": ["options": [slug: ["prompt": sttPromptZh]]]
         ]
         var req = URLRequest(url: sttEndpoint, timeoutInterval: timeoutSec)
         req.httpMethod = "POST"
