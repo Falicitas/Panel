@@ -37,7 +37,6 @@ final class SegmentPlayer {
 
     private var player: AVAudioPlayer?
     private var progressTimer: Timer?
-    private var safetyStopWork: DispatchWorkItem?
 
     private init() {}
 
@@ -70,7 +69,6 @@ final class SegmentPlayer {
         player = p
 
         startProgressTimer()
-        scheduleSafetyStop()
     }
 
     /// 拖进度条调用 — seek 到 sec (clamp 到 [startSec, endSec])。
@@ -93,15 +91,12 @@ final class SegmentPlayer {
         guard let p = player, !p.isPlaying else { return }
         p.play()
         paused = false
-        scheduleSafetyStop()
     }
 
     /// 立刻停止 + 释放。重置状态。
     func stop() {
         progressTimer?.invalidate()
         progressTimer = nil
-        safetyStopWork?.cancel()
-        safetyStopWork = nil
         player?.stop()
         player = nil
         playingAudioID = nil
@@ -115,6 +110,11 @@ final class SegmentPlayer {
     // MARK: - private
 
     /// 0.1s 轮询 currentTime → 更新进度 + 检测 endSec 边界 (loop 或 stop)。
+    ///
+    /// 不再用 dispatch-after 兜底 stop — 旧版按 segDur*1.5+5s 强制 stop, rate 改慢
+    /// / AVAudioPlayer audio session 被打断 / 系统级 pause 等场景下会在段没播完时
+    /// 提前触发 stop, 表现为「播一半进度突然回到 0」。timer 是 main runloop 稳定调度,
+    /// 漏触发的极端场景 cost 远小于"无故打断用户"的 cost。
     private func startProgressTimer() {
         progressTimer?.invalidate()
         let t = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -125,8 +125,6 @@ final class SegmentPlayer {
                     if self.loop {
                         p.currentTime = self.startSec
                         self.currentSec = self.startSec
-                        // loop 重置 safety stop deadline
-                        self.scheduleSafetyStop()
                     } else {
                         self.stop()
                     }
@@ -136,16 +134,5 @@ final class SegmentPlayer {
         progressTimer = t
         // Tolerance 大点不影响 0.1s 精度
         t.tolerance = 0.02
-    }
-
-    /// 兜底 stop: 万一 timer 没触发 (rate 变化, app 后台等), 按预期总时长 + 50% 余量到时强制 stop。
-    private func scheduleSafetyStop() {
-        safetyStopWork?.cancel()
-        let segDur = endSec - startSec
-        let realDur = segDur / Double(rate)
-        let safetyDur = realDur * 1.5 + 5.0
-        let work = DispatchWorkItem { [weak self] in self?.stop() }
-        safetyStopWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + safetyDur, execute: work)
     }
 }
