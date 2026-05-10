@@ -18,7 +18,6 @@ struct EnglishSegmentRow: View {
     private static let playbackPaddingMs: Int = 0
 
     var body: some View {
-        let playing = player.isPlaying(audioID: audio.id, segIdx: segment.idx)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
                 playButton
@@ -29,11 +28,13 @@ struct EnglishSegmentRow: View {
                 textArea
                 checkBox
             }
-            if playing {
-                HStack(spacing: 0) {
-                    Spacer().frame(width: 36 + 12 + 24)  // 对齐到文本起始位置
-                    MiniPlayerControls()
-                }
+            HStack(spacing: 0) {
+                Spacer().frame(width: 36 + 12 + 24)  // 对齐到文本起始位置
+                MiniPlayerControls(placeholder: .init(
+                    audioID: audio.id,
+                    segIdx: segment.idx,
+                    lengthSec: Double(segment.endMs - segment.startMs) / 1000.0
+                ))
             }
         }
         .padding(.vertical, 6)
