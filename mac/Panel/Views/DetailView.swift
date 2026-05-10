@@ -84,6 +84,10 @@ struct DetailView: View {
                     .transition(.opacity)
             }
         }
+        // 撑满整个 detail 列, 让 .overlay { SleepGuardOverlay() } 覆盖全列。
+        // 否则 EmptyState (ContentUnavailableView) / hasContent 的 VStack 都按自然尺寸,
+        // 蒙版只盖中间一小块。
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.25), value: hasContent)
         .animation(.easeInOut(duration: 0.25), value: detailEmptyKind)
         .overlay(alignment: .bottomTrailing) {
