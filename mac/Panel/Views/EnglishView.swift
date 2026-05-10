@@ -35,6 +35,12 @@ struct EnglishView: View {
                     Divider()
                     windowsSection(today: today)
                     Divider()
+                    if let review = state.englishReviewToday {
+                        EnglishReviewSection(review: review)
+                            .environment(state)
+                            .environment(player)
+                        Divider()
+                    }
                     audioSection(today: today)
                 } else {
                     ProgressView("加载中…")
@@ -70,7 +76,7 @@ struct EnglishView: View {
     private func headerStats(today: EnglishToday) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "今日 %.1f /", today.totalMinutes))
+                Text(String(format: "今日新学 %.1f /", today.totalMinutes))
                     .font(.title2.weight(.semibold))
                 ThresholdEditor(currentMin: today.thresholdMin)
                 Text("分钟")
@@ -80,12 +86,36 @@ struct EnglishView: View {
                         .font(.headline)
                         .foregroundStyle(.green)
                 }
+                Spacer()
+                reviewSummaryBadge(today: today)
             }
             ProgressView(
                 value: min(today.totalMinutes, Double(today.thresholdMin)),
                 total: Double(today.thresholdMin)
             )
             .tint(today.todayDone ? .green : .accentColor)
+        }
+    }
+
+    /// 复习摘要 (跟新学时长并列). 后端 issue-44 起返回; 老 backend 缺字段时这些值都是 0,
+    /// 仍渲染 "复习 0/0" 不刺眼 (不专门 hide 简化判断)。
+    @ViewBuilder
+    private func reviewSummaryBadge(today: EnglishToday) -> some View {
+        let limit = max(today.reviewDailyLimit, 1)
+        let done = today.reviewDoneToday
+        let due = today.reviewDueTotal
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("复习 \(done) / \(limit) 条")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            if due > 0 {
+                Text("(\(due) 待)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.orange)
+            }
         }
     }
 

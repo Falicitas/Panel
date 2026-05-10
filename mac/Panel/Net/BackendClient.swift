@@ -90,4 +90,10 @@ protocol BackendClient: Sendable {
     func putEnglishSettings(_ es: EnglishSettings) async throws -> EnglishSettings
     func candidateEnglishAudio(topic: String, excludeIDs: [Int64], currentID: Int64?) async throws -> EnglishCandidateResp
     func skipEnglishAudio(audioID: Int64, selectedAudioID: Int64, topic: String) async throws -> EnglishSkipResp
+
+    // MARK: English Review (issue-44)
+    func getEnglishReviewToday() async throws -> EnglishReviewToday
+    func reviewMarkDone(itemID: Int64) async throws
+    func reviewPostpone(itemID: Int64, toDate: String?) async throws
+    func reviewFinish(itemID: Int64) async throws
 }

@@ -60,6 +60,18 @@ struct EnglishSettingsSheet: View {
                         .frame(maxWidth: 280)
                     }
 
+                    HStack {
+                        Text("复习配额").frame(width: 80, alignment: .leading)
+                        Stepper(value: $settings.reviewDailyLimit, in: 1...100, step: 1) {
+                            Text("\(settings.reviewDailyLimit) 条 / 天")
+                                .font(.body.monospacedDigit())
+                        }
+                        .frame(maxWidth: 280)
+                        Text("超出的自动延到次日")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("时段").frame(width: 80, alignment: .leading)
@@ -109,6 +121,7 @@ struct EnglishSettingsSheet: View {
 
     private var canSave: Bool {
         guard settings.thresholdMin > 0, settings.thresholdMin <= 240 else { return false }
+        guard settings.reviewDailyLimit > 0, settings.reviewDailyLimit <= 200 else { return false }
         for w in settings.windows {
             guard let s = Self.parseHHMM(w.start), let e = Self.parseHHMM(w.end), s < e else {
                 return false

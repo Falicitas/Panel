@@ -51,6 +51,8 @@ final class AppState {
     var englishToday: EnglishToday?
     /// 英文练习 - settings (windows / threshold)
     var englishSettings: EnglishSettings?
+    /// 英文练习 - 复习队列今日响应 (按 audio 分组). nil = 未加载, groups 空 = 今日无到期。
+    var englishReviewToday: EnglishReviewToday?
     /// 跳过模态框: 是否显示 (绑给 .sheet)。主动点跳过 / 自动归档触发都走这条。
     var showSkipSheet: Bool = false
     /// 模态框当前候选 audio (含 segments / description preview)。fetch 中或抽完时为 nil。
@@ -145,6 +147,7 @@ final class AppState {
             async let suppMonthResp = api.getSupplementsMonth(month: nil)
             async let engTodayResp = api.getEnglishToday()
             async let engSettingsResp = api.getEnglishSettings()
+            async let engReviewResp = api.getEnglishReviewToday()
             let (l, a, f, m, mp, r) = try await (lists, anchorResp, focusResp, microResp, microProgResp, recurResp)
             let (sum, set, bs, fx, fr, inc) = try await (summaryResp, settingsResp, billsResp, fixedResp, freesResp, incomesResp)
             let (sp, st, ds, ss, ns) = try await (supplResp, supplTodayResp, dailyResp, stateSetResp, notifResp)
@@ -152,6 +155,7 @@ final class AppState {
             // english 用 try? 让旧 backend 缺 endpoint 时 fallback nil, 不阻断其他模块加载
             let engT = try? await engTodayResp
             let engS = try? await engSettingsResp
+            let engR = try? await engReviewResp
             self.active = l.active
             self.done = l.done
             // anchor 校验: 文件可能在 Finder 里被改名/删除, backend 还存旧 anchor;
@@ -184,6 +188,7 @@ final class AppState {
             self.supplementMonthly = sm
             self.englishToday = engT
             self.englishSettings = engS
+            self.englishReviewToday = engR
             self.selectedName = effectiveAnchor
             if let name = effectiveAnchor {
                 self.detail = try? await api.getTodolist(name: name)
@@ -484,6 +489,49 @@ final class AppState {
         }
     }
 
+    /// 拉取精听复习队列今日响应 (按 audio 分组). 失败 fallback nil + 记 lastError, 不抛。
+    func reloadEnglishReview() async {
+        do {
+            self.englishReviewToday = try await api.getEnglishReviewToday()
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 复习项推进到下一阶段 (advance). 完成后 reload review + today (today 头部数字要更新)。
+    func reviewMarkDone(itemID: Int64) async {
+        do {
+            try await api.reviewMarkDone(itemID: itemID)
+            await reloadEnglishReview()
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 延后复习项 (默认 +1 天). 完成后 reload review (today 头部计数不变)。
+    func reviewPostpone(itemID: Int64, toDate: String? = nil) async {
+        do {
+            try await api.reviewPostpone(itemID: itemID, toDate: toDate)
+            await reloadEnglishReview()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 永久跳过复习项 (用户二次确认后调用). 完成后 reload review。
+    func reviewFinish(itemID: Int64) async {
+        do {
+            try await api.reviewFinish(itemID: itemID)
+            await reloadEnglishReview()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     /// 当前 audio 若 status=pending 且 local 文件存在 + 本 session 没失败过, 后台启动转写,
     /// 完成后 PUT segments 回 backend + 刷新 today。失败把 audio.id 加进 asrFailedIDs,
     /// tick 后续不再重试 (防止无限失败循环烧钱)。
@@ -530,6 +578,8 @@ final class AppState {
                 seconds: secs
             )
             await reloadEnglishToday()
+            // 勾选/取消勾选副作用是入队/退队复习, 顺手 refresh 复习区。
+            await reloadEnglishReview()
             self.lastError = nil
             // 全勾完 → 弹跳过模态框 (取代 backend 自动归档)
             if let today = englishToday,
@@ -942,10 +992,13 @@ final class AppState {
             async let supplToday = api.getSupplementsToday()
             async let listsResp = api.listTodolists()
             async let engToday = api.getEnglishToday()
+            async let engReview = api.getEnglishReviewToday()
             let (m, mp, ns, ds, st, lists) = try await (micro, microProg, notif, daily, supplToday, listsResp)
             let engT = try? await engToday
+            let engR = try? await engReview
             if st != self.supplementsToday { self.supplementsToday = st }
             if let engT, engT != self.englishToday { self.englishToday = engT }
+            if let engR, engR != self.englishReviewToday { self.englishReviewToday = engR }
             // tick 也尝试触发 ASR — 用户首次启动后切到英文 tab 才看到 audio,
             // 此时 ensureSegmentsForCurrentAudio 把它推上 ASR 队列
             ensureSegmentsForCurrentAudio()
