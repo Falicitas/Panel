@@ -1,23 +1,37 @@
 import Cocoa
 import os.log
 
-/// CGEventTap 监听全局 F12 keyDown (kVK_F12 = 111)。
-/// callback 返回 nil 吞掉事件,不让其他 App 收到 (避免触发 macOS 默认 F12 行为)。
-/// tap 被 macOS 关掉 (timeout / userInput) 时自动 re-enable。
+/// CGEventTap 全局 keyDown 监听 (shared 单例). 多个 controller 注册各自的 keyCode handler:
+///   - VoiceController: F12 (录音)
+///   - EnglishHotkeyController: F5 (回退 5s) / F6 (toggle play/pause)
 ///
-/// 需要 Input Monitoring 权限 (不是 Accessibility) — 见 Permissions.swift 注释。
+/// callback 里查 handlers dict, 命中则 dispatch 到 main + 返回 nil 吞掉事件 (不让其他
+/// App 收到, 避免触发 macOS 默认行为). tap 被 macOS 关掉 (timeout / userInput) 时自动 re-enable.
+///
+/// 需要 Input Monitoring 权限 (不是 Accessibility) — 见 Permissions.swift 注释.
 final class HotkeyTap {
+    static let shared = HotkeyTap()
+
+    static let f5KeyCode: Int64 = 96
+    static let f6KeyCode: Int64 = 97
+    static let f7KeyCode: Int64 = 98
+    static let f8KeyCode: Int64 = 100
     static let f12KeyCode: Int64 = 111
+
     private static let log = OSLog(subsystem: "com.kinesis.panel", category: "voice.hotkey")
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private let onF12: () -> Void
+    private var handlers: [Int64: () -> Void] = [:]
 
     var isActive: Bool { eventTap != nil }
 
-    init(onF12: @escaping () -> Void) {
-        self.onF12 = onF12
+    private init() {}
+
+    /// register/replace handler for keyCode. 同 keyCode 重复注册后者覆盖前者.
+    /// 必须从 main thread 调 (handlers dict 单线程读写).
+    func register(keyCode: Int64, handler: @escaping () -> Void) {
+        handlers[keyCode] = handler
     }
 
     func start() {
@@ -42,7 +56,7 @@ final class HotkeyTap {
         CGEvent.tapEnable(tap: tap, enable: true)
         self.eventTap = tap
         self.runLoopSource = src
-        os_log("tap installed, F12 监听中", log: Self.log, type: .info)
+        os_log("tap installed, 监听 keyDown (handlers=%d)", log: Self.log, type: .info, handlers.count)
     }
 
     func stop() {
@@ -68,10 +82,10 @@ final class HotkeyTap {
         }
         if type == .keyDown {
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode == HotkeyTap.f12KeyCode {
-                os_log("F12 received", log: HotkeyTap.log, type: .info)
-                DispatchQueue.main.async { me.onF12() }
-                return nil  // 吞掉 F12
+            if let handler = me.handlers[keyCode] {
+                os_log("hotkey keyCode=%d", log: HotkeyTap.log, type: .info, keyCode)
+                DispatchQueue.main.async { handler() }
+                return nil  // 吞掉, 不触发 macOS 默认行为
             }
         }
         return Unmanaged.passUnretained(event)

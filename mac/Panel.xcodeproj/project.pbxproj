@@ -15,6 +15,7 @@
 		11F42E2B885FCC47CD5CC0FF /* Bash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61935B607A9598142B233FF5 /* Bash.swift */; };
 		153DA7D67F1ADAC2D1CC6680 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1166585D8F0E17D1ED5D28B /* VoiceController.swift */; };
 		1644A8FCEFA720F7A18003DC /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 72998BAACAAFAAE88443FA9F /* MarkdownUI */; };
+		20D02DEA146FC710CD1D0979 /* EnglishHotkeyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AC0511E3F7AF6604F992F7 /* EnglishHotkeyController.swift */; };
 		213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */; };
 		21924AA056E5D9A45D82252B /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57C0B4A33E9458556E739EF /* Transcriber.swift */; };
 		231097D700A81E581B9A7270 /* Supplements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87F59C4D70D2A509B0F65C2F /* Supplements.swift */; };
@@ -60,11 +61,13 @@
 		D729A090A31E8DBD927D1D92 /* MilkDownEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D3907E04010E5BE6264DDD /* MilkDownEditor.swift */; };
 		D829A06EC28905CFCEF0F794 /* SupplementForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22D6102ADB89301B5F475EE /* SupplementForms.swift */; };
 		DA74EFA1D1701F6237FE3D5C /* HotkeyTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */; };
+		DB2CB4E282F9B0D4CE92DBBC /* EnglishReviewSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05CFEADE9B5F02DE1A39570 /* EnglishReviewSection.swift */; };
 		E37EF58CD36B02371C339F46 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC72BE1E58C5BDB3F8A456C /* AppState.swift */; };
 		EDD047A4C24549C7D1DBB979 /* RecurringSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D723C1C47D2CF2E4388D0D1 /* RecurringSheet.swift */; };
 		EE93FE0679B53A6547638AC7 /* EnglishSkipSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873D3F310317C8F5D2E08567 /* EnglishSkipSheet.swift */; };
 		EF787609ECD0E4BE733414F5 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB4D7055D1E71929BC92B3E /* APIClient.swift */; };
 		F1832D5AC7464601EEF34137 /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC082A3656358B75E3D0C9A1 /* Permissions.swift */; };
+		F4064928F2B79BAEADEA566E /* EnglishReviewRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D8C633580C89F408308CC7 /* EnglishReviewRow.swift */; };
 		F46C02CF0872C5DC865EFD4F /* UrgentNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE5A1A92DB4F3166F482702 /* UrgentNotifier.swift */; };
 		FA3A289E08F189633F342CE2 /* EnglishView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E695D73E361DCE1AAE1D25B /* EnglishView.swift */; };
 		FB356D2BA047AABD854873B0 /* CommitRitualView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F5DD50AEB2C3D86F551DB0 /* CommitRitualView.swift */; };
@@ -95,6 +98,7 @@
 		60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyTap.swift; sourceTree = "<group>"; };
 		61935B607A9598142B233FF5 /* Bash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bash.swift; sourceTree = "<group>"; };
 		62A9C2F35D43C52C2B90561B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		64AC0511E3F7AF6604F992F7 /* EnglishHotkeyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishHotkeyController.swift; sourceTree = "<group>"; };
 		65BDF0617EDF92971A4168A2 /* ListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListEntry.swift; sourceTree = "<group>"; };
 		6E7C6EBF44D6F527F79C38FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6EB340428613B213332CFB3E /* Finance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finance.swift; sourceTree = "<group>"; };
@@ -111,6 +115,7 @@
 		A22D6102ADB89301B5F475EE /* SupplementForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementForms.swift; sourceTree = "<group>"; };
 		A2C6FBE3A739FDB01702B722 /* FinanceForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceForms.swift; sourceTree = "<group>"; };
 		A8F6BA666ED0AEB506763737 /* RecordsContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsContentView.swift; sourceTree = "<group>"; };
+		A9D8C633580C89F408308CC7 /* EnglishReviewRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishReviewRow.swift; sourceTree = "<group>"; };
 		AF389499A461D89EC2F91FB3 /* MicroProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicroProgress.swift; sourceTree = "<group>"; };
 		B0F1E80F3E943C3E632D1797 /* EnglishSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishSettingsSheet.swift; sourceTree = "<group>"; };
 		B18E8C1E08A00B871A4C9C04 /* RecurringTodo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringTodo.swift; sourceTree = "<group>"; };
@@ -118,6 +123,7 @@
 		B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBar.swift; sourceTree = "<group>"; };
 		B6F9936F17C66C82102D617D /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		BF74459F6ADCA6D9056A7911 /* MainLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainLayout.swift; sourceTree = "<group>"; };
+		C05CFEADE9B5F02DE1A39570 /* EnglishReviewSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishReviewSection.swift; sourceTree = "<group>"; };
 		C1C3DA32EC86A724BA60EAD7 /* Todolist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Todolist.swift; sourceTree = "<group>"; };
 		CAE5A1A92DB4F3166F482702 /* UrgentNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UrgentNotifier.swift; sourceTree = "<group>"; };
 		D3062A0F8CB95C2386D0B4E2 /* SupplementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupplementsView.swift; sourceTree = "<group>"; };
@@ -158,6 +164,8 @@
 				81F5DD50AEB2C3D86F551DB0 /* CommitRitualView.swift */,
 				D754AC7CF099F8B68D14859D /* DetailView.swift */,
 				FBEA95F9C5B5537519499A96 /* EnglishArchiveSheet.swift */,
+				A9D8C633580C89F408308CC7 /* EnglishReviewRow.swift */,
+				C05CFEADE9B5F02DE1A39570 /* EnglishReviewSection.swift */,
 				D5C1D248FAE0891DDA297AF0 /* EnglishSegmentRow.swift */,
 				B0F1E80F3E943C3E632D1797 /* EnglishSettingsSheet.swift */,
 				873D3F310317C8F5D2E08567 /* EnglishSkipSheet.swift */,
@@ -233,6 +241,7 @@
 			isa = PBXGroup;
 			children = (
 				25A142018514E0D2EAF50A25 /* AudioPlayer.swift */,
+				64AC0511E3F7AF6604F992F7 /* EnglishHotkeyController.swift */,
 				60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */,
 				4BEB313D3572C774F686B032 /* KeyStore.swift */,
 				E865FAD42860A4D230E43B90 /* MenuBarItem.swift */,
@@ -372,6 +381,9 @@
 				27D2A375A7B30146C7407436 /* DetailView.swift in Sources */,
 				7FA40456F313F3E14F6D236F /* English.swift in Sources */,
 				8875EBCEA0E4842F8A9A6707 /* EnglishArchiveSheet.swift in Sources */,
+				20D02DEA146FC710CD1D0979 /* EnglishHotkeyController.swift in Sources */,
+				F4064928F2B79BAEADEA566E /* EnglishReviewRow.swift in Sources */,
+				DB2CB4E282F9B0D4CE92DBBC /* EnglishReviewSection.swift in Sources */,
 				8A1B2DF3671C824AA875846C /* EnglishSegmentRow.swift in Sources */,
 				34CFD94C244BA7A7787B93E5 /* EnglishSettingsSheet.swift in Sources */,
 				EE93FE0679B53A6547638AC7 /* EnglishSkipSheet.swift in Sources */,

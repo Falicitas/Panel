@@ -37,7 +37,6 @@ final class SegmentPlayer {
 
     private var player: AVAudioPlayer?
     private var progressTimer: Timer?
-    private var safetyStopWork: DispatchWorkItem?
 
     private init() {}
 
@@ -70,7 +69,6 @@ final class SegmentPlayer {
         player = p
 
         startProgressTimer()
-        scheduleSafetyStop()
     }
 
     /// 拖进度条调用 — seek 到 sec (clamp 到 [startSec, endSec])。
@@ -89,19 +87,22 @@ final class SegmentPlayer {
     }
 
     /// 暂停后恢复播放。
+    /// 若停在段末尾 (progressTimer 触发末尾 pause 留下的位置), 自动 seek 回段头重播 —
+    /// 否则 p.play() 立刻又被 progressTimer 检测末尾再次 pause, 死循环。
     func resume() {
         guard let p = player, !p.isPlaying else { return }
+        if p.currentTime >= endSec - 0.05 {
+            p.currentTime = startSec
+            currentSec = startSec
+        }
         p.play()
         paused = false
-        scheduleSafetyStop()
     }
 
     /// 立刻停止 + 释放。重置状态。
     func stop() {
         progressTimer?.invalidate()
         progressTimer = nil
-        safetyStopWork?.cancel()
-        safetyStopWork = nil
         player?.stop()
         player = nil
         playingAudioID = nil
@@ -114,21 +115,33 @@ final class SegmentPlayer {
 
     // MARK: - private
 
-    /// 0.1s 轮询 currentTime → 更新进度 + 检测 endSec 边界 (loop 或 stop)。
+    /// 0.1s 轮询 currentTime → 更新进度 + 检测 endSec 边界 (loop 或 pause-at-end)。
+    ///
+    /// 只在 p.isPlaying 真在播时更新 currentSec + 检查边界。pause / 系统 interruption
+    /// 让 p.isPlaying=false 时直接 no-op, 保留 currentSec 让 resume 接着上次位置播,
+    /// 避免 AVAudioPlayer 内部 currentTime 重置时 UI 进度条被反向覆盖回 0。
+    ///
+    /// 段末尾自然结束: pause 但不 stop — 让用户用 F5 从末尾回退 5s 重听末尾片段。
+    /// 用户按 F6 走 resume(), resume 内部检测末尾自动 seek 回段头重播。
+    ///
+    /// 不再用 dispatch-after 兜底 stop — 旧版按 segDur*1.5+5s 强制 stop, rate 改慢
+    /// / audio session 被打断 / 系统级 pause 等场景下会在段没播完时提前触发 stop。
     private func startProgressTimer() {
         progressTimer?.invalidate()
         let t = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let p = self.player else { return }
+                guard p.isPlaying else { return }
                 self.currentSec = p.currentTime
                 if p.currentTime >= self.endSec {
                     if self.loop {
                         p.currentTime = self.startSec
                         self.currentSec = self.startSec
-                        // loop 重置 safety stop deadline
-                        self.scheduleSafetyStop()
                     } else {
-                        self.stop()
+                        // 段末尾自然结束 — 暂停留在 endSec, 不销毁 player
+                        p.pause()
+                        self.paused = true
+                        self.currentSec = self.endSec  // clamp, 不让 slider 越界
                     }
                 }
             }
@@ -136,16 +149,5 @@ final class SegmentPlayer {
         progressTimer = t
         // Tolerance 大点不影响 0.1s 精度
         t.tolerance = 0.02
-    }
-
-    /// 兜底 stop: 万一 timer 没触发 (rate 变化, app 后台等), 按预期总时长 + 50% 余量到时强制 stop。
-    private func scheduleSafetyStop() {
-        safetyStopWork?.cancel()
-        let segDur = endSec - startSec
-        let realDur = segDur / Double(rate)
-        let safetyDur = realDur * 1.5 + 5.0
-        let work = DispatchWorkItem { [weak self] in self?.stop() }
-        safetyStopWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + safetyDur, execute: work)
     }
 }

@@ -24,9 +24,8 @@ final class VoiceController {
     private(set) var state: State = .idle
     private(set) var lastRecordingURL: URL?
 
-    var isHotkeyActive: Bool { hotkey?.isActive ?? false }
+    var isHotkeyActive: Bool { HotkeyTap.shared.isActive }
 
-    private var hotkey: HotkeyTap?
     private let recorder = Recorder()
     private var refreshTicker: Timer?
     private var recordingTimer: Timer?
@@ -39,10 +38,10 @@ final class VoiceController {
     private init() {}
 
     func start() {
-        if hotkey == nil {
-            hotkey = HotkeyTap(onF12: { [weak self] in self?.handleF12() })
-            hotkey?.start()
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f12KeyCode) { [weak self] in
+            self?.handleF12()
         }
+        HotkeyTap.shared.start()
         Task { @MainActor in
             if !Permissions.hasMicrophone() {
                 _ = await Permissions.requestMicrophone()
@@ -67,9 +66,9 @@ final class VoiceController {
     }
 
     func refresh() {
-        if hotkey?.isActive == false {
+        if !HotkeyTap.shared.isActive {
             os_log("refresh: hotkey 未 active, retry", log: Self.log, type: .info)
-            hotkey?.start()
+            HotkeyTap.shared.start()
         }
         // 录音 / 转写中不打断
         if state == .recording || state == .transcribing { return }

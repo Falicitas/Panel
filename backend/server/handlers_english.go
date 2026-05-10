@@ -38,6 +38,10 @@ type englishTodayResp struct {
 	CurrentAudio *store.EnglishAudio    `json:"current_audio,omitempty"` // 最新未归档
 	Segments     []store.EnglishSegment `json:"segments"`                // 当前 audio 的段
 	DoneSegIdx   []int                  `json:"done_seg_idx"`            // 当前 audio 当日已勾的 idx
+	// 精听复习队列摘要 (issue-44 引入). UI headerStats 双指标"新学 X.X / Y · 复习 W / Z 条"
+	ReviewDoneToday  int `json:"review_done_today"`  // 今日已 advance 的复习条数 (stage > 0 + last_advanced_at 落今天)
+	ReviewDailyLimit int `json:"review_daily_limit"` // 配额上限 (用户设置)
+	ReviewDueTotal   int `json:"review_due_total"`   // 今日总到期 (含 cap 后被 postpone 的)
 }
 
 // GET /api/english/today
@@ -64,13 +68,31 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reviewLimit := settings.ReviewDailyLimit
+	if reviewLimit <= 0 {
+		reviewLimit = defaultReviewDailyLimit
+	}
+	reviewDone, err := s.store.CountReviewDoneToday(today)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	dueAll, err := s.store.ListDueReviewItems(today)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	resp := englishTodayResp{
-		Date:         today,
-		Windows:      make([]englishWindowResp, 0, len(settings.Windows)),
-		ThresholdMin: settings.ThresholdMin,
-		TotalMinutes: totalMin,
-		Segments:     []store.EnglishSegment{},
-		DoneSegIdx:   []int{},
+		Date:             today,
+		Windows:          make([]englishWindowResp, 0, len(settings.Windows)),
+		ThresholdMin:     settings.ThresholdMin,
+		TotalMinutes:     totalMin,
+		Segments:         []store.EnglishSegment{},
+		DoneSegIdx:       []int{},
+		ReviewDoneToday:  reviewDone,
+		ReviewDailyLimit: reviewLimit,
+		ReviewDueTotal:   len(dueAll),
 	}
 
 	for idx, win := range settings.Windows {
@@ -419,10 +441,23 @@ func (s *Server) handleCheckEnglishSegment(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		// 入队精听复习. best-effort: 失败 log warn 不阻断 200 (核心动作是勾选)。
+		// EnsureReviewItem 是 idempotent — 已存在则 no-op, 不会重置 stage。
+		tomorrow, err := nextLogicalDate(today)
+		if err != nil {
+			log.Printf("review enqueue compute tomorrow: %v", err)
+		} else if _, err := s.store.EnsureReviewItem(p.AudioID, p.SegIdx, tomorrow, now.Unix()); err != nil {
+			log.Printf("review enqueue %d:%d: %v", p.AudioID, p.SegIdx, err)
+		}
 	} else {
 		if err := s.store.DeleteRecord(english.SegModule, today, key); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
+		}
+		// 退队 — 取消勾选 = 那段没听懂 / 误勾, 整个 SRS 进度作废。
+		// 重新勾选时 EnsureReviewItem 走 INSERT 路径 stage=0 重新开始。
+		if err := s.store.DeleteReviewItem(p.AudioID, p.SegIdx); err != nil {
+			log.Printf("review dequeue %d:%d: %v", p.AudioID, p.SegIdx, err)
 		}
 	}
 
@@ -547,6 +582,20 @@ func (s *Server) handlePutEnglishSettings(w http.ResponseWriter, r *http.Request
 	}
 	if es.ThresholdMin <= 0 || es.ThresholdMin > 240 {
 		writeError(w, http.StatusBadRequest, errors.New("threshold_min must be between 1 and 240"))
+		return
+	}
+	// review_daily_limit 0/缺省 → 客户端没传时容忍, fallback 默认值 (PUT 全量替换语义下保留老值更安全):
+	// 老 mac 客户端 PUT 时不带 review_daily_limit 会让该字段被覆盖为 0, 必须在这里 fallback。
+	if es.ReviewDailyLimit <= 0 {
+		old, _ := s.store.GetEnglishSettings()
+		if old.ReviewDailyLimit > 0 {
+			es.ReviewDailyLimit = old.ReviewDailyLimit
+		} else {
+			es.ReviewDailyLimit = defaultReviewDailyLimit
+		}
+	}
+	if es.ReviewDailyLimit > 200 {
+		writeError(w, http.StatusBadRequest, errors.New("review_daily_limit must be <= 200"))
 		return
 	}
 	if err := s.store.SetEnglishSettings(es); err != nil {

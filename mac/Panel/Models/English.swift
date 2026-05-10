@@ -63,10 +63,12 @@ struct EnglishSettings: Codable, Hashable, Sendable {
     var windows: [EnglishWindow]
     var thresholdMin: Int
     var enabled: Bool
+    var reviewDailyLimit: Int  // 精听复习队列每日配额上限 (后端默认 15)
 
     enum CodingKeys: String, CodingKey {
         case windows, enabled
         case thresholdMin = "threshold_min"
+        case reviewDailyLimit = "review_daily_limit"
     }
 }
 
@@ -101,6 +103,10 @@ struct EnglishToday: Codable, Hashable, Sendable {
     let currentAudio: EnglishAudio?
     let segments: [EnglishSegment]
     let doneSegIdx: [Int]
+    // 精听复习队列摘要 (后端 issue-44 起返回; 老 backend 字段缺省 → 0)
+    let reviewDoneToday: Int
+    let reviewDailyLimit: Int
+    let reviewDueTotal: Int
 
     enum CodingKeys: String, CodingKey {
         case date, windows, segments
@@ -109,6 +115,9 @@ struct EnglishToday: Codable, Hashable, Sendable {
         case totalMinutes = "total_minutes"
         case currentAudio = "current_audio"
         case doneSegIdx = "done_seg_idx"
+        case reviewDoneToday = "review_done_today"
+        case reviewDailyLimit = "review_daily_limit"
+        case reviewDueTotal = "review_due_total"
     }
 }
 
@@ -139,6 +148,60 @@ struct EnglishSkipReq: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case topic
         case selectedAudioID = "selected_audio_id"
+    }
+}
+
+/// 精听复习队列单条复习项 (server 富化了 segment + audio).
+/// stage 0..4 对应 1/3/7/14/30 天复习; stage 5 = mastered (不再展示).
+struct EnglishReviewItem: Codable, Identifiable, Hashable, Sendable {
+    let id: Int64
+    let audioID: Int64
+    let segIdx: Int
+    let stage: Int
+    let nextReviewAt: String       // YYYY-MM-DD
+    let firstDoneAt: Int64
+    let lastAdvancedAt: Int64
+    let postponedCount: Int
+    let finishedAt: Int64?
+    let masteredAt: Int64?
+    let overdueDays: Int           // today - next_review_at; 0 = 当天
+    let segment: EnglishSegment    // server 富化避免前端二次 fetch
+
+    enum CodingKeys: String, CodingKey {
+        case id, stage, segment
+        case audioID = "audio_id"
+        case segIdx = "seg_idx"
+        case nextReviewAt = "next_review_at"
+        case firstDoneAt = "first_done_at"
+        case lastAdvancedAt = "last_advanced_at"
+        case postponedCount = "postponed_count"
+        case finishedAt = "finished_at"
+        case masteredAt = "mastered_at"
+        case overdueDays = "overdue_days"
+    }
+}
+
+/// 复习项按 audio 分组 (展示用).
+struct EnglishReviewGroup: Codable, Hashable, Sendable {
+    let audio: EnglishAudio
+    let items: [EnglishReviewItem]
+}
+
+/// 后端 GET /api/english/review/today 响应.
+struct EnglishReviewToday: Codable, Hashable, Sendable {
+    let date: String
+    let dailyLimit: Int
+    let dueTotal: Int        // 全部到期数
+    let shownTotal: Int      // = min(dueTotal, dailyLimit)
+    let postponedTotal: Int  // 因配额溢出本次自动延到次日的条数
+    let groups: [EnglishReviewGroup]
+
+    enum CodingKeys: String, CodingKey {
+        case date, groups
+        case dailyLimit = "daily_limit"
+        case dueTotal = "due_total"
+        case shownTotal = "shown_total"
+        case postponedTotal = "postponed_total"
     }
 }
 

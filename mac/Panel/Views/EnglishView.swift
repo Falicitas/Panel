@@ -35,6 +35,12 @@ struct EnglishView: View {
                     Divider()
                     windowsSection(today: today)
                     Divider()
+                    if let review = state.englishReviewToday {
+                        EnglishReviewSection(review: review)
+                            .environment(state)
+                            .environment(player)
+                        Divider()
+                    }
                     audioSection(today: today)
                 } else {
                     ProgressView("加载中…")
@@ -70,7 +76,7 @@ struct EnglishView: View {
     private func headerStats(today: EnglishToday) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "今日 %.1f /", today.totalMinutes))
+                Text(String(format: "今日新学 %.1f /", today.totalMinutes))
                     .font(.title2.weight(.semibold))
                 ThresholdEditor(currentMin: today.thresholdMin)
                 Text("分钟")
@@ -80,12 +86,36 @@ struct EnglishView: View {
                         .font(.headline)
                         .foregroundStyle(.green)
                 }
+                Spacer()
+                reviewSummaryBadge(today: today)
             }
             ProgressView(
                 value: min(today.totalMinutes, Double(today.thresholdMin)),
                 total: Double(today.thresholdMin)
             )
             .tint(today.todayDone ? .green : .accentColor)
+        }
+    }
+
+    /// 复习摘要 (跟新学时长并列). 后端 issue-44 起返回; 老 backend 缺字段时这些值都是 0,
+    /// 仍渲染 "复习 0/0" 不刺眼 (不专门 hide 简化判断)。
+    @ViewBuilder
+    private func reviewSummaryBadge(today: EnglishToday) -> some View {
+        let limit = max(today.reviewDailyLimit, 1)
+        let done = today.reviewDoneToday
+        let due = today.reviewDueTotal
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("复习 \(done) / \(limit) 条")
+                .font(.body.monospacedDigit())
+                .foregroundStyle(.secondary)
+            if due > 0 {
+                Text("(\(due) 待)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -178,24 +208,25 @@ struct EnglishView: View {
     @ViewBuilder
     private func wholeAudioPlayer(audio: EnglishAudio) -> some View {
         if !audio.localPath.isEmpty, audio.durationMs > 0 {
-            let playing = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            let bound = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            let playing = bound && !player.paused
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 12) {
                     Button {
-                        toggleWholePlay(audio: audio, playing: playing)
+                        toggleWholePlay(audio: audio, bound: bound, playing: playing)
                     } label: {
                         Image(systemName: playing ? "stop.circle.fill" : "play.circle.fill")
                             .font(.system(size: 28))
                             .foregroundStyle(playing ? Color.orange : Color.accentColor)
                     }
                     .buttonStyle(.plain)
-                    .help("整段播放 (无字幕)")
+                    .help(playing ? "暂停" : (bound ? "继续" : "整段播放 (无字幕)"))
                     Text("整段播放")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
-                if playing {
+                if bound {
                     MiniPlayerControls()
                 }
             }
@@ -204,9 +235,14 @@ struct EnglishView: View {
         }
     }
 
-    private func toggleWholePlay(audio: EnglishAudio, playing: Bool) {
+    /// pause / resume 三态: 在播 → pause; 已绑定但暂停 → resume; 未绑定 → play 从 0 开始。
+    private func toggleWholePlay(audio: EnglishAudio, bound: Bool, playing: Bool) {
         if playing {
-            player.stop()
+            player.pause()
+            return
+        }
+        if bound {
+            player.resume()
             return
         }
         let url = URL(fileURLWithPath: audio.localPath)

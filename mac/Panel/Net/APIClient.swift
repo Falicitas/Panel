@@ -403,6 +403,44 @@ actor APIClient: BackendClient {
         return try decoder.decode(EnglishSkipResp.self, from: data)
     }
 
+    // MARK: - English Review (issue-44)
+
+    func getEnglishReviewToday() async throws -> EnglishReviewToday {
+        try await get("/api/english/review/today")
+    }
+
+    func reviewMarkDone(itemID: Int64) async throws {
+        try await postNoBody("/api/english/review/\(itemID)/done")
+    }
+
+    func reviewPostpone(itemID: Int64, toDate: String? = nil) async throws {
+        struct Body: Encodable {
+            let toDate: String?
+            enum CodingKeys: String, CodingKey { case toDate = "to_date" }
+        }
+        var req = URLRequest(url: try url("/api/english/review/\(itemID)/postpone"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try encoder.encode(Body(toDate: toDate))
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "postpone review \(itemID) failed")
+        }
+    }
+
+    func reviewFinish(itemID: Int64) async throws {
+        try await postNoBody("/api/english/review/\(itemID)/finish")
+    }
+
+    private func postNoBody(_ path: String) async throws {
+        var req = URLRequest(url: try url(path))
+        req.httpMethod = "POST"
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError(message: "POST \(path) failed (status \((resp as? HTTPURLResponse)?.statusCode ?? -1))")
+        }
+    }
+
     // MARK: - HTTP helpers
 
     private func encode(_ s: String) -> String {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -53,9 +54,10 @@ type EnglishWindow struct {
 }
 
 type EnglishSettings struct {
-	Windows      []EnglishWindow `json:"windows"`
-	ThresholdMin int             `json:"threshold_min"`
-	Enabled      bool            `json:"enabled"`
+	Windows          []EnglishWindow `json:"windows"`
+	ThresholdMin     int             `json:"threshold_min"`
+	Enabled          bool            `json:"enabled"`
+	ReviewDailyLimit int             `json:"review_daily_limit"` // 精听复习队列每日配额上限
 }
 
 const audioCols = `id, source, source_ref, title, description, published_at, duration_ms,
@@ -232,10 +234,13 @@ func (s *Store) DismissStaleEnglishNotifications(beforeUnix, atUnix int64) (int6
 	return n, nil
 }
 
-// DeleteAudio 物理删除 audio + 关联 segments。用户在历史档案"永久删除"时调用。
+// DeleteAudio 物理删除 audio + 关联 segments + 复习队列项。用户在历史档案"永久删除"时调用。
 //
 // records 表中 module='english_seg' key='{audio_id}:{idx}' 保留 — 那是当日已积累的
 // 学习时长事实, 不应因 audio 删除而抹掉; orphan key 不影响任何查询。
+//
+// english_review_queue 必须级联删 — review queue 是引用关系数据 (audio_id 指向已删 audio
+// 是孤儿, handler 富化 segment 时会查不到),不像 records 是事实数据可以保留。
 //
 // LocalPath 文件在 db 事务 commit 后 best-effort 删除; 文件缺失或删失败只 log,
 // audio 已离开 db, 残留 mp3 不再被任何代码引用。
@@ -253,6 +258,9 @@ func (s *Store) DeleteAudio(id int64) error {
 	defer tx.Rollback()
 	if _, err := tx.Exec(`DELETE FROM english_segments WHERE audio_id=?`, id); err != nil {
 		return fmt.Errorf("delete english_segments %d: %w", id, err)
+	}
+	if _, err := tx.Exec(`DELETE FROM english_review_queue WHERE audio_id=?`, id); err != nil {
+		return fmt.Errorf("delete english_review_queue %d: %w", id, err)
 	}
 	if _, err := tx.Exec(`DELETE FROM english_audios WHERE id=?`, id); err != nil {
 		return fmt.Errorf("delete english_audio %d: %w", id, err)
@@ -311,7 +319,8 @@ func (s *Store) ListSegments(audioID int64) ([]EnglishSegment, error) {
 	return out, rows.Err()
 }
 
-// ReplaceSegments 事务内: 删旧 + 插新 + 设 status=ready (清空 failed_reason)。
+// ReplaceSegments 事务内: 删旧 + 插新 + 设 status=ready (清空 failed_reason)
+// + 清理 english_review_queue 里 seg_idx 已不存在的孤儿。
 // 用于 mac ASR 完成后回写。
 func (s *Store) ReplaceSegments(audioID int64, segs []EnglishSegment) error {
 	tx, err := s.db.Begin()
@@ -342,6 +351,27 @@ func (s *Store) ReplaceSegments(audioID int64, segs []EnglishSegment) error {
 	); err != nil {
 		return fmt.Errorf("set status ready: %w", err)
 	}
+	// 复习队列孤儿清理: 旧 idx 在新 segs 里没了的 review 项必须删, 否则 handler 富化阶段查不到 segment。
+	// 新 segs 为空 → 该 audio 全部 review 项作废。
+	if len(segs) == 0 {
+		if _, err := tx.Exec(`DELETE FROM english_review_queue WHERE audio_id=?`, audioID); err != nil {
+			return fmt.Errorf("clear review_queue for audio %d: %w", audioID, err)
+		}
+	} else {
+		// 构造 NOT IN (?,?,?...) 占位符
+		placeholders := make([]string, len(segs))
+		args := make([]any, 0, len(segs)+1)
+		args = append(args, audioID)
+		for i, seg := range segs {
+			placeholders[i] = "?"
+			args = append(args, seg.Idx)
+		}
+		q := `DELETE FROM english_review_queue WHERE audio_id=? AND seg_idx NOT IN (` +
+			strings.Join(placeholders, ",") + `)`
+		if _, err := tx.Exec(q, args...); err != nil {
+			return fmt.Errorf("prune review_queue orphans for audio %d: %w", audioID, err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit tx: %w", err)
 	}
@@ -351,11 +381,12 @@ func (s *Store) ReplaceSegments(audioID int64, segs []EnglishSegment) error {
 // GetEnglishSettings 读单行 settings (id=1)。无行返回硬编码默认。
 func (s *Store) GetEnglishSettings() (EnglishSettings, error) {
 	var raw string
-	var threshold int
+	var threshold, reviewLimit int
 	var enabled int
 	err := s.db.QueryRow(
-		`SELECT windows_json, threshold_min, enabled FROM english_settings WHERE id=1`,
-	).Scan(&raw, &threshold, &enabled)
+		`SELECT windows_json, threshold_min, enabled, review_daily_limit
+		   FROM english_settings WHERE id=1`,
+	).Scan(&raw, &threshold, &enabled, &reviewLimit)
 	if errors.Is(err, sql.ErrNoRows) {
 		return defaultEnglishSettings(), nil
 	}
@@ -372,9 +403,10 @@ func (s *Store) GetEnglishSettings() (EnglishSettings, error) {
 		windows = []EnglishWindow{}
 	}
 	return EnglishSettings{
-		Windows:      windows,
-		ThresholdMin: threshold,
-		Enabled:      enabled != 0,
+		Windows:          windows,
+		ThresholdMin:     threshold,
+		Enabled:          enabled != 0,
+		ReviewDailyLimit: reviewLimit,
 	}, nil
 }
 
@@ -392,8 +424,10 @@ func (s *Store) SetEnglishSettings(es EnglishSettings) error {
 		enabled = 1
 	}
 	_, err = s.db.Exec(
-		`UPDATE english_settings SET windows_json=?, threshold_min=?, enabled=? WHERE id=1`,
-		string(raw), es.ThresholdMin, enabled,
+		`UPDATE english_settings
+		    SET windows_json=?, threshold_min=?, enabled=?, review_daily_limit=?
+		  WHERE id=1`,
+		string(raw), es.ThresholdMin, enabled, es.ReviewDailyLimit,
 	)
 	if err != nil {
 		return fmt.Errorf("update english_settings: %w", err)
@@ -407,8 +441,9 @@ func defaultEnglishSettings() EnglishSettings {
 			{Start: "07:30", End: "09:00"},
 			{Start: "21:00", End: "22:30"},
 		},
-		ThresholdMin: 10,
-		Enabled:      true,
+		ThresholdMin:     10,
+		Enabled:          true,
+		ReviewDailyLimit: 15,
 	}
 }
 
