@@ -15,6 +15,7 @@
 		11F42E2B885FCC47CD5CC0FF /* Bash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61935B607A9598142B233FF5 /* Bash.swift */; };
 		153DA7D67F1ADAC2D1CC6680 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1166585D8F0E17D1ED5D28B /* VoiceController.swift */; };
 		1644A8FCEFA720F7A18003DC /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 72998BAACAAFAAE88443FA9F /* MarkdownUI */; };
+		20D02DEA146FC710CD1D0979 /* EnglishHotkeyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64AC0511E3F7AF6604F992F7 /* EnglishHotkeyController.swift */; };
 		213960FC5D11D37B740CE9E5 /* NotificationBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AE0F039345F3A8FD043ABA /* NotificationBar.swift */; };
 		21924AA056E5D9A45D82252B /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = F57C0B4A33E9458556E739EF /* Transcriber.swift */; };
 		231097D700A81E581B9A7270 /* Supplements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87F59C4D70D2A509B0F65C2F /* Supplements.swift */; };
@@ -97,6 +98,7 @@
 		60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyTap.swift; sourceTree = "<group>"; };
 		61935B607A9598142B233FF5 /* Bash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bash.swift; sourceTree = "<group>"; };
 		62A9C2F35D43C52C2B90561B /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		64AC0511E3F7AF6604F992F7 /* EnglishHotkeyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishHotkeyController.swift; sourceTree = "<group>"; };
 		65BDF0617EDF92971A4168A2 /* ListEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListEntry.swift; sourceTree = "<group>"; };
 		6E7C6EBF44D6F527F79C38FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6EB340428613B213332CFB3E /* Finance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Finance.swift; sourceTree = "<group>"; };
@@ -239,6 +241,7 @@
 			isa = PBXGroup;
 			children = (
 				25A142018514E0D2EAF50A25 /* AudioPlayer.swift */,
+				64AC0511E3F7AF6604F992F7 /* EnglishHotkeyController.swift */,
 				60EC94CEE62D1E694E1212A8 /* HotkeyTap.swift */,
 				4BEB313D3572C774F686B032 /* KeyStore.swift */,
 				E865FAD42860A4D230E43B90 /* MenuBarItem.swift */,
@@ -378,6 +381,7 @@
 				27D2A375A7B30146C7407436 /* DetailView.swift in Sources */,
 				7FA40456F313F3E14F6D236F /* English.swift in Sources */,
 				8875EBCEA0E4842F8A9A6707 /* EnglishArchiveSheet.swift in Sources */,
+				20D02DEA146FC710CD1D0979 /* EnglishHotkeyController.swift in Sources */,
 				F4064928F2B79BAEADEA566E /* EnglishReviewRow.swift in Sources */,
 				DB2CB4E282F9B0D4CE92DBBC /* EnglishReviewSection.swift in Sources */,
 				8A1B2DF3671C824AA875846C /* EnglishSegmentRow.swift in Sources */,

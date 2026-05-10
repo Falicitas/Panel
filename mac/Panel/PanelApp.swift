@@ -26,6 +26,7 @@ struct PanelApp: App {
                     await state.loadAll()
                     state.ensureSegmentsForCurrentAudio()
                     voice.start()
+                    EnglishHotkeyController.shared.bind(state: state)
                 }
         }
         .windowResizability(.contentMinSize)
