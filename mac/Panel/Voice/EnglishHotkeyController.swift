@@ -6,9 +6,11 @@ import os.log
 /// 注册的 key:
 ///   - F6: 「最新一个没勾的段落」toggle play / pause / resume
 ///   - F5: 同段 seek -5s (clamp 到段开头)
+///   - F7: 倍速 -0.1 (clamp 到 0.5)
+///   - F8: 倍速 +0.1 (clamp 到 1.5)
 ///
 /// 「最新一个没勾的段落」= currentAudio.segments 中第一个 idx 不在 doneSegIdx 的段.
-/// 没 audio / 全勾完 / segments 空 → no-op.
+/// 没 audio / 全勾完 / segments 空 → no-op (但 F7/F8 仍生效, 改全局 rate).
 ///
 /// 用户场景: 焦点在 Typora 等其他 app, 一边写笔记一边精听, 不需要切回 Panel
 /// 就能控制段落播放. 跟 F12 (录音) 共用 HotkeyTap.shared.
@@ -23,6 +25,10 @@ final class EnglishHotkeyController {
     /// F5 seek 回退秒数.
     private let seekBackSec: Double = 5.0
 
+    /// F7/F8 倍速调整范围, 跟 MiniPlayerControls picker 选项 0.5..1.5 一致.
+    private let rateMinTimes10: Int = 5
+    private let rateMaxTimes10: Int = 15
+
     private init() {}
 
     /// PanelApp.task 启动后调一次. state 是 SwiftUI 持有的 AppState (@Observable),
@@ -34,6 +40,12 @@ final class EnglishHotkeyController {
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f6KeyCode) { [weak self] in
             Task { @MainActor in self?.handleF6() }
+        }
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f7KeyCode) { [weak self] in
+            Task { @MainActor in self?.adjustRate(steps: -1) }
+        }
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode) { [weak self] in
+            Task { @MainActor in self?.adjustRate(steps: +1) }
         }
         HotkeyTap.shared.start()
         os_log("F5/F6 hotkeys registered", log: Self.log, type: .info)
@@ -109,5 +121,19 @@ final class EnglishHotkeyController {
         let target = max(player.startSec, player.currentSec - seekBackSec)
         os_log("F5: seek seg %d to %.2fs", log: Self.log, type: .info, seg.idx, target)
         player.seek(to: target)
+    }
+
+    /// F7 (steps=-1) / F8 (steps=+1): 倍速 ±0.1, clamp 到 [0.5, 1.5].
+    ///
+    /// 用整数中间值避浮点累积误差 — 否则 0.5+0.1+0.1+... 会变成 0.6000001 之类,
+    /// MiniPlayerControls 的 Picker 用 Float tag 比较, 不相等就显示不出选中态.
+    /// 不需要 player 已绑定, 任何时候都能调 (rate 是全局设置, 下次 play 也用).
+    private func adjustRate(steps: Int) {
+        let cur = Int(round(player.rate * 10))
+        let next = max(rateMinTimes10, min(rateMaxTimes10, cur + steps))
+        if next == cur { return }
+        player.rate = Float(next) / 10.0
+        os_log("rate adjust: %.1fx → %.1fx", log: Self.log, type: .info,
+               Double(cur) / 10.0, Double(next) / 10.0)
     }
 }

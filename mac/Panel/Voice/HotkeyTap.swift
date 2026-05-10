@@ -14,6 +14,8 @@ final class HotkeyTap {
 
     static let f5KeyCode: Int64 = 96
     static let f6KeyCode: Int64 = 97
+    static let f7KeyCode: Int64 = 98
+    static let f8KeyCode: Int64 = 100
     static let f12KeyCode: Int64 = 111
 
     private static let log = OSLog(subsystem: "com.kinesis.panel", category: "voice.hotkey")
