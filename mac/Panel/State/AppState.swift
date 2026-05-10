@@ -154,7 +154,17 @@ final class AppState {
             let engS = try? await engSettingsResp
             self.active = l.active
             self.done = l.done
-            self.anchor = a.name
+            // anchor 校验: 文件可能在 Finder 里被改名/删除, backend 还存旧 anchor;
+            // 用最新 lists 校验, 失效则当作无 anchor 并通知 backend 清掉, 避免后续 fetch 撞 404
+            let validNames = Set(l.active.map(\.name)).union(l.done.map(\.name))
+            let effectiveAnchor: String? = {
+                guard let n = a.name else { return nil }
+                return validNames.contains(n) ? n : nil
+            }()
+            if a.name != nil && effectiveAnchor == nil {
+                _ = try? await api.setAnchor(name: nil)
+            }
+            self.anchor = effectiveAnchor
             self.focus = f
             self.microToday = m
             self.microProgress = mp
@@ -174,9 +184,9 @@ final class AppState {
             self.supplementMonthly = sm
             self.englishToday = engT
             self.englishSettings = engS
-            self.selectedName = a.name
-            if let name = a.name {
-                self.detail = try await api.getTodolist(name: name)
+            self.selectedName = effectiveAnchor
+            if let name = effectiveAnchor {
+                self.detail = try? await api.getTodolist(name: name)
             } else {
                 self.detail = nil
             }

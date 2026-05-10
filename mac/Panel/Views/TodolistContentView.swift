@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct TodolistContentView: View {
     @Environment(AppState.self) private var state
@@ -67,6 +68,18 @@ struct TodolistContentView: View {
         TodolistRow(entry: entry, isAnchored: isAnchored)
             .tag(entry.name as String?)
             .listRowBackground(isAnchored ? Color.anchorAccent : Color.clear)
+            .contextMenu {
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([Self.fileURL(for: entry.name)])
+                } label: {
+                    Label("在 Finder 中显示", systemImage: "folder")
+                }
+            }
+    }
+
+    private static func fileURL(for name: String) -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("panel/todolists/\(name)")
     }
 }
 
