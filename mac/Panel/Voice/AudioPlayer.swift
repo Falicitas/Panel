@@ -87,8 +87,14 @@ final class SegmentPlayer {
     }
 
     /// 暂停后恢复播放。
+    /// 若停在段末尾 (progressTimer 触发末尾 pause 留下的位置), 自动 seek 回段头重播 —
+    /// 否则 p.play() 立刻又被 progressTimer 检测末尾再次 pause, 死循环。
     func resume() {
         guard let p = player, !p.isPlaying else { return }
+        if p.currentTime >= endSec - 0.05 {
+            p.currentTime = startSec
+            currentSec = startSec
+        }
         p.play()
         paused = false
     }
@@ -109,11 +115,14 @@ final class SegmentPlayer {
 
     // MARK: - private
 
-    /// 0.1s 轮询 currentTime → 更新进度 + 检测 endSec 边界 (loop 或 stop)。
+    /// 0.1s 轮询 currentTime → 更新进度 + 检测 endSec 边界 (loop 或 pause-at-end)。
     ///
     /// 只在 p.isPlaying 真在播时更新 currentSec + 检查边界。pause / 系统 interruption
     /// 让 p.isPlaying=false 时直接 no-op, 保留 currentSec 让 resume 接着上次位置播,
     /// 避免 AVAudioPlayer 内部 currentTime 重置时 UI 进度条被反向覆盖回 0。
+    ///
+    /// 段末尾自然结束: pause 但不 stop — 让用户用 F5 从末尾回退 5s 重听末尾片段。
+    /// 用户按 F6 走 resume(), resume 内部检测末尾自动 seek 回段头重播。
     ///
     /// 不再用 dispatch-after 兜底 stop — 旧版按 segDur*1.5+5s 强制 stop, rate 改慢
     /// / audio session 被打断 / 系统级 pause 等场景下会在段没播完时提前触发 stop。
@@ -129,7 +138,10 @@ final class SegmentPlayer {
                         p.currentTime = self.startSec
                         self.currentSec = self.startSec
                     } else {
-                        self.stop()
+                        // 段末尾自然结束 — 暂停留在 endSec, 不销毁 player
+                        p.pause()
+                        self.paused = true
+                        self.currentSec = self.endSec  // clamp, 不让 slider 越界
                     }
                 }
             }
