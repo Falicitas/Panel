@@ -174,13 +174,30 @@ func (s *Store) migrate() error {
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_english_segments_audio_idx
 		  ON english_segments(audio_id, idx);
 		CREATE TABLE IF NOT EXISTS english_settings (
-			id            INTEGER PRIMARY KEY CHECK (id = 1),
-			windows_json  TEXT NOT NULL DEFAULT '[]',
-			threshold_min INTEGER NOT NULL DEFAULT 10,
-			enabled       INTEGER NOT NULL DEFAULT 1
+			id                 INTEGER PRIMARY KEY CHECK (id = 1),
+			windows_json       TEXT NOT NULL DEFAULT '[]',
+			threshold_min      INTEGER NOT NULL DEFAULT 10,
+			enabled            INTEGER NOT NULL DEFAULT 1,
+			review_daily_limit INTEGER NOT NULL DEFAULT 15
 		);
 		INSERT OR IGNORE INTO english_settings (id, windows_json)
 		  VALUES (1, '[{"start":"07:30","end":"09:00"},{"start":"21:00","end":"22:30"}]');
+		CREATE TABLE IF NOT EXISTS english_review_queue (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			audio_id          INTEGER NOT NULL,
+			seg_idx           INTEGER NOT NULL,
+			stage             INTEGER NOT NULL DEFAULT 0,
+			next_review_at    TEXT    NOT NULL,
+			first_done_at     INTEGER NOT NULL,
+			last_advanced_at  INTEGER NOT NULL,
+			postponed_count   INTEGER NOT NULL DEFAULT 0,
+			finished_at       INTEGER,
+			mastered_at       INTEGER
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_review_queue_audio_seg
+		  ON english_review_queue(audio_id, seg_idx);
+		CREATE INDEX IF NOT EXISTS idx_review_queue_due
+		  ON english_review_queue(next_review_at);
 	`)
 	if err != nil {
 		return err
@@ -212,6 +229,9 @@ func (s *Store) migrate() error {
 		// 一次性 backfill: 老 npr / voa audio 没 topic, 按 source 默认值补; 仅 topic='' 行受影响, 幂等。
 		{"english_audios.topic_backfill_npr", `UPDATE english_audios SET topic='finance' WHERE source='npr' AND topic=''`},
 		{"english_audios.topic_backfill_voa", `UPDATE english_audios SET topic='general' WHERE source='voa' AND topic=''`},
+		// english_settings.review_daily_limit: 精听复习队列每日配额上限 (issue-44 引入)。
+		// 老库默认 15 条/天; 用户可在 EnglishSettingsSheet 改。配额溢出的复习项自动 postpone 到次日。
+		{"english_settings.review_daily_limit", `ALTER TABLE english_settings ADD COLUMN review_daily_limit INTEGER NOT NULL DEFAULT 15`},
 	} {
 		if _, err := s.db.Exec(alter.sql); err != nil {
 			if !isDuplicateColumnErr(err) {
