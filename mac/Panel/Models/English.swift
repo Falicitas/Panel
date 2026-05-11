@@ -102,7 +102,8 @@ struct EnglishToday: Codable, Hashable, Sendable {
     let totalMinutes: Double
     let currentAudio: EnglishAudio?
     let segments: [EnglishSegment]
-    let doneSegIdx: [Int]
+    let doneSegIdx: [Int]            // 跨日累积已勾 (用于 ✓ + 全勾完弹 sheet)
+    let doneTodaySegIdx: [Int]       // 仅今日勾 (UI 颜色区分今日 vs 历史)
     // 精听复习队列摘要 (后端 issue-44 起返回; 老 backend 字段缺省 → 0)
     let reviewDoneToday: Int
     let reviewDailyLimit: Int
@@ -115,6 +116,7 @@ struct EnglishToday: Codable, Hashable, Sendable {
         case totalMinutes = "total_minutes"
         case currentAudio = "current_audio"
         case doneSegIdx = "done_seg_idx"
+        case doneTodaySegIdx = "done_today_seg_idx"
         case reviewDoneToday = "review_done_today"
         case reviewDailyLimit = "review_daily_limit"
         case reviewDueTotal = "review_due_total"

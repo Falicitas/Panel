@@ -281,11 +281,17 @@ struct EnglishView: View {
             }
         } else {
             let doneSet = Set(today.doneSegIdx)
+            let doneTodaySet = Set(today.doneTodaySegIdx)
             VStack(alignment: .leading, spacing: 0) {
                 Divider().padding(.vertical, 4)
                 Text("段落 (\(today.segments.count))").font(.headline)
                 ForEach(today.segments) { seg in
-                    EnglishSegmentRow(audio: audio, segment: seg, isDone: doneSet.contains(seg.idx))
+                    EnglishSegmentRow(
+                        audio: audio,
+                        segment: seg,
+                        isDone: doneSet.contains(seg.idx),
+                        isDoneToday: doneTodaySet.contains(seg.idx)
+                    )
                 }
             }
         }

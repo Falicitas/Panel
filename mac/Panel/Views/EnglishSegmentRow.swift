@@ -6,7 +6,8 @@ import SwiftUI
 struct EnglishSegmentRow: View {
     let audio: EnglishAudio
     let segment: EnglishSegment
-    let isDone: Bool
+    let isDone: Bool         // 跨日累积: 任一天勾过 → true
+    let isDoneToday: Bool    // 仅今日勾过 → true (用于 checkbox 颜色区分)
 
     @Environment(SegmentPlayer.self) private var player
     @Environment(AppState.self) private var state
@@ -65,6 +66,11 @@ struct EnglishSegmentRow: View {
 
     @ViewBuilder
     private var checkBox: some View {
+        // 颜色三态:
+        //   未勾 (isDone=false)            → 空 □ secondary
+        //   今日勾 (isDoneToday)            → ✓ accentColor (蓝)
+        //   仅历史勾 (isDone && !isDoneToday) → ✓ secondary (灰), 表示之前已完成跨日累计
+        let color: Color = isDoneToday ? Color.accentColor : (isDone ? Color.secondary : Color.secondary)
         Button {
             Task {
                 await state.toggleEnglishSegment(
@@ -76,10 +82,17 @@ struct EnglishSegmentRow: View {
         } label: {
             Image(systemName: isDone ? "checkmark.square.fill" : "square")
                 .font(.system(size: 20))
-                .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
+                .foregroundStyle(color)
         }
         .buttonStyle(.plain)
-        .help(isDone ? "取消勾选" : "标记完成")
+        .help(isDone
+              ? (isDoneToday ? "今日已勾, 点击取消" : "历史已勾 (\(historicalHelp))")
+              : "标记完成")
+    }
+
+    /// 历史已勾 checkbox 的 hover 提示, 暂时简单提示一句, 不真去拿历史日期 (避免 N+1).
+    private var historicalHelp: String {
+        "之前已完成"
     }
 
     @ViewBuilder

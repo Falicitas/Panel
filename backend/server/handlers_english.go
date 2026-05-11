@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -30,14 +31,15 @@ type englishWindowResp struct {
 }
 
 type englishTodayResp struct {
-	Date         string                 `json:"date"`
-	Windows      []englishWindowResp    `json:"windows"`
-	TodayDone    bool                   `json:"today_done"`
-	ThresholdMin int                    `json:"threshold_min"`
-	TotalMinutes float64                `json:"total_minutes"`           // 当日总累计 (含窗口外)
-	CurrentAudio *store.EnglishAudio    `json:"current_audio,omitempty"` // 最新未归档
-	Segments     []store.EnglishSegment `json:"segments"`                // 当前 audio 的段
-	DoneSegIdx   []int                  `json:"done_seg_idx"`            // 当前 audio 当日已勾的 idx
+	Date            string                 `json:"date"`
+	Windows         []englishWindowResp    `json:"windows"`
+	TodayDone       bool                   `json:"today_done"`
+	ThresholdMin    int                    `json:"threshold_min"`
+	TotalMinutes    float64                `json:"total_minutes"`           // 当日总累计 (含窗口外)
+	CurrentAudio    *store.EnglishAudio    `json:"current_audio,omitempty"` // 最新未归档
+	Segments        []store.EnglishSegment `json:"segments"`                // 当前 audio 的段
+	DoneSegIdx      []int                  `json:"done_seg_idx"`            // 跨日累积已勾 idx (UI ✓ + 全勾完弹 sheet)
+	DoneTodaySegIdx []int                  `json:"done_today_seg_idx"`      // 仅今日勾 idx (UI 颜色区分今日 vs 历史)
 	// 精听复习队列摘要 (issue-44 引入). UI headerStats 双指标"新学 X.X / Y · 复习 W / Z 条"
 	ReviewDoneToday  int `json:"review_done_today"`  // 今日已 advance 的复习条数 (stage > 0 + last_advanced_at 落今天)
 	ReviewDailyLimit int `json:"review_daily_limit"` // 配额上限 (用户设置)
@@ -90,6 +92,7 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 		TotalMinutes:     totalMin,
 		Segments:         []store.EnglishSegment{},
 		DoneSegIdx:       []int{},
+		DoneTodaySegIdx:  []int{},
 		ReviewDoneToday:  reviewDone,
 		ReviewDailyLimit: reviewLimit,
 		ReviewDueTotal:   len(dueAll),
@@ -141,7 +144,8 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			resp.Segments = segs
 		}
-		resp.DoneSegIdx = doneSegIdxForAudio(s.store, today, cur.ID)
+		resp.DoneSegIdx = doneSegIdxForAudio(s.store, cur.ID)
+		resp.DoneTodaySegIdx = doneTodaySegIdxForAudio(s.store, today, cur.ID)
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -648,8 +652,32 @@ func computeTotalMinutes(s *store.Store, today string) (float64, error) {
 	return sum / 60.0, nil
 }
 
-// doneSegIdxForAudio 拿当日勾过的 segment idx (audio 当前页用)。
-func doneSegIdxForAudio(s *store.Store, today string, audioID int64) []int {
+// doneSegIdxForAudio 跨日累计: audio 历史上任一天勾过完成的 segment idx。
+// 用于 isDone 判定 (checkbox ✓) + mac 端跨日全勾完弹 skip sheet 触发归档。
+func doneSegIdxForAudio(s *store.Store, audioID int64) []int {
+	recs, _ := s.ListRecords(english.SegModule, "", "")
+	prefix := fmt.Sprintf("%d:", audioID)
+	set := map[int]bool{}
+	for _, rec := range recs {
+		if !strings.HasPrefix(rec.Key, prefix) {
+			continue
+		}
+		idx, err := strconv.Atoi(strings.TrimPrefix(rec.Key, prefix))
+		if err != nil {
+			continue
+		}
+		set[idx] = true
+	}
+	out := make([]int, 0, len(set))
+	for idx := range set {
+		out = append(out, idx)
+	}
+	sort.Ints(out)
+	return out
+}
+
+// doneTodaySegIdxForAudio 仅今日勾的 segment idx, 用于 UI 颜色区分 (今日蓝 / 历史灰)。
+func doneTodaySegIdxForAudio(s *store.Store, today string, audioID int64) []int {
 	recs, _ := s.ListRecords(english.SegModule, today, today)
 	prefix := fmt.Sprintf("%d:", audioID)
 	out := []int{}
