@@ -75,7 +75,7 @@ final class EnglishHotkeyController {
             os_log("F6: no current segment (no audio / all done / no localPath)", log: Self.log, type: .info)
             return
         }
-        let bound = player.isPlaying(audioID: audio.id, segIdx: seg.idx)
+        let bound = player.isPlaying(audioID: audio.id, segIdx: seg.idx, source: .learn)
         let playing = bound && !player.paused
         if playing {
             os_log("F6: pause seg %d", log: Self.log, type: .info, seg.idx)
@@ -97,6 +97,7 @@ final class EnglishHotkeyController {
                 url: url,
                 audioID: audio.id,
                 segIdx: seg.idx,
+                source: .learn,
                 startMs: max(0, Int(seg.startMs)),
                 endMs: endMs
             )
@@ -114,8 +115,8 @@ final class EnglishHotkeyController {
             os_log("F5: no current segment", log: Self.log, type: .info)
             return
         }
-        guard player.isPlaying(audioID: audio.id, segIdx: seg.idx) else {
-            os_log("F5: seg %d not bound, ignore", log: Self.log, type: .info, seg.idx)
+        guard player.isPlaying(audioID: audio.id, segIdx: seg.idx, source: .learn) else {
+            os_log("F5: seg %d not bound (learn), ignore", log: Self.log, type: .info, seg.idx)
             return
         }
         let target = max(player.startSec, player.currentSec - seekBackSec)

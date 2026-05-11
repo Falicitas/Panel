@@ -208,7 +208,7 @@ struct EnglishView: View {
     @ViewBuilder
     private func wholeAudioPlayer(audio: EnglishAudio) -> some View {
         if !audio.localPath.isEmpty, audio.durationMs > 0 {
-            let bound = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx)
+            let bound = player.isPlaying(audioID: audio.id, segIdx: SegmentPlayer.wholeAudioSegIdx, source: .whole)
             let playing = bound && !player.paused
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 12) {
@@ -251,6 +251,7 @@ struct EnglishView: View {
                 url: url,
                 audioID: audio.id,
                 segIdx: SegmentPlayer.wholeAudioSegIdx,
+                source: .whole,
                 startMs: 0,
                 endMs: Int(audio.durationMs)
             )

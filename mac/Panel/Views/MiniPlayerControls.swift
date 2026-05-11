@@ -14,6 +14,7 @@ struct MiniPlayerControls: View {
     struct Placeholder {
         let audioID: Int64
         let segIdx: Int
+        let source: PlaySource
         let lengthSec: Double
     }
 
@@ -100,7 +101,7 @@ struct MiniPlayerControls: View {
 
     private var isLive: Bool {
         guard let p = placeholder else { return true }
-        return player.isPlaying(audioID: p.audioID, segIdx: p.segIdx)
+        return player.isPlaying(audioID: p.audioID, segIdx: p.segIdx, source: p.source)
     }
 
     private var displaySec: Double {

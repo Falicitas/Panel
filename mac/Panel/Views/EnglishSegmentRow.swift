@@ -33,6 +33,7 @@ struct EnglishSegmentRow: View {
                 MiniPlayerControls(placeholder: .init(
                     audioID: audio.id,
                     segIdx: segment.idx,
+                    source: .learn,
                     lengthSec: Double(segment.endMs - segment.startMs) / 1000.0
                 ))
             }
@@ -83,7 +84,7 @@ struct EnglishSegmentRow: View {
 
     @ViewBuilder
     private var playButton: some View {
-        let bound = player.isPlaying(audioID: audio.id, segIdx: segment.idx)
+        let bound = player.isPlaying(audioID: audio.id, segIdx: segment.idx, source: .learn)
         let playing = bound && !player.paused
         Button {
             togglePlay(bound: bound, playing: playing)
@@ -120,6 +121,7 @@ struct EnglishSegmentRow: View {
                 url: url,
                 audioID: audio.id,
                 segIdx: segment.idx,
+                source: .learn,
                 startMs: expandedStart,
                 endMs: expandedEnd
             )

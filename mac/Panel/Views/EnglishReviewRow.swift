@@ -20,7 +20,7 @@ struct EnglishReviewRow: View {
     private static let playbackPaddingMs: Int = 0
 
     var body: some View {
-        let bound = player.isPlaying(audioID: audio.id, segIdx: item.segment.idx)
+        let bound = player.isPlaying(audioID: audio.id, segIdx: item.segment.idx, source: .review)
         let playing = bound && !player.paused
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 12) {
@@ -205,6 +205,7 @@ struct EnglishReviewRow: View {
                 url: url,
                 audioID: audio.id,
                 segIdx: item.segment.idx,
+                source: .review,
                 startMs: expandedStart,
                 endMs: expandedEnd
             )

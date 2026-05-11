@@ -2,6 +2,18 @@ import AVFoundation
 import Foundation
 import Observation
 
+/// 段播放的来源 view, 跟 (audioID, segIdx) 一起作为绑定 key 的第三维。
+///
+/// 同一段 (audioID, segIdx) 同时显示在「当前音频段落」和「复习队列」两个 view 里时,
+/// 不带 source 的 isPlaying 会让两个 view 都判定 bound, 进度条同步显示 — 用户在 A
+/// 区按 ▶ 结果 B 区也亮起。加 source 后两个 view 各自只响应自己的播放。
+enum PlaySource: String, Sendable {
+    case learn   // 当前音频段落 (EnglishSegmentRow)
+    case review  // 复习队列段落 (EnglishReviewRow)
+    case whole   // 整段播放 (EnglishView.wholeAudioPlayer)
+    case archive // 历史档案段落 (EnglishArchiveSheet)
+}
+
 /// 单例的"段播放器"。同一时刻只放一个 segment (或整段, segIdx = .integerMin)。
 /// 不切割实际 mp3 文件 — AVAudioPlayer 加载整文件, 设 currentTime 跳到区间起点,
 /// 0.1s timer 检测 currentTime >= endSec 触发 stop / loop。
@@ -16,6 +28,7 @@ final class SegmentPlayer {
 
     private(set) var playingAudioID: Int64?
     private(set) var playingSegIdx: Int?
+    private(set) var playingSource: PlaySource?
 
     /// 当前播放进度 (绝对 audio 秒数, 不是相对段起点)。
     private(set) var currentSec: Double = 0
@@ -40,14 +53,16 @@ final class SegmentPlayer {
 
     private init() {}
 
-    /// 是否正在播放给定 audio 的给定 segment (含暂停态)。
-    func isPlaying(audioID: Int64, segIdx: Int) -> Bool {
-        playingAudioID == audioID && playingSegIdx == segIdx
+    /// 是否正在播放给定 audio + segment + source 的组合 (含暂停态)。
+    /// source 区分同一段被多个 view 同时显示时谁绑定 player — 见 PlaySource 注释。
+    func isPlaying(audioID: Int64, segIdx: Int, source: PlaySource) -> Bool {
+        playingAudioID == audioID && playingSegIdx == segIdx && playingSource == source
     }
 
     /// 开始播放区间 [startMs, endMs) of url。已在播则先 stop。
     /// segIdx = SegmentPlayer.wholeAudioSegIdx 表示整段播放 (T4)。
-    func play(url: URL, audioID: Int64, segIdx: Int, startMs: Int, endMs: Int) throws {
+    /// source 标识调用方 view, 让其他显示同段的 view 不被误判为 bound。
+    func play(url: URL, audioID: Int64, segIdx: Int, source: PlaySource, startMs: Int, endMs: Int) throws {
         stop()
         guard endMs > startMs else { return }
         let p = try AVAudioPlayer(contentsOf: url)
@@ -65,6 +80,7 @@ final class SegmentPlayer {
         currentSec = startSec
         playingAudioID = audioID
         playingSegIdx = segIdx
+        playingSource = source
         paused = false
         player = p
 
@@ -107,6 +123,7 @@ final class SegmentPlayer {
         player = nil
         playingAudioID = nil
         playingSegIdx = nil
+        playingSource = nil
         currentSec = 0
         startSec = 0
         endSec = 0
