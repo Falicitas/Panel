@@ -89,6 +89,10 @@ struct EnglishView: View {
                 Spacer()
                 reviewSummaryBadge(today: today)
             }
+            HStack {
+                anchorBadge()
+                Spacer()
+            }
             ProgressView(
                 value: min(today.totalMinutes, Double(today.thresholdMin)),
                 total: Double(today.thresholdMin)
@@ -117,6 +121,73 @@ struct EnglishView: View {
                     .foregroundStyle(.orange)
             }
         }
+    }
+
+    /// 当前锚定段 (F5/F6 全局热键的目标). 焦点在 Typora 时按热键作用此段;
+    /// 没锚定按 F5/F6 会蜂鸣提示。
+    @ViewBuilder
+    private func anchorBadge() -> some View {
+        HStack(spacing: 6) {
+            if let anchor = state.englishAnchor {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Text(anchorDisplay(anchor: anchor))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Button {
+                    state.clearEnglishAnchor()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("清除锚定")
+            } else {
+                Image(systemName: "pin.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary.opacity(0.5))
+                Text("未锚定 · F5/F6 不响应")
+                    .font(.caption)
+                    .foregroundStyle(.secondary.opacity(0.7))
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(
+            (state.englishAnchor != nil ? Color.orange : Color.secondary)
+                .opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 6)
+        )
+    }
+
+    /// 锚定段的人话: "[SCIAM] 段 3 (复习)" / "[NPR] 段 7 (新学)"
+    private func anchorDisplay(anchor: EnglishAnchor) -> String {
+        let sourceLabel: String = {
+            switch anchor.source {
+            case .learn:   return "新学"
+            case .review:  return "复习"
+            case .whole:   return "整段"
+            case .archive: return "档案"
+            }
+        }()
+        let audioLabel = anchorAudioSource(audioID: anchor.audioID)
+        return "\(audioLabel) 段 \(anchor.segIdx + 1) (\(sourceLabel))"
+    }
+
+    /// 找锚定 audio 的 source 字符串 (大写如 SCIAM/NPR/VOA), 找不到回退 audioID。
+    private func anchorAudioSource(audioID: Int64) -> String {
+        if let cur = state.englishToday?.currentAudio, cur.id == audioID {
+            return "[\(cur.source.uppercased())]"
+        }
+        if let rev = state.englishReviewToday {
+            for g in rev.groups where g.audio.id == audioID {
+                return "[\(g.audio.source.uppercased())]"
+            }
+        }
+        return "audio#\(audioID)"
     }
 
     @ViewBuilder

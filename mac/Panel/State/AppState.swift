@@ -53,6 +53,10 @@ final class AppState {
     var englishSettings: EnglishSettings?
     /// 英文练习 - 复习队列今日响应 (按 audio 分组). nil = 未加载, groups 空 = 今日无到期。
     var englishReviewToday: EnglishReviewToday?
+    /// 英文练习 - 锚定段 (全局唯一). F5/F6 全局热键作用于此段; nil = 未锚定 (热键 beep 提示).
+    /// source 区分锚定来自 learn / review view, 让播放进度只在对应 view 显示。
+    /// 当前不持久化, 重启 Panel 丢失 (用户需重新点 📌)。
+    var englishAnchor: EnglishAnchor?
     /// 跳过模态框: 是否显示 (绑给 .sheet)。主动点跳过 / 自动归档触发都走这条。
     var showSkipSheet: Bool = false
     /// 模态框当前候选 audio (含 segments / description preview)。fetch 中或抽完时为 nil。
@@ -530,6 +534,23 @@ final class AppState {
         } catch {
             self.lastError = error.localizedDescription
         }
+    }
+
+    // MARK: - English anchor (F5/F6 全局热键的目标段)
+
+    /// toggle 锚定: 已锚定同段 → 取消; 否则锚定为新段 (替换之前的锚定)。
+    /// 全局只有一个 anchor — 锚定别处自动取消旧锚。
+    func toggleEnglishAnchor(audioID: Int64, segIdx: Int, source: PlaySource) {
+        let want = EnglishAnchor(audioID: audioID, segIdx: segIdx, source: source)
+        if englishAnchor == want {
+            englishAnchor = nil
+        } else {
+            englishAnchor = want
+        }
+    }
+
+    func clearEnglishAnchor() {
+        englishAnchor = nil
     }
 
     /// 当前 audio 若 status=pending 且 local 文件存在 + 本 session 没失败过, 后台启动转写,

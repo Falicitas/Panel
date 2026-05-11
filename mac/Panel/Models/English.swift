@@ -153,6 +153,14 @@ struct EnglishSkipReq: Codable, Sendable {
     }
 }
 
+/// 锚定段标识 (F5/F6 全局热键的目标). 全局唯一, AppState 持有。
+/// source 区分锚定来自哪个 view (learn / review), 让 player 在对应 view 显示进度。
+struct EnglishAnchor: Equatable, Hashable, Sendable {
+    let audioID: Int64
+    let segIdx: Int
+    let source: PlaySource
+}
+
 /// 精听复习队列单条复习项 (server 富化了 segment + audio).
 /// stage 0..4 对应 1/3/7/14/30 天复习; stage 5 = mastered (不再展示).
 struct EnglishReviewItem: Codable, Identifiable, Hashable, Sendable {

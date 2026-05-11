@@ -22,6 +22,7 @@ struct EnglishSegmentRow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
                 playButton
+                anchorButton
                 Text("\(segment.idx + 1).")
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -93,6 +94,23 @@ struct EnglishSegmentRow: View {
     /// 历史已勾 checkbox 的 hover 提示, 暂时简单提示一句, 不真去拿历史日期 (避免 N+1).
     private var historicalHelp: String {
         "之前已完成"
+    }
+
+    @ViewBuilder
+    private var anchorButton: some View {
+        let isAnchored = state.englishAnchor == EnglishAnchor(
+            audioID: audio.id, segIdx: segment.idx, source: .learn
+        )
+        Button {
+            state.toggleEnglishAnchor(audioID: audio.id, segIdx: segment.idx, source: .learn)
+        } label: {
+            Image(systemName: isAnchored ? "pin.fill" : "pin")
+                .font(.system(size: 16))
+                .foregroundStyle(isAnchored ? Color.orange : Color.secondary.opacity(0.5))
+                .rotationEffect(.degrees(isAnchored ? 0 : 30))
+        }
+        .buttonStyle(.plain)
+        .help(isAnchored ? "已锚定 (F5/F6 作用此段) · 点击取消" : "锚定为 F5/F6 操作目标")
     }
 
     @ViewBuilder
