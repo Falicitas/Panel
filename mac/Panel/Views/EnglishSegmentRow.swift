@@ -44,10 +44,28 @@ struct EnglishSegmentRow: View {
         .contentShape(Rectangle())
     }
 
+    /// 锚定段 = 用 state.anchorShowText (F10 全局切换 + 点击同步), 非锚定段 = 本地 @State。
+    private var isAnchored: Bool {
+        state.englishAnchor == EnglishAnchor(audioID: audio.id, segIdx: segment.idx, source: .learn)
+    }
+
+    private var displayShowText: Bool {
+        isAnchored ? state.anchorShowText : showText
+    }
+
+    private func toggleShowText() {
+        if isAnchored {
+            state.anchorShowText.toggle()
+        } else {
+            showText.toggle()
+        }
+    }
+
     @ViewBuilder
     private var textArea: some View {
+        let shown = displayShowText
         Group {
-            if showText {
+            if shown {
                 Text(segment.text)
                     .font(.title3)
                     .lineSpacing(2)
@@ -61,8 +79,8 @@ struct EnglishSegmentRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .onTapGesture { showText.toggle() }
-        .help(showText ? "点击隐藏字幕" : "点击显示字幕")
+        .onTapGesture { toggleShowText() }
+        .help(shown ? "点击隐藏字幕" : "点击显示字幕")
     }
 
     @ViewBuilder

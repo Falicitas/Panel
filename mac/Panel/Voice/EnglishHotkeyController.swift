@@ -5,10 +5,11 @@ import os.log
 /// 英文精听全局快捷键 controller (shared 单例).
 ///
 /// 注册的 key (focused 在哪个 app 都生效, 通过 HotkeyTap.shared 的 CGEventTap):
-///   - F6: 锚定段 toggle play / pause / resume
 ///   - F5: 锚定段 seek -5s (clamp 到段开头)
+///   - F6: 锚定段 toggle play / pause / resume
 ///   - F7: 倍速 -0.1 (clamp 到 0.5)
 ///   - F8: 倍速 +0.1 (clamp 到 1.5)
+///   - F10: 锚定段字幕显示 toggle (state.anchorShowText)
 ///
 /// F5/F6 作用对象 = AppState.englishAnchor (用户在 EnglishSegmentRow / EnglishReviewRow
 /// 点 📌 按钮设置). 全局只有一个锚定 — 锚新段自动取消旧锚。
@@ -49,8 +50,11 @@ final class EnglishHotkeyController {
         HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode) { [weak self] in
             Task { @MainActor in self?.adjustRate(steps: +1) }
         }
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f10KeyCode) { [weak self] in
+            Task { @MainActor in self?.handleF10() }
+        }
         HotkeyTap.shared.start()
-        os_log("F5-F8 hotkeys registered", log: Self.log, type: .info)
+        os_log("F5-F10 hotkeys registered", log: Self.log, type: .info)
     }
 
     /// 解锁定段 → 实际 audio + segment + source. 三种 nil 路径:
@@ -152,7 +156,19 @@ final class EnglishHotkeyController {
                Double(cur) / 10.0, Double(next) / 10.0)
     }
 
-    /// F5/F6 没锚定 / 锚定段失效 → 系统蜂鸣提示用户回 Panel 锚定。
+    /// F10: toggle 锚定段字幕显示. 没锚定 → beep。
+    /// 改 state.anchorShowText, 锚定 row 用此值 reactive 切换 textArea 显示。
+    private func handleF10() {
+        guard let st = stateRef, st.englishAnchor != nil else {
+            beepNoAnchor(action: "F10")
+            return
+        }
+        st.anchorShowText.toggle()
+        os_log("F10: anchorShowText → %{public}@", log: Self.log, type: .info,
+               st.anchorShowText ? "show" : "hide")
+    }
+
+    /// F5/F6/F10 没锚定 / 锚定段失效 → 系统蜂鸣提示用户回 Panel 锚定。
     /// Typora 等前台 app 焦点下用户能立即听到反馈, 不需要切回 Panel 看 lastError。
     private func beepNoAnchor(action: String) {
         os_log("%{public}@: no anchor, beep", log: Self.log, type: .info, action)

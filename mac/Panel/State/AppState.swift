@@ -57,6 +57,9 @@ final class AppState {
     /// source 区分锚定来自 learn / review view, 让播放进度只在对应 view 显示。
     /// 当前不持久化, 重启 Panel 丢失 (用户需重新点 📌)。
     var englishAnchor: EnglishAnchor?
+    /// 锚定段的字幕显示开关. F10 全局热键 toggle 这个值, 锚定 row 用它决定 textArea 显示。
+    /// 切换锚定段时 reset = false (新锚段默认隐藏字幕)。非锚定段仍用 row 本地 @State。
+    var anchorShowText: Bool = false
     /// 跳过模态框: 是否显示 (绑给 .sheet)。主动点跳过 / 自动归档触发都走这条。
     var showSkipSheet: Bool = false
     /// 模态框当前候选 audio (含 segments / description preview)。fetch 中或抽完时为 nil。
@@ -540,6 +543,7 @@ final class AppState {
 
     /// toggle 锚定: 已锚定同段 → 取消; 否则锚定为新段 (替换之前的锚定)。
     /// 全局只有一个 anchor — 锚定别处自动取消旧锚。
+    /// 切换锚定段 (含取消) 时 anchorShowText reset = false, 新锚段从隐藏字幕开始。
     func toggleEnglishAnchor(audioID: Int64, segIdx: Int, source: PlaySource) {
         let want = EnglishAnchor(audioID: audioID, segIdx: segIdx, source: source)
         if englishAnchor == want {
@@ -547,10 +551,12 @@ final class AppState {
         } else {
             englishAnchor = want
         }
+        anchorShowText = false
     }
 
     func clearEnglishAnchor() {
         englishAnchor = nil
+        anchorShowText = false
     }
 
     /// 当前 audio 若 status=pending 且 local 文件存在 + 本 session 没失败过, 后台启动转写,
