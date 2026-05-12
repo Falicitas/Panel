@@ -20,11 +20,12 @@ struct EnglishReviewRow: View {
     private static let playbackPaddingMs: Int = 0
 
     var body: some View {
-        let bound = player.isPlaying(audioID: audio.id, segIdx: item.segment.idx)
+        let bound = player.isPlaying(audioID: audio.id, segIdx: item.segment.idx, source: .review)
         let playing = bound && !player.paused
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 12) {
                 playButton(bound: bound, playing: playing)
+                anchorButton
                 Text("\(item.segment.idx + 1).")
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -68,10 +69,28 @@ struct EnglishReviewRow: View {
         }
     }
 
+    /// 锚定段 = 用 state.anchorShowText (F10 全局切换 + 点击同步), 非锚定段 = 本地 @State。
+    private var isAnchored: Bool {
+        state.englishAnchor == EnglishAnchor(audioID: audio.id, segIdx: item.segment.idx, source: .review)
+    }
+
+    private var displayShowText: Bool {
+        isAnchored ? state.anchorShowText : showText
+    }
+
+    private func toggleShowText() {
+        if isAnchored {
+            state.anchorShowText.toggle()
+        } else {
+            showText.toggle()
+        }
+    }
+
     @ViewBuilder
     private var textArea: some View {
+        let shown = displayShowText
         Group {
-            if showText {
+            if shown {
                 Text(item.segment.text)
                     .font(.title3)
                     .lineSpacing(2)
@@ -85,8 +104,25 @@ struct EnglishReviewRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .onTapGesture { showText.toggle() }
-        .help(showText ? "点击隐藏字幕" : "点击显示字幕")
+        .onTapGesture { toggleShowText() }
+        .help(shown ? "点击隐藏字幕" : "点击显示字幕")
+    }
+
+    @ViewBuilder
+    private var anchorButton: some View {
+        let isAnchored = state.englishAnchor == EnglishAnchor(
+            audioID: audio.id, segIdx: item.segment.idx, source: .review
+        )
+        Button {
+            state.toggleEnglishAnchor(audioID: audio.id, segIdx: item.segment.idx, source: .review)
+        } label: {
+            Image(systemName: isAnchored ? "pin.fill" : "pin")
+                .font(.system(size: 16))
+                .foregroundStyle(isAnchored ? Color.orange : Color.secondary.opacity(0.5))
+                .rotationEffect(.degrees(isAnchored ? 0 : 30))
+        }
+        .buttonStyle(.plain)
+        .help(isAnchored ? "已锚定 (F5/F6 作用此段) · 点击取消" : "锚定为 F5/F6 操作目标")
     }
 
     @ViewBuilder
@@ -205,6 +241,7 @@ struct EnglishReviewRow: View {
                 url: url,
                 audioID: audio.id,
                 segIdx: item.segment.idx,
+                source: .review,
                 startMs: expandedStart,
                 endMs: expandedEnd
             )

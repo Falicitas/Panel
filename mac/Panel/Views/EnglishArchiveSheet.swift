@@ -161,7 +161,7 @@ struct EnglishArchiveSheet: View {
 
     @ViewBuilder
     private func archiveSegmentRow(audio: EnglishAudio, segment: EnglishSegment) -> some View {
-        let playing = player.isPlaying(audioID: audio.id, segIdx: segment.idx)
+        let playing = player.isPlaying(audioID: audio.id, segIdx: segment.idx, source: .archive)
         HStack(alignment: .top, spacing: 10) {
             Button {
                 togglePlay(audio: audio, segment: segment, playing: playing)
@@ -196,6 +196,7 @@ struct EnglishArchiveSheet: View {
                 url: url,
                 audioID: audio.id,
                 segIdx: segment.idx,
+                source: .archive,
                 startMs: Int(segment.startMs),
                 endMs: Int(segment.endMs)
             )

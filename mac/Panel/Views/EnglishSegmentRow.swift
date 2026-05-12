@@ -6,7 +6,8 @@ import SwiftUI
 struct EnglishSegmentRow: View {
     let audio: EnglishAudio
     let segment: EnglishSegment
-    let isDone: Bool
+    let isDone: Bool         // 跨日累积: 任一天勾过 → true
+    let isDoneToday: Bool    // 仅今日勾过 → true (用于 checkbox 颜色区分)
 
     @Environment(SegmentPlayer.self) private var player
     @Environment(AppState.self) private var state
@@ -21,6 +22,7 @@ struct EnglishSegmentRow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
                 playButton
+                anchorButton
                 Text("\(segment.idx + 1).")
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -33,6 +35,7 @@ struct EnglishSegmentRow: View {
                 MiniPlayerControls(placeholder: .init(
                     audioID: audio.id,
                     segIdx: segment.idx,
+                    source: .learn,
                     lengthSec: Double(segment.endMs - segment.startMs) / 1000.0
                 ))
             }
@@ -41,10 +44,28 @@ struct EnglishSegmentRow: View {
         .contentShape(Rectangle())
     }
 
+    /// 锚定段 = 用 state.anchorShowText (F10 全局切换 + 点击同步), 非锚定段 = 本地 @State。
+    private var isAnchored: Bool {
+        state.englishAnchor == EnglishAnchor(audioID: audio.id, segIdx: segment.idx, source: .learn)
+    }
+
+    private var displayShowText: Bool {
+        isAnchored ? state.anchorShowText : showText
+    }
+
+    private func toggleShowText() {
+        if isAnchored {
+            state.anchorShowText.toggle()
+        } else {
+            showText.toggle()
+        }
+    }
+
     @ViewBuilder
     private var textArea: some View {
+        let shown = displayShowText
         Group {
-            if showText {
+            if shown {
                 Text(segment.text)
                     .font(.title3)
                     .lineSpacing(2)
@@ -58,12 +79,17 @@ struct EnglishSegmentRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .onTapGesture { showText.toggle() }
-        .help(showText ? "点击隐藏字幕" : "点击显示字幕")
+        .onTapGesture { toggleShowText() }
+        .help(shown ? "点击隐藏字幕" : "点击显示字幕")
     }
 
     @ViewBuilder
     private var checkBox: some View {
+        // 颜色三态:
+        //   未勾 (isDone=false)            → 空 □ secondary
+        //   今日勾 (isDoneToday)            → ✓ accentColor (蓝)
+        //   仅历史勾 (isDone && !isDoneToday) → ✓ secondary (灰), 表示之前已完成跨日累计
+        let color: Color = isDoneToday ? Color.accentColor : (isDone ? Color.secondary : Color.secondary)
         Button {
             Task {
                 await state.toggleEnglishSegment(
@@ -75,15 +101,39 @@ struct EnglishSegmentRow: View {
         } label: {
             Image(systemName: isDone ? "checkmark.square.fill" : "square")
                 .font(.system(size: 20))
-                .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
+                .foregroundStyle(color)
         }
         .buttonStyle(.plain)
-        .help(isDone ? "取消勾选" : "标记完成")
+        .help(isDone
+              ? (isDoneToday ? "今日已勾, 点击取消" : "历史已勾 (\(historicalHelp))")
+              : "标记完成")
+    }
+
+    /// 历史已勾 checkbox 的 hover 提示, 暂时简单提示一句, 不真去拿历史日期 (避免 N+1).
+    private var historicalHelp: String {
+        "之前已完成"
+    }
+
+    @ViewBuilder
+    private var anchorButton: some View {
+        let isAnchored = state.englishAnchor == EnglishAnchor(
+            audioID: audio.id, segIdx: segment.idx, source: .learn
+        )
+        Button {
+            state.toggleEnglishAnchor(audioID: audio.id, segIdx: segment.idx, source: .learn)
+        } label: {
+            Image(systemName: isAnchored ? "pin.fill" : "pin")
+                .font(.system(size: 16))
+                .foregroundStyle(isAnchored ? Color.orange : Color.secondary.opacity(0.5))
+                .rotationEffect(.degrees(isAnchored ? 0 : 30))
+        }
+        .buttonStyle(.plain)
+        .help(isAnchored ? "已锚定 (F5/F6 作用此段) · 点击取消" : "锚定为 F5/F6 操作目标")
     }
 
     @ViewBuilder
     private var playButton: some View {
-        let bound = player.isPlaying(audioID: audio.id, segIdx: segment.idx)
+        let bound = player.isPlaying(audioID: audio.id, segIdx: segment.idx, source: .learn)
         let playing = bound && !player.paused
         Button {
             togglePlay(bound: bound, playing: playing)
@@ -120,6 +170,7 @@ struct EnglishSegmentRow: View {
                 url: url,
                 audioID: audio.id,
                 segIdx: segment.idx,
+                source: .learn,
                 startMs: expandedStart,
                 endMs: expandedEnd
             )

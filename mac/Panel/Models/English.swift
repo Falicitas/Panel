@@ -102,7 +102,8 @@ struct EnglishToday: Codable, Hashable, Sendable {
     let totalMinutes: Double
     let currentAudio: EnglishAudio?
     let segments: [EnglishSegment]
-    let doneSegIdx: [Int]
+    let doneSegIdx: [Int]            // 跨日累积已勾 (用于 ✓ + 全勾完弹 sheet)
+    let doneTodaySegIdx: [Int]       // 仅今日勾 (UI 颜色区分今日 vs 历史)
     // 精听复习队列摘要 (后端 issue-44 起返回; 老 backend 字段缺省 → 0)
     let reviewDoneToday: Int
     let reviewDailyLimit: Int
@@ -115,6 +116,7 @@ struct EnglishToday: Codable, Hashable, Sendable {
         case totalMinutes = "total_minutes"
         case currentAudio = "current_audio"
         case doneSegIdx = "done_seg_idx"
+        case doneTodaySegIdx = "done_today_seg_idx"
         case reviewDoneToday = "review_done_today"
         case reviewDailyLimit = "review_daily_limit"
         case reviewDueTotal = "review_due_total"
@@ -149,6 +151,14 @@ struct EnglishSkipReq: Codable, Sendable {
         case topic
         case selectedAudioID = "selected_audio_id"
     }
+}
+
+/// 锚定段标识 (F5/F6 全局热键的目标). 全局唯一, AppState 持有。
+/// source 区分锚定来自哪个 view (learn / review), 让 player 在对应 view 显示进度。
+struct EnglishAnchor: Equatable, Hashable, Sendable {
+    let audioID: Int64
+    let segIdx: Int
+    let source: PlaySource
 }
 
 /// 精听复习队列单条复习项 (server 富化了 segment + audio).
