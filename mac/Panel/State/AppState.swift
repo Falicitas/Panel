@@ -554,6 +554,12 @@ final class AppState {
         anchorShowText = false
     }
 
+    /// set 锚定 (替换语义, 不 toggle). Shift+F7/F8 切换上下复习 audio 用。
+    func setEnglishAnchor(audioID: Int64, segIdx: Int, source: PlaySource) {
+        englishAnchor = EnglishAnchor(audioID: audioID, segIdx: segIdx, source: source)
+        anchorShowText = false
+    }
+
     func clearEnglishAnchor() {
         englishAnchor = nil
         anchorShowText = false

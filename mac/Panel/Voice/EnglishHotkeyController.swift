@@ -10,6 +10,8 @@ import os.log
 ///   - F6: 锚定段 toggle play / pause / resume
 ///   - F7: 倍速 -0.1 (clamp 到 0.5)
 ///   - F8: 倍速 +0.1 (clamp 到 1.5)
+///   - Shift+F7: 锚定上一个复习音频 (锚到该 audio 第一段, source=.review)
+///   - Shift+F8: 锚定下一个复习音频
 ///
 /// 字幕 toggle 用 F4 而非 F10 — F10/F11 在 Apple/Cherry 键盘上走 HID 媒体事件
 /// (NSSystemDefined), CGEventTap 收不到, 即使加 Option 也不行。F4 实测能拦下。
@@ -56,8 +58,14 @@ final class EnglishHotkeyController {
         HotkeyTap.shared.register(keyCode: HotkeyTap.f4KeyCode) { [weak self] in
             Task { @MainActor in self?.handleSubtitleToggle() }
         }
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f7KeyCode, modifiers: .maskShift) { [weak self] in
+            Task { @MainActor in self?.shiftReviewAudio(step: -1) }
+        }
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode, modifiers: .maskShift) { [weak self] in
+            Task { @MainActor in self?.shiftReviewAudio(step: +1) }
+        }
         HotkeyTap.shared.start()
-        os_log("F4-F8 hotkeys registered", log: Self.log, type: .info)
+        os_log("F4-F8 + Shift+F7/F8 hotkeys registered", log: Self.log, type: .info)
     }
 
     /// 解锁定段 → 实际 audio + segment + source. 三种 nil 路径:
@@ -171,7 +179,59 @@ final class EnglishHotkeyController {
                st.anchorShowText ? "show" : "hide")
     }
 
-    /// F5/F6/F10 没锚定 / 锚定段失效 → 系统蜂鸣提示用户回 Panel 锚定。
+    /// Shift+F7 (step=-1) / Shift+F8 (step=+1): 锚定到上/下一个复习音频.
+    ///
+    /// 行为:
+    ///   - 复习队列空 → beep
+    ///   - 当前锚定不在 review (没锚 / 锚在 .learn) → 跳到第 1 个 (F8) 或最后一个 (F7)
+    ///   - 已在 review 边界再越界 → beep (不循环, 避免误操作回到开头)
+    ///   - 锚定到目标 audio 的第一段 (segIdx = items[0].segIdx)
+    ///
+    /// 副作用: anchorShowText reset = false (新音频从隐藏字幕开始); 不停当前播放
+    /// (player 的 source 跟 anchor 解耦, 锚切了但 player 继续播旧段直到自然结束 / 显式 stop)。
+    private func shiftReviewAudio(step: Int) {
+        guard let st = stateRef,
+              let rev = st.englishReviewToday,
+              !rev.groups.isEmpty else {
+            os_log("Shift+F7/8: review queue empty, beep", log: Self.log, type: .info)
+            NSSound.beep()
+            return
+        }
+        let groups = rev.groups
+
+        let curIdx: Int = {
+            guard let anchor = st.englishAnchor, anchor.source == .review else {
+                return -1
+            }
+            return groups.firstIndex(where: { $0.audio.id == anchor.audioID }) ?? -1
+        }()
+
+        let targetIdx: Int
+        if curIdx < 0 {
+            // 没锚在 review → step>0 跳第一个, step<0 跳最后一个
+            targetIdx = step > 0 ? 0 : groups.count - 1
+        } else {
+            let raw = curIdx + step
+            if raw < 0 || raw >= groups.count {
+                os_log("Shift+F7/8: at boundary curIdx=%d, beep", log: Self.log, type: .info, curIdx)
+                NSSound.beep()
+                return
+            }
+            targetIdx = raw
+        }
+
+        let group = groups[targetIdx]
+        guard let firstItem = group.items.first else {
+            os_log("Shift+F7/8: group %d has no items, beep", log: Self.log, type: .info, targetIdx)
+            NSSound.beep()
+            return
+        }
+        os_log("Shift+F7/8: anchor → group %d audio %lld seg %d", log: Self.log, type: .info,
+               targetIdx, group.audio.id, firstItem.segIdx)
+        st.setEnglishAnchor(audioID: group.audio.id, segIdx: firstItem.segIdx, source: .review)
+    }
+
+    /// F5/F6/F4/Shift+F7/8 没锚定 / 锚定段失效 → 系统蜂鸣提示用户回 Panel 锚定。
     /// Typora 等前台 app 焦点下用户能立即听到反馈, 不需要切回 Panel 看 lastError。
     private func beepNoAnchor(action: String) {
         os_log("%{public}@: no anchor, beep", log: Self.log, type: .info, action)
