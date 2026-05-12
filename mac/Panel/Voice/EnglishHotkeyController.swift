@@ -5,13 +5,14 @@ import os.log
 /// 英文精听全局快捷键 controller (shared 单例).
 ///
 /// 注册的 key (focused 在哪个 app 都生效, 通过 HotkeyTap.shared 的 CGEventTap):
+///   - F4: 锚定段字幕显示 toggle (state.anchorShowText)
 ///   - F5: 锚定段 seek -5s (clamp 到段开头)
 ///   - F6: 锚定段 toggle play / pause / resume
 ///   - F7: 倍速 -0.1 (clamp 到 0.5)
 ///   - F8: 倍速 +0.1 (clamp 到 1.5)
-///   - Option+F10: 锚定段字幕显示 toggle (state.anchorShowText)
-///     单 F10 在 Apple 键盘上是 mute 媒体键 (走 NSSystemDefined, CGEventTap 收不到),
-///     必须配 Option 让 HID 走普通 keyDown 路径。
+///
+/// 字幕 toggle 用 F4 而非 F10 — F10/F11 在 Apple/Cherry 键盘上走 HID 媒体事件
+/// (NSSystemDefined), CGEventTap 收不到, 即使加 Option 也不行。F4 实测能拦下。
 ///
 /// F5/F6 作用对象 = AppState.englishAnchor (用户在 EnglishSegmentRow / EnglishReviewRow
 /// 点 📌 按钮设置). 全局只有一个锚定 — 锚新段自动取消旧锚。
@@ -52,11 +53,11 @@ final class EnglishHotkeyController {
         HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode) { [weak self] in
             Task { @MainActor in self?.adjustRate(steps: +1) }
         }
-        HotkeyTap.shared.register(keyCode: HotkeyTap.f10KeyCode, modifiers: .maskAlternate) { [weak self] in
-            Task { @MainActor in self?.handleF10() }
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f4KeyCode) { [weak self] in
+            Task { @MainActor in self?.handleSubtitleToggle() }
         }
         HotkeyTap.shared.start()
-        os_log("F5-F8 + Option+F10 hotkeys registered", log: Self.log, type: .info)
+        os_log("F4-F8 hotkeys registered", log: Self.log, type: .info)
     }
 
     /// 解锁定段 → 实际 audio + segment + source. 三种 nil 路径:
@@ -158,15 +159,15 @@ final class EnglishHotkeyController {
                Double(cur) / 10.0, Double(next) / 10.0)
     }
 
-    /// F10: toggle 锚定段字幕显示. 没锚定 → beep。
+    /// F4: toggle 锚定段字幕显示. 没锚定 → beep。
     /// 改 state.anchorShowText, 锚定 row 用此值 reactive 切换 textArea 显示。
-    private func handleF10() {
+    private func handleSubtitleToggle() {
         guard let st = stateRef, st.englishAnchor != nil else {
-            beepNoAnchor(action: "F10")
+            beepNoAnchor(action: "F4")
             return
         }
         st.anchorShowText.toggle()
-        os_log("F10: anchorShowText → %{public}@", log: Self.log, type: .info,
+        os_log("F4: anchorShowText → %{public}@", log: Self.log, type: .info,
                st.anchorShowText ? "show" : "hide")
     }
 

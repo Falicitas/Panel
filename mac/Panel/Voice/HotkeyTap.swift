@@ -15,12 +15,15 @@ import os.log
 final class HotkeyTap {
     static let shared = HotkeyTap()
 
+    static let f4KeyCode: Int64 = 118
     static let f5KeyCode: Int64 = 96
     static let f6KeyCode: Int64 = 97
     static let f7KeyCode: Int64 = 98
     static let f8KeyCode: Int64 = 100
-    static let f10KeyCode: Int64 = 109
     static let f12KeyCode: Int64 = 111
+    // F9/F10/F11 在多数 Apple 键盘 + 部分第三方键盘 (如 Cherry) 上走 NSSystemDefined
+    // 媒体事件 (mute / play / 自定义), CGEventTap.keyDown 收不到 — 即使加 Option/Cmd
+    // 修饰键也未必能绕开 (Cherry 在 USB HID 层就吞了); 不预定义这些常量。
 
     /// 关心的修饰键 mask — 屏蔽 caps-lock / numpad / function 等噪音。
     static let modifierMask: CGEventFlags = [.maskCommand, .maskAlternate, .maskControl, .maskShift]
