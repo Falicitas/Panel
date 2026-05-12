@@ -10,8 +10,9 @@ import os.log
 ///   - F6: 锚定段 toggle play / pause / resume
 ///   - F7: 倍速 -0.1 (clamp 到 0.5)
 ///   - F8: 倍速 +0.1 (clamp 到 1.5)
-///   - Shift+F7: 锚定上一个复习音频 (锚到该 audio 第一段, source=.review)
-///   - Shift+F8: 锚定下一个复习音频
+///   - Shift+F7 / Shift+F8: 锚定段在所属列表上下移动 (环形循环)
+///     · 锚在 .learn → currentAudio.segments 列表
+///     · 锚在 .review → 复习队列所有段扁平列表 (跨 audio, 跟 UI 显示顺序一致)
 ///
 /// 字幕 toggle 用 F4 而非 F10 — F10/F11 在 Apple/Cherry 键盘上走 HID 媒体事件
 /// (NSSystemDefined), CGEventTap 收不到, 即使加 Option 也不行。F4 实测能拦下。
@@ -59,10 +60,10 @@ final class EnglishHotkeyController {
             Task { @MainActor in self?.handleSubtitleToggle() }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f7KeyCode, modifiers: .maskShift) { [weak self] in
-            Task { @MainActor in self?.shiftReviewAudio(step: -1) }
+            Task { @MainActor in self?.shiftAnchorSegment(step: -1) }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode, modifiers: .maskShift) { [weak self] in
-            Task { @MainActor in self?.shiftReviewAudio(step: +1) }
+            Task { @MainActor in self?.shiftAnchorSegment(step: +1) }
         }
         HotkeyTap.shared.start()
         os_log("F4-F8 + Shift+F7/F8 hotkeys registered", log: Self.log, type: .info)
@@ -179,56 +180,83 @@ final class EnglishHotkeyController {
                st.anchorShowText ? "show" : "hide")
     }
 
-    /// Shift+F7 (step=-1) / Shift+F8 (step=+1): 锚定到上/下一个复习音频.
+    /// Shift+F7 (step=-1) / Shift+F8 (step=+1): 锚定段在所属列表上下移动 (环形循环).
     ///
-    /// 行为:
-    ///   - 复习队列空 → beep
-    ///   - 当前锚定不在 review (没锚 / 锚在 .learn) → 跳到第 1 个 (F8) 或最后一个 (F7)
-    ///   - 已在 review 边界再越界 → beep (不循环, 避免误操作回到开头)
-    ///   - 锚定到目标 audio 的第一段 (segIdx = items[0].segIdx)
+    /// 行为按 anchor.source 分支:
+    ///   - .learn → currentAudio.segments 列表里 segIdx ±1, 越界绕回另一端
+    ///   - .review → 复习队列所有段扁平 [(audioID, segIdx)] 列表里 ±1, 跨 audio 切;
+    ///     越界绕回另一端 (整个列表是循环)
     ///
-    /// 副作用: anchorShowText reset = false (新音频从隐藏字幕开始); 不停当前播放
-    /// (player 的 source 跟 anchor 解耦, 锚切了但 player 继续播旧段直到自然结束 / 显式 stop)。
-    private func shiftReviewAudio(step: Int) {
-        guard let st = stateRef,
-              let rev = st.englishReviewToday,
-              !rev.groups.isEmpty else {
-            os_log("Shift+F7/8: review queue empty, beep", log: Self.log, type: .info)
+    /// no-op + beep:
+    ///   - 没锚定
+    ///   - 列表为空 (currentAudio 无 / segments 空 / review groups 空)
+    ///   - 锚定段不在当前列表里 (audio 切了 / segments 重新生成 / review item 已 finish)
+    ///   - source 是 .whole / .archive (UI 不暴露锚定那两个 source, 防御性 beep)
+    ///
+    /// 副作用: anchorShowText reset = false (新段从隐藏字幕开始); 不停当前播放。
+    private func shiftAnchorSegment(step: Int) {
+        guard let st = stateRef, let anchor = st.englishAnchor else {
+            os_log("Shift+F7/8: no anchor, beep", log: Self.log, type: .info)
             NSSound.beep()
             return
         }
-        let groups = rev.groups
 
-        let curIdx: Int = {
-            guard let anchor = st.englishAnchor, anchor.source == .review else {
-                return -1
-            }
-            return groups.firstIndex(where: { $0.audio.id == anchor.audioID }) ?? -1
-        }()
-
-        let targetIdx: Int
-        if curIdx < 0 {
-            // 没锚在 review → step>0 跳第一个, step<0 跳最后一个
-            targetIdx = step > 0 ? 0 : groups.count - 1
-        } else {
-            let raw = curIdx + step
-            if raw < 0 || raw >= groups.count {
-                os_log("Shift+F7/8: at boundary curIdx=%d, beep", log: Self.log, type: .info, curIdx)
-                NSSound.beep()
-                return
-            }
-            targetIdx = raw
+        switch anchor.source {
+        case .learn:
+            shiftLearnAnchor(st: st, anchor: anchor, step: step)
+        case .review:
+            shiftReviewAnchor(st: st, anchor: anchor, step: step)
+        case .whole, .archive:
+            os_log("Shift+F7/8: source=%{public}@ unsupported, beep", log: Self.log, type: .info, anchor.source.rawValue)
+            NSSound.beep()
         }
+    }
 
-        let group = groups[targetIdx]
-        guard let firstItem = group.items.first else {
-            os_log("Shift+F7/8: group %d has no items, beep", log: Self.log, type: .info, targetIdx)
+    private func shiftLearnAnchor(st: AppState, anchor: EnglishAnchor, step: Int) {
+        guard let today = st.englishToday,
+              let audio = today.currentAudio,
+              audio.id == anchor.audioID,
+              !today.segments.isEmpty else {
             NSSound.beep()
             return
         }
-        os_log("Shift+F7/8: anchor → group %d audio %lld seg %d", log: Self.log, type: .info,
-               targetIdx, group.audio.id, firstItem.segIdx)
-        st.setEnglishAnchor(audioID: group.audio.id, segIdx: firstItem.segIdx, source: .review)
+        guard let curIdx = today.segments.firstIndex(where: { $0.idx == anchor.segIdx }) else {
+            NSSound.beep()
+            return
+        }
+        let n = today.segments.count
+        let nextIdx = ((curIdx + step) % n + n) % n  // 环形, 处理负数
+        let nextSeg = today.segments[nextIdx]
+        os_log("Shift+F7/8 [learn]: seg %d → seg %d", log: Self.log, type: .info,
+               anchor.segIdx, nextSeg.idx)
+        st.setEnglishAnchor(audioID: audio.id, segIdx: nextSeg.idx, source: .learn)
+    }
+
+    private func shiftReviewAnchor(st: AppState, anchor: EnglishAnchor, step: Int) {
+        guard let rev = st.englishReviewToday else {
+            NSSound.beep()
+            return
+        }
+        // (audioID, segIdx) flatten — 跟 UI 显示顺序一致 (groups 顺序 + group 内 items 顺序)
+        let flat: [(audioID: Int64, segIdx: Int)] = rev.groups.flatMap { group in
+            group.items.map { (group.audio.id, $0.segIdx) }
+        }
+        guard !flat.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        guard let curIdx = flat.firstIndex(where: {
+            $0.audioID == anchor.audioID && $0.segIdx == anchor.segIdx
+        }) else {
+            NSSound.beep()
+            return
+        }
+        let n = flat.count
+        let nextIdx = ((curIdx + step) % n + n) % n
+        let next = flat[nextIdx]
+        os_log("Shift+F7/8 [review]: %lld:%d → %lld:%d", log: Self.log, type: .info,
+               anchor.audioID, anchor.segIdx, next.audioID, next.segIdx)
+        st.setEnglishAnchor(audioID: next.audioID, segIdx: next.segIdx, source: .review)
     }
 
     /// F5/F6/F4/Shift+F7/8 没锚定 / 锚定段失效 → 系统蜂鸣提示用户回 Panel 锚定。
