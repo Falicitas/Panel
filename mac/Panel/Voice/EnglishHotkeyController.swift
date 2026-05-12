@@ -9,7 +9,9 @@ import os.log
 ///   - F6: 锚定段 toggle play / pause / resume
 ///   - F7: 倍速 -0.1 (clamp 到 0.5)
 ///   - F8: 倍速 +0.1 (clamp 到 1.5)
-///   - F10: 锚定段字幕显示 toggle (state.anchorShowText)
+///   - Option+F10: 锚定段字幕显示 toggle (state.anchorShowText)
+///     单 F10 在 Apple 键盘上是 mute 媒体键 (走 NSSystemDefined, CGEventTap 收不到),
+///     必须配 Option 让 HID 走普通 keyDown 路径。
 ///
 /// F5/F6 作用对象 = AppState.englishAnchor (用户在 EnglishSegmentRow / EnglishReviewRow
 /// 点 📌 按钮设置). 全局只有一个锚定 — 锚新段自动取消旧锚。
@@ -50,11 +52,11 @@ final class EnglishHotkeyController {
         HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode) { [weak self] in
             Task { @MainActor in self?.adjustRate(steps: +1) }
         }
-        HotkeyTap.shared.register(keyCode: HotkeyTap.f10KeyCode) { [weak self] in
+        HotkeyTap.shared.register(keyCode: HotkeyTap.f10KeyCode, modifiers: .maskAlternate) { [weak self] in
             Task { @MainActor in self?.handleF10() }
         }
         HotkeyTap.shared.start()
-        os_log("F5-F10 hotkeys registered", log: Self.log, type: .info)
+        os_log("F5-F8 + Option+F10 hotkeys registered", log: Self.log, type: .info)
     }
 
     /// 解锁定段 → 实际 audio + segment + source. 三种 nil 路径:
