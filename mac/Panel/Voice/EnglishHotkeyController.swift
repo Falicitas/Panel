@@ -8,11 +8,11 @@ import os.log
 ///   - F4: 锚定段字幕显示 toggle (state.anchorShowText)
 ///   - F5: 锚定段 seek -5s (clamp 到段开头)
 ///   - F6: 锚定段 toggle play / pause / resume
-///   - F7: 倍速 -0.1 (clamp 到 0.5)
-///   - F8: 倍速 +0.1 (clamp 到 1.5)
-///   - Shift+F7 / Shift+F8: 锚定段在所属列表上下移动 (环形循环)
+///   - F7 / F8: 锚定段在所属列表上下移动 (环形循环)
 ///     · 锚在 .learn → currentAudio.segments 列表
 ///     · 锚在 .review → 复习队列所有段扁平列表 (跨 audio, 跟 UI 显示顺序一致)
+///   - Shift+F7: 倍速 -0.1 (clamp 到 0.5)
+///   - Shift+F8: 倍速 +0.1 (clamp 到 1.5)
 ///
 /// 字幕 toggle 用 F4 而非 F10 — F10/F11 在 Apple/Cherry 键盘上走 HID 媒体事件
 /// (NSSystemDefined), CGEventTap 收不到, 即使加 Option 也不行。F4 实测能拦下。
@@ -51,19 +51,19 @@ final class EnglishHotkeyController {
             Task { @MainActor in self?.handleF6() }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f7KeyCode) { [weak self] in
-            Task { @MainActor in self?.adjustRate(steps: -1) }
+            Task { @MainActor in self?.shiftAnchorSegment(step: -1) }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode) { [weak self] in
-            Task { @MainActor in self?.adjustRate(steps: +1) }
+            Task { @MainActor in self?.shiftAnchorSegment(step: +1) }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f4KeyCode) { [weak self] in
             Task { @MainActor in self?.handleSubtitleToggle() }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f7KeyCode, modifiers: .maskShift) { [weak self] in
-            Task { @MainActor in self?.shiftAnchorSegment(step: -1) }
+            Task { @MainActor in self?.adjustRate(steps: -1) }
         }
         HotkeyTap.shared.register(keyCode: HotkeyTap.f8KeyCode, modifiers: .maskShift) { [weak self] in
-            Task { @MainActor in self?.shiftAnchorSegment(step: +1) }
+            Task { @MainActor in self?.adjustRate(steps: +1) }
         }
         HotkeyTap.shared.start()
         os_log("F4-F8 + Shift+F7/F8 hotkeys registered", log: Self.log, type: .info)
