@@ -223,7 +223,9 @@ struct CommitRitualView: View {
         }
         .padding(.vertical, 28)
         .padding(.horizontal, 36)
-        .frame(maxWidth: 580, alignment: .leading)
+        // 卡片宽度贴最长项 (短词 morning 不会被撑到 580 显空旷, 长句 phone 也照样 fit)。
+        // 纵向继续按 SwiftUI 自动算高。
+        .fixedSize(horizontal: true, vertical: false)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
         .overlay(
             RoundedRectangle(cornerRadius: 20)
