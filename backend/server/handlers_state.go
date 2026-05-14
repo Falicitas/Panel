@@ -102,7 +102,15 @@ func (s *Server) injectRecurringIntoMicro() error {
 	if err != nil {
 		return err
 	}
-	if len(recur) == 0 {
+	// phone kind 只用于睡前 ritual 蒙版, 不注入 micro。
+	filtered := recur[:0]
+	for _, r := range recur {
+		if r.Kind == store.RecurringKindPhone {
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	if len(filtered) == 0 {
 		return nil
 	}
 	today, err := s.micro.LoadToday()
@@ -110,7 +118,7 @@ func (s *Server) injectRecurringIntoMicro() error {
 		return err
 	}
 	var sb strings.Builder
-	for _, r := range recur {
+	for _, r := range filtered {
 		sb.WriteString("- [ ] ")
 		sb.WriteString(r.Content)
 		sb.WriteString("\n")
