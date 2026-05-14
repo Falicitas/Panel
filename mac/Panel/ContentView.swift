@@ -9,11 +9,14 @@ struct ContentView: View {
         @Bindable var state = state
         ZStack {
             MainLayout()
-            // 优先级: 早晨 wake > 晚 phone > 17 点 focus
+            // 优先级: 早晨 wake > 晨间 morning > 晚 phone > 17 点 focus
             // 任一时刻最多 1 个全屏蒙版 — 22:00 后 phone ritual 优先于 focus
             // (即使 17-22 没确认 focus, 22 后 sleep 时段也不再有意义弹 focus 蒙版)。
             if shouldShowWakeMask {
                 WakeMaskView()
+                    .transition(.opacity)
+            } else if shouldShowMorningRitual {
+                CommitRitualView(config: .morning, onComplete: { ritualTick += 1 })
                     .transition(.opacity)
             } else if shouldShowPhoneRitual {
                 CommitRitualView(config: .phone, onComplete: { ritualTick += 1 })
@@ -24,6 +27,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: shouldShowWakeMask)
+        .animation(.easeInOut(duration: 0.3), value: shouldShowMorningRitual)
         .animation(.easeInOut(duration: 0.3), value: shouldShowPhoneRitual)
         .animation(.easeInOut(duration: 0.3), value: shouldShowFocusRitual)
         .task { await state.startPolling() }
@@ -48,6 +52,20 @@ struct ContentView: View {
         let h = Calendar.current.component(.hour, from: Date())
         guard h >= 6 else { return false }
         return ds.modeSetAt == 0
+    }
+
+    /// 用户选了普通模式 (wake mask 已确认过) 后, 早晨~午前弹晨间 4 项 ritual。
+    /// 外出模式 / 已 commit / 时间过了 focusStart 都不弹 (让位给 focus / phone)。
+    private var shouldShowMorningRitual: Bool {
+        let _ = state.timeTick
+        let _ = ritualTick
+        guard let ds = state.dailyState, let ss = state.stateSettings else { return false }
+        guard ds.modeSetAt != 0, ds.mode == "normal" else { return false }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let nowMin = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
+        let focusMin = Self.parseHHMM(ss.focusStart)
+        guard nowMin >= 6 * 60 && nowMin < focusMin else { return false }
+        return !CommitRitualView.isCommitted(CommitRitualConfig.morning)
     }
 
     /// 22:00 ~ 次日 06:00 弹白色手机 ritual, 当日已 commit (UserDefaults today key set) 则不弹。
