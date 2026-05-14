@@ -472,6 +472,18 @@ final class AppState {
         }
     }
 
+    /// 永久禁止 / 启用某餐 (跟 setSupplementEnabled 同构, 跟 paused 两轴独立)。
+    /// 禁用: dismiss 当前通知; 启用: undismiss + 重生成。
+    func setMealEnabled(_ meal: String, enabled: Bool) async {
+        do {
+            self.dailyState = try await api.enableMeal(meal: meal, enabled: enabled)
+            await reloadNotifications()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     func dismiss(_ n: PanelNotification) async {
         do {
             try await api.dismissNotification(id: n.id)

@@ -240,6 +240,13 @@ actor APIClient: BackendClient {
         return try await post("/api/state/meal/\(meal)/pause", body: Body(until: until))
     }
 
+    /// 永久禁止 / 启用某餐 (跟 enableSupplement 同构, 跟 paused_until 两轴独立)。
+    /// disable: 已 active 通知 dismiss; enable: undismiss + 立即 regen。
+    func enableMeal(meal: String, enabled: Bool) async throws -> DailyState {
+        struct Body: Encodable { let enabled: Bool }
+        return try await post("/api/state/meal/\(meal)/enable", body: Body(enabled: enabled))
+    }
+
     // MARK: - Notifications
 
     func listNotifications(all: Bool = false) async throws -> [PanelNotification] {
