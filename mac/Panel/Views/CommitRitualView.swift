@@ -74,13 +74,13 @@ extension CommitRitualConfig {
     static let focus = CommitRitualConfig(
         title: "进入专注模式",
         stage1: .init(
-            body: "关闭社交、即时通讯,防止打扰、防止引来打扰",
+            body: "关闭社交、即时通讯；防止打扰、防止引来打扰",
             buttonTitle: "我准备好",
             buttonSubtitle: "现在去关闭社交",
             systemImage: "sparkles"
         ),
         stage2: .init(
-            body: "确认所有社交已关闭?",
+            body: "确认所有社交已关闭？",
             buttonTitle: "确认关闭社交",
             buttonSubtitle: "5 秒后才可点",
             systemImage: "checkmark.shield"
@@ -94,15 +94,16 @@ extension CommitRitualConfig {
             "把白色 iPhone 14 放到那个晚上不会再碰的位置",
             "已洗完澡且刷完牙",
             "已吃锌镁片",
-            "十点之后不碰工作内容、不聊任何工作相关",
+            "10:00 不碰工作内容、不聊任何工作相关",
+            "11:15 不娱乐，开始看书，严格执行",
         ]
         return CommitRitualConfig(
-            title: "睡前 4 项",
+            title: "睡前 5 项",
             stage1: .init(
                 body: "全部做完再按",
                 bodyItems: items,
                 buttonTitle: "都做完了",
-                buttonSubtitle: "起身去把这 4 项做完",
+                buttonSubtitle: "起身去把这 5 项做完",
                 systemImage: "moon.stars"
             ),
             stage2: .init(
@@ -181,7 +182,7 @@ struct CommitRitualView: View {
         }
     }
 
-    /// 玻璃卡片包 4 项 checklist — 与 RitualButton 视觉语言一致 (white opacity bg + 描边)。
+    /// 玻璃卡片包 5 项 checklist — 与 RitualButton 视觉语言一致 (white opacity bg + 描边)。
     private func checklistCard(items: [String]) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
