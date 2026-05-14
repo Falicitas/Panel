@@ -457,6 +457,33 @@ final class AppState {
         }
     }
 
+    /// 暂停某餐 N 天 (now + days*86400);days = 0 取消暂停。跟 pauseSupplement 同构。
+    /// 后端会 dismiss 当前 active 通知 (暂停场景) 或 undismiss + 重生成 (取消场景), 双向绑定。
+    func pauseMeal(_ meal: String, days: Int) async {
+        let until: Int64? = days > 0
+            ? Int64(Date().timeIntervalSince1970) + Int64(days) * 86400
+            : nil
+        do {
+            self.dailyState = try await api.pauseMeal(meal: meal, until: until)
+            await reloadNotifications()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
+    /// 永久禁止 / 启用某餐 (跟 setSupplementEnabled 同构, 跟 paused 两轴独立)。
+    /// 禁用: dismiss 当前通知; 启用: undismiss + 重生成。
+    func setMealEnabled(_ meal: String, enabled: Bool) async {
+        do {
+            self.dailyState = try await api.enableMeal(meal: meal, enabled: enabled)
+            await reloadNotifications()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     func dismiss(_ n: PanelNotification) async {
         do {
             try await api.dismissNotification(id: n.id)

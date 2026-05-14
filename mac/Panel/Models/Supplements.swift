@@ -137,6 +137,16 @@ struct DailyState: Codable, Hashable {
     var breakfastAt: String  // "HH:MM" or "" — 用户主动触发的早餐时刻
     var lunchAt: String
     var dinnerAt: String
+    // 三餐暂停截止 (unix 秒, nil = 未暂停)。跨日保留 (跟 supplement.pausedUntil 同语义)。
+    // backend 从 meal_settings 表 join 进 DailyState 返回, mac UI 单点取数据渲染暂停状态。
+    var breakfastPausedUntil: Int64?
+    var lunchPausedUntil: Int64?
+    var dinnerPausedUntil: Int64?
+    // 三餐永久禁止开关 (默认 true)。false = 该餐通知不发, MealCard 显示禁用态。
+    // 老 backend 缺字段时 init(from:) 默认 true, 行为不变。
+    var breakfastEnabled: Bool
+    var lunchEnabled: Bool
+    var dinnerEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case date, mode
@@ -145,6 +155,30 @@ struct DailyState: Codable, Hashable {
         case breakfastAt = "breakfast_at"
         case lunchAt = "lunch_at"
         case dinnerAt = "dinner_at"
+        case breakfastPausedUntil = "breakfast_paused_until"
+        case lunchPausedUntil = "lunch_paused_until"
+        case dinnerPausedUntil = "dinner_paused_until"
+        case breakfastEnabled = "breakfast_enabled"
+        case lunchEnabled = "lunch_enabled"
+        case dinnerEnabled = "dinner_enabled"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.date = try c.decode(String.self, forKey: .date)
+        self.mode = try c.decode(String.self, forKey: .mode)
+        self.wakeTime = try c.decodeIfPresent(String.self, forKey: .wakeTime) ?? ""
+        self.modeSetAt = try c.decode(Int64.self, forKey: .modeSetAt)
+        self.breakfastAt = try c.decodeIfPresent(String.self, forKey: .breakfastAt) ?? ""
+        self.lunchAt = try c.decodeIfPresent(String.self, forKey: .lunchAt) ?? ""
+        self.dinnerAt = try c.decodeIfPresent(String.self, forKey: .dinnerAt) ?? ""
+        self.breakfastPausedUntil = try c.decodeIfPresent(Int64.self, forKey: .breakfastPausedUntil)
+        self.lunchPausedUntil = try c.decodeIfPresent(Int64.self, forKey: .lunchPausedUntil)
+        self.dinnerPausedUntil = try c.decodeIfPresent(Int64.self, forKey: .dinnerPausedUntil)
+        // 老 backend 缺 enabled 字段时默认 true (跟 backend DEFAULT 1 对齐)
+        self.breakfastEnabled = try c.decodeIfPresent(Bool.self, forKey: .breakfastEnabled) ?? true
+        self.lunchEnabled = try c.decodeIfPresent(Bool.self, forKey: .lunchEnabled) ?? true
+        self.dinnerEnabled = try c.decodeIfPresent(Bool.self, forKey: .dinnerEnabled) ?? true
     }
 }
 

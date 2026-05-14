@@ -19,7 +19,9 @@ struct SupplementsView: View {
                     MealsSection(
                         dailyState: state.dailyState,
                         onTrigger: { meal in Task { await state.triggerMeal(meal) } },
-                        onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } }
+                        onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } },
+                        onPause: { meal, days in Task { await state.pauseMeal(meal, days: days) } },
+                        onEnable: { meal, on in Task { await state.setMealEnabled(meal, enabled: on) } }
                     )
                     AllListSection(
                         today: state.supplementsToday,
@@ -194,6 +196,8 @@ private struct MealsSection: View {
     let dailyState: DailyState?
     let onTrigger: (String) -> Void
     let onClear: (String) -> Void
+    let onPause: (String, Int) -> Void  // (meal, days) — days=0 取消
+    let onEnable: (String, Bool) -> Void  // (meal, enabled) — 永久禁止/启用
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -211,8 +215,12 @@ private struct MealsSection: View {
                     MealCard(
                         meta: meta,
                         recordedAt: recorded(meta.key),
+                        pausedUntil: pausedUntil(meta.key),
+                        enabled: enabled(meta.key),
                         onTrigger: { onTrigger(meta.key) },
-                        onClear: { onClear(meta.key) }
+                        onClear: { onClear(meta.key) },
+                        onPause: { days in onPause(meta.key, days) },
+                        onEnable: { on in onEnable(meta.key, on) }
                     )
                 }
             }
@@ -230,13 +238,37 @@ private struct MealsSection: View {
         }
         return v.isEmpty ? nil : v
     }
+
+    private func pausedUntil(_ key: String) -> Int64? {
+        guard let ds = dailyState else { return nil }
+        switch key {
+        case "breakfast": return ds.breakfastPausedUntil
+        case "lunch":     return ds.lunchPausedUntil
+        case "dinner":    return ds.dinnerPausedUntil
+        default:          return nil
+        }
+    }
+
+    private func enabled(_ key: String) -> Bool {
+        guard let ds = dailyState else { return true }
+        switch key {
+        case "breakfast": return ds.breakfastEnabled
+        case "lunch":     return ds.lunchEnabled
+        case "dinner":    return ds.dinnerEnabled
+        default:          return true
+        }
+    }
 }
 
 private struct MealCard: View {
     let meta: MealMeta
     let recordedAt: String?
+    let pausedUntil: Int64?  // unix 秒, > now 时该餐处于暂停状态
+    let enabled: Bool        // false = 永久禁止 (跟 supplement.enabled 同语义)
     let onTrigger: () -> Void
     let onClear: () -> Void
+    let onPause: (Int) -> Void   // days, 0 = 取消暂停
+    let onEnable: (Bool) -> Void // 永久禁止 / 启用
 
     @Environment(AppState.self) private var state
 
@@ -247,21 +279,46 @@ private struct MealCard: View {
         return meta.validRangeMin.contains(mins)
     }
 
+    /// 当前是否处于暂停期: pausedUntil 不为 nil 且大于现在 unix。
+    private var isPaused: Bool {
+        guard let until = pausedUntil else { return false }
+        let _ = state.timeTick
+        return Int64(Date().timeIntervalSince1970) < until
+    }
+
+    /// 卡片主色: 禁用 = 红; 已记 = 绿; 暂停 = 橙; 否则锚点色。
+    /// 优先级跟 supplement ItemCard 一致 — disabled 优先于其它状态。
+    private var tint: Color {
+        if !enabled { return .red }
+        if recordedAt != nil { return .green }
+        if isPaused { return .orange }
+        return Color.anchorAccent
+    }
+
     var body: some View {
         let _ = state.timeTick
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: meta.icon)
-                    .foregroundStyle(recordedAt != nil ? Color.green : Color.anchorAccent)
+                    .foregroundStyle(tint)
                     .imageScale(.large)
                 Text(meta.label)
                     .font(.title3.weight(.semibold))
                 Spacer()
-                if let at = recordedAt {
+                if !enabled {
+                    Text("永久禁止")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else if let at = recordedAt {
                     Text(at)
                         .font(.body.monospacedDigit())
                         .foregroundStyle(.green)
+                } else if isPaused, let until = pausedUntil {
+                    Text("暂停至 \(dateLabel(until))")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
+                pauseMenu
             }
             Text(meta.rangeLabel)
                 .font(.caption.monospacedDigit())
@@ -280,10 +337,20 @@ private struct MealCard: View {
                         Label("现在记", systemImage: "checkmark.circle")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!inRange)
-                    .help(inRange ? "记录当前时刻为 \(meta.label)" : "不在 \(meta.label) 时段")
+                    .disabled(!inRange || !enabled)
+                    .help(enabled
+                          ? (inRange ? "记录当前时刻为 \(meta.label)" : "不在 \(meta.label) 时段")
+                          : "已永久禁止 \(meta.label), 在菜单里启用后可记录")
                     Spacer()
-                    if !inRange {
+                    if !enabled {
+                        Text("已禁止")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else if isPaused {
+                        Text("已暂停")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else if !inRange {
                         Text("不在区间")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -293,17 +360,64 @@ private struct MealCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            (recordedAt != nil ? Color.green : Color.anchorAccent).opacity(0.06),
-            in: RoundedRectangle(cornerRadius: 10)
-        )
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(
-                    (recordedAt != nil ? Color.green : Color.anchorAccent).opacity(0.35),
-                    lineWidth: 1
-                )
+                .stroke(tint.opacity(0.35), lineWidth: 1)
         )
+        .opacity(enabled ? 1 : 0.55)
+    }
+
+    /// 暂停 menu — 跟 supplement ItemCard 的 pause Menu 风格一致 (icon + days options + 永久禁止 / 启用 / 取消)。
+    /// icon 状态化 (跟 supplement 完全对齐):
+    ///   - !enabled → playpause.circle 红, 提示已永久禁止
+    ///   - paused   → play.circle 橙, 提示限时暂停中
+    ///   - 正常     → pause.circle 灰
+    @ViewBuilder
+    private var pauseMenu: some View {
+        Menu {
+            Button("暂停 1 天") { onPause(1) }
+            Button("暂停 7 天") { onPause(7) }
+            Button("暂停 14 天") { onPause(14) }
+            Button("暂停 30 天") { onPause(30) }
+            Divider()
+            if enabled {
+                Button("永久禁止") { onEnable(false) }
+            } else {
+                Button("重新启用") { onEnable(true) }
+            }
+            if isPaused {
+                Button("取消时限暂停") { onPause(0) }
+            }
+        } label: {
+            Image(systemName: pauseIcon)
+                .foregroundStyle(pauseColor)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 28)
+        .help(pauseHelp)
+    }
+
+    private var pauseIcon: String {
+        if !enabled { return "playpause.circle" }
+        return isPaused ? "play.circle" : "pause.circle"
+    }
+    private var pauseColor: Color {
+        if !enabled { return .red }
+        return isPaused ? .orange : .secondary
+    }
+    private var pauseHelp: String {
+        if !enabled { return "已永久禁止, 点击启用 / 限时暂停" }
+        if isPaused { return "限时暂停中, 点击调整 / 取消 / 永久禁止" }
+        return "暂停 N 天 / 永久禁止"
+    }
+
+    private func dateLabel(_ unix: Int64) -> String {
+        let d = Date(timeIntervalSince1970: TimeInterval(unix))
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        return f.string(from: d)
     }
 }
 

@@ -109,6 +109,12 @@ func (s *Store) migrate() error {
 			sleep_start TEXT NOT NULL DEFAULT '22:30'
 		);
 		INSERT OR IGNORE INTO state_settings (id) VALUES (1);
+		CREATE TABLE IF NOT EXISTS meal_settings (
+			meal         TEXT PRIMARY KEY CHECK (meal IN ('breakfast', 'lunch', 'dinner')),
+			paused_until INTEGER,
+			enabled      INTEGER NOT NULL DEFAULT 1
+		);
+		INSERT OR IGNORE INTO meal_settings (meal) VALUES ('breakfast'), ('lunch'), ('dinner');
 		CREATE TABLE IF NOT EXISTS notifications (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			source TEXT NOT NULL,
@@ -232,6 +238,9 @@ func (s *Store) migrate() error {
 		// english_settings.review_daily_limit: 精听复习队列每日配额上限 (issue-44 引入)。
 		// 老库默认 15 条/天; 用户可在 EnglishSettingsSheet 改。配额溢出的复习项自动 postpone 到次日。
 		{"english_settings.review_daily_limit", `ALTER TABLE english_settings ADD COLUMN review_daily_limit INTEGER NOT NULL DEFAULT 15`},
+		// meal_settings.enabled: 三餐永久禁止开关 (跟 supplement.enabled 同语义, default 1=启用)。
+		// false 时 GenerateMealNotifications 跳过 + dismiss 已 active 通知, MealCard 显示禁用态。
+		{"meal_settings.enabled", `ALTER TABLE meal_settings ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`},
 	} {
 		if _, err := s.db.Exec(alter.sql); err != nil {
 			if !isDuplicateColumnErr(err) {
