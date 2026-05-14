@@ -89,21 +89,17 @@ extension CommitRitualConfig {
         commitKey: "focusRitualCommit"
     )
 
-    static let phone: CommitRitualConfig = {
-        let items = [
-            "把白色 iPhone 14 放到那个晚上不会再碰的位置",
-            "已洗完澡且刷完牙",
-            "已吃锌镁片",
-            "10:00 不碰工作内容、不聊任何工作相关",
-            "11:15 不娱乐，开始看书，严格执行",
-        ]
+    /// items 由 backend `recurring_todos` 表 (kind=phone) 提供, 调用方 (ContentView)
+    /// 已过滤好。空数组时调用方不该弹蒙版 — 这里不再做兜底。
+    static func phone(items: [String]) -> CommitRitualConfig {
+        let n = items.count
         return CommitRitualConfig(
-            title: "睡前 5 项",
+            title: "睡前 \(n) 项",
             stage1: .init(
                 body: "全部做完再按",
                 bodyItems: items,
                 buttonTitle: "都做完了",
-                buttonSubtitle: "起身去把这 5 项做完",
+                buttonSubtitle: "起身去把这 \(n) 项做完",
                 systemImage: "moon.stars"
             ),
             stage2: .init(
@@ -117,22 +113,19 @@ extension CommitRitualConfig {
             commitKey: "phoneRitualCommit",
             dayKind: .sleepNight
         )
-    }()
+    }
 
-    static let morning: CommitRitualConfig = {
-        let items = [
-            "起床喝水",
-            "吃早餐",
-            "刷牙、洗澡",
-            "冲茶、喝茶",
-        ]
+    /// items 由 backend `recurring_todos` 表 (kind=morning) 提供, 调用方 (ContentView)
+    /// 已过滤好。空数组时调用方不该弹蒙版 — 这里不再做兜底。
+    static func morning(items: [String]) -> CommitRitualConfig {
+        let n = items.count
         return CommitRitualConfig(
-            title: "晨间起床",
+            title: "晨间 \(n) 项",
             stage1: .init(
-                body: "起床后这 4 项依次做完",
+                body: "起床后这 \(n) 项依次做完",
                 bodyItems: items,
                 buttonTitle: "都做完了",
-                buttonSubtitle: "起身去把这 4 项做完",
+                buttonSubtitle: "起身去把这 \(n) 项做完",
                 systemImage: "sun.max"
             ),
             stage2: .init(
@@ -145,7 +138,7 @@ extension CommitRitualConfig {
             countdownSec: 5,
             commitKey: "morningRitualCommit"
         )
-    }()
+    }
 }
 
 struct CommitRitualView: View {

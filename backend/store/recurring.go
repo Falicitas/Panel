@@ -11,24 +11,26 @@ type RecurringTodo struct {
 	Content   string `json:"content"`
 	SortOrder int    `json:"sort_order"`
 	CreatedAt int64  `json:"created_at"`
-	Kind      string `json:"kind"` // "morning" | "free"
+	Kind      string `json:"kind"` // "morning" | "phone" | "free"
 }
 
 const (
 	RecurringKindMorning = "morning"
+	RecurringKindPhone   = "phone"
 	RecurringKindFree    = "free"
 )
 
 func ValidRecurringKind(k string) bool {
-	return k == RecurringKindMorning || k == RecurringKindFree
+	return k == RecurringKindMorning || k == RecurringKindPhone || k == RecurringKindFree
 }
 
-// ListRecurring 返回所有复发 todo,排序:morning 在前 → 同 kind 内按 sort_order → 同 sort_order 按 id。
+// ListRecurring 返回所有复发 todo,排序: morning → phone → free, 同 kind 内按 sort_order → id。
 func (s *Store) ListRecurring() ([]RecurringTodo, error) {
 	rows, err := s.db.Query(
 		`SELECT id, content, sort_order, created_at, kind
 		 FROM recurring_todos
-		 ORDER BY (CASE kind WHEN 'morning' THEN 0 ELSE 1 END), sort_order ASC, id ASC`,
+		 ORDER BY (CASE kind WHEN 'morning' THEN 0 WHEN 'phone' THEN 1 ELSE 2 END),
+		          sort_order ASC, id ASC`,
 	)
 	if err != nil {
 		return nil, err

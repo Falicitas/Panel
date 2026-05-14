@@ -16,11 +16,17 @@ struct ContentView: View {
                 WakeMaskView()
                     .transition(.opacity)
             } else if shouldShowMorningRitual {
-                CommitRitualView(config: .morning, onComplete: { ritualTick += 1 })
-                    .transition(.opacity)
+                CommitRitualView(
+                    config: .morning(items: morningItems),
+                    onComplete: { ritualTick += 1 }
+                )
+                .transition(.opacity)
             } else if shouldShowPhoneRitual {
-                CommitRitualView(config: .phone, onComplete: { ritualTick += 1 })
-                    .transition(.opacity)
+                CommitRitualView(
+                    config: .phone(items: phoneItems),
+                    onComplete: { ritualTick += 1 }
+                )
+                .transition(.opacity)
             } else if shouldShowFocusRitual {
                 CommitRitualView(config: .focus, onComplete: { ritualTick += 1 })
                     .transition(.opacity)
@@ -54,27 +60,41 @@ struct ContentView: View {
         return ds.modeSetAt == 0
     }
 
-    /// 用户选了普通模式 (wake mask 已确认过) 后, 早晨~午前弹晨间 4 项 ritual。
-    /// 外出模式 / 已 commit / 时间过了 focusStart 都不弹 (让位给 focus / phone)。
+    /// 晨间 items 来自 backend recurring 表 (kind=morning), 按 sort_order 排序。
+    /// 空 → 蒙版不弹 (用户在 RecurringSheet 里没设置)。
+    private var morningItems: [String] {
+        state.recurring.filter { $0.kind == .morning }.map(\.content)
+    }
+
+    /// 睡前 items 来自 backend recurring 表 (kind=phone)。空 → 蒙版不弹。
+    private var phoneItems: [String] {
+        state.recurring.filter { $0.kind == .phone }.map(\.content)
+    }
+
+    /// 用户选了普通模式 (wake mask 已确认过) 后, 早晨~午前弹晨间 ritual。
+    /// 外出模式 / 已 commit / 时间过了 focusStart / morningItems 为空 都不弹。
     private var shouldShowMorningRitual: Bool {
         let _ = state.timeTick
         let _ = ritualTick
         guard let ds = state.dailyState, let ss = state.stateSettings else { return false }
         guard ds.modeSetAt != 0, ds.mode == "normal" else { return false }
+        guard !morningItems.isEmpty else { return false }
         let comps = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let nowMin = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
         let focusMin = Self.parseHHMM(ss.focusStart)
         guard nowMin >= 6 * 60 && nowMin < focusMin else { return false }
-        return !CommitRitualView.isCommitted(CommitRitualConfig.morning)
+        return !CommitRitualView.isCommitted(CommitRitualConfig.morning(items: morningItems))
     }
 
     /// 22:00 ~ 次日 06:00 弹白色手机 ritual, 当日已 commit (UserDefaults today key set) 则不弹。
     /// 时间窗复用 SleepGuard.isActive() — 跟黑色蒙版同生同灭, 跨 0 点不消失, 直到 commit。
+    /// phoneItems 为空 → 不弹。
     private var shouldShowPhoneRitual: Bool {
         let _ = state.timeTick
         let _ = ritualTick
         guard SleepGuard.isActive() else { return false }
-        return !CommitRitualView.isCommitted(CommitRitualConfig.phone)
+        guard !phoneItems.isEmpty else { return false }
+        return !CommitRitualView.isCommitted(CommitRitualConfig.phone(items: phoneItems))
     }
 
     /// 17:00 (focusStart, 用户可调) 后到 sleepStart 之间弹专注 ritual,
