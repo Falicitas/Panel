@@ -2,6 +2,7 @@ import Foundation
 
 enum RecurringKind: String, Codable, CaseIterable, Hashable {
     case morning
+    case phone
     case free
 }
 
