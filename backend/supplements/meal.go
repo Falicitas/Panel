@@ -60,6 +60,11 @@ func GenerateMealNotifications(s *store.Store, now time.Time) (int, error) {
 		"lunch":     state.LunchPausedUntil,
 		"dinner":    state.DinnerPausedUntil,
 	}
+	enabled := map[string]bool{
+		"breakfast": state.BreakfastEnabled,
+		"lunch":     state.LunchEnabled,
+		"dinner":    state.DinnerEnabled,
+	}
 	nowUnix := now.Unix()
 	nowMin := now.Hour()*60 + now.Minute()
 	created := 0
@@ -68,6 +73,12 @@ func GenerateMealNotifications(s *store.Store, now time.Time) (int, error) {
 		ref := fmt.Sprintf("meal:%s:date:%s", m.key, today)
 		// 已记录 → dismiss (idempotent, 没生成过 / 已 dismissed 都安全)
 		if recordedAt[m.key] != "" {
+			_ = s.DismissNotificationByRef(ref, nowUnix)
+			continue
+		}
+		// 永久禁止 → 跟"已记录"路径同样 dismiss + 跳过 (跟 supplement.Enabled=false 同语义)。
+		// 重新启用后下次 tick 自动 INSERT 新通知, handleEnableMeal 启用时也 undismiss 老 ref。
+		if !enabled[m.key] {
 			_ = s.DismissNotificationByRef(ref, nowUnix)
 			continue
 		}

@@ -297,6 +297,11 @@ type DailyState struct {
 	BreakfastPausedUntil *int64 `json:"breakfast_paused_until"`
 	LunchPausedUntil     *int64 `json:"lunch_paused_until"`
 	DinnerPausedUntil    *int64 `json:"dinner_paused_until"`
+	// 三餐永久禁止开关 (false = 该餐不发通知, 跟 Supplement.Enabled 同语义)。
+	// 默认 true; 跟 paused_until 两轴独立。GetDailyState 一并 join meal_settings.enabled。
+	BreakfastEnabled bool `json:"breakfast_enabled"`
+	LunchEnabled     bool `json:"lunch_enabled"`
+	DinnerEnabled    bool `json:"dinner_enabled"`
 }
 
 func (s *Store) GetDailyState(date string) (DailyState, error) {
@@ -324,14 +329,17 @@ func (s *Store) GetDailyState(date string) (DailyState, error) {
 			ds.DinnerAt = di.String
 		}
 	}
-	// 跨表读 meal_settings 把 paused_until 三字段 join 上 — 给 UI 单点渲染。
-	pauses, err := s.GetMealPausedAll()
+	// 跨表读 meal_settings 把 paused_until / enabled 字段 join 上 — 给 UI 单点渲染。
+	settings, err := s.GetMealSettingsAll()
 	if err != nil {
-		return DailyState{}, fmt.Errorf("get daily state meal paused: %w", err)
+		return DailyState{}, fmt.Errorf("get daily state meal settings: %w", err)
 	}
-	ds.BreakfastPausedUntil = pauses["breakfast"]
-	ds.LunchPausedUntil = pauses["lunch"]
-	ds.DinnerPausedUntil = pauses["dinner"]
+	ds.BreakfastPausedUntil = settings["breakfast"].PausedUntil
+	ds.LunchPausedUntil = settings["lunch"].PausedUntil
+	ds.DinnerPausedUntil = settings["dinner"].PausedUntil
+	ds.BreakfastEnabled = settings["breakfast"].Enabled
+	ds.LunchEnabled = settings["lunch"].Enabled
+	ds.DinnerEnabled = settings["dinner"].Enabled
 	return ds, nil
 }
 

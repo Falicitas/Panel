@@ -72,6 +72,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/state/settings", s.handlePutStateSettings)
 	mux.HandleFunc("POST /api/state/meal", s.handlePostMeal)
 	mux.HandleFunc("POST /api/state/meal/{meal}/pause", s.handlePauseMeal)
+	mux.HandleFunc("POST /api/state/meal/{meal}/enable", s.handleEnableMeal)
 	mux.HandleFunc("GET /api/notifications", s.handleListNotifications)
 	mux.HandleFunc("POST /api/notifications/{id}/dismiss", s.handleDismissNotification)
 	mux.HandleFunc("POST /api/records/grip", s.handlePostGrip)

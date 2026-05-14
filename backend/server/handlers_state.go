@@ -271,6 +271,45 @@ func (s *Server) handlePauseMeal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ds)
 }
 
+// handleEnableMeal POST /api/state/meal/{meal}/enable
+// body: {"enabled": true|false}
+//   - 永久禁止 / 启用某餐 (跟 supplement.enable 同语义, 跟 paused_until 独立)
+//   - 立即跑 GenerateMealNotifications:
+//       disable → 把该 meal 当前 active 通知 dismiss
+//       enable  → 先 undismiss 现有 ref, ticker 下一帧或本帧立即重新生成
+//   - meal ∈ {"breakfast","lunch","dinner"}
+func (s *Server) handleEnableMeal(w http.ResponseWriter, r *http.Request) {
+	meal := r.PathValue("meal")
+	if !store.IsValidMeal(meal) {
+		writeError(w, http.StatusBadRequest, errors.New("meal must be breakfast | lunch | dinner"))
+		return
+	}
+	var p struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decodeJSON(r, &p); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.SetMealEnabled(meal, p.Enabled); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if p.Enabled {
+		// 启用: 先 undismiss 老 ref, GenerateMealNotifications 在合法时段内会复用同 ref
+		// (CreateNotificationIdempotent INSERT IGNORE 跳过, 但 dismissed_at 已重置)
+		today := dateutil.LogicalToday(time.Now())
+		ref := fmt.Sprintf("meal:%s:date:%s", meal, today)
+		_ = s.store.UndismissNotificationByRef(ref)
+	}
+	if _, err := supplements.GenerateMealNotifications(s.store, time.Now()); err != nil {
+		log.Printf("meal notif gen (post-enable): %v", err)
+	}
+	today := dateutil.LogicalToday(time.Now())
+	ds, _ := s.store.GetDailyState(today)
+	writeJSON(w, http.StatusOK, ds)
+}
+
 // exprUsesMeal 检查 supplement window 时间表达式是否引用了某 meal 锚点。
 // 跟 supplements.ParseTimeExpr 的 anchor prefix 匹配规则一致 (HasPrefix), 仅识别
 // breakfast/lunch/dinner (wake 不算 meal, 跟 firstMealMiss 一致)。
