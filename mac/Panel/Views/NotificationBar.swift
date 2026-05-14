@@ -16,7 +16,7 @@ struct NotificationBar: View {
             }
             .imageScale(.large)
             if state.notifications.isEmpty {
-                Text("无新通知 — 食物保健品到点提醒在此")
+                Text("无新通知")
                     .font(.body)
                     .foregroundStyle(.tertiary)
             } else {
