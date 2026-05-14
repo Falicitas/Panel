@@ -291,6 +291,12 @@ type DailyState struct {
 	BreakfastAt  string `json:"breakfast_at"` // "HH:MM" or "" — 用户主动触发的早餐时刻
 	LunchAt      string `json:"lunch_at"`
 	DinnerAt     string `json:"dinner_at"`
+	// 三餐暂停截止 (unix 秒, nil = 未暂停)。语义跟 Supplement.PausedUntil 一致:
+	// > now 时不发该餐提醒, 跨日保留。底层存 meal_settings 表 (非 daily_state 表),
+	// GetDailyState 自动 join 进来给 UI 单点渲染。
+	BreakfastPausedUntil *int64 `json:"breakfast_paused_until"`
+	LunchPausedUntil     *int64 `json:"lunch_paused_until"`
+	DinnerPausedUntil    *int64 `json:"dinner_paused_until"`
 }
 
 func (s *Store) GetDailyState(date string) (DailyState, error) {
@@ -301,23 +307,31 @@ func (s *Store) GetDailyState(date string) (DailyState, error) {
 		   FROM daily_state WHERE date=?`, date,
 	).Scan(&ds.Date, &ds.Mode, &wake, &ds.ModeSetAt, &bf, &lu, &di)
 	if errors.Is(err, sql.ErrNoRows) {
-		return DailyState{Date: date, Mode: "normal", WakeTime: "", ModeSetAt: 0}, nil
-	}
-	if err != nil {
+		ds = DailyState{Date: date, Mode: "normal", WakeTime: "", ModeSetAt: 0}
+	} else if err != nil {
 		return DailyState{}, err
+	} else {
+		if wake.Valid {
+			ds.WakeTime = wake.String
+		}
+		if bf.Valid {
+			ds.BreakfastAt = bf.String
+		}
+		if lu.Valid {
+			ds.LunchAt = lu.String
+		}
+		if di.Valid {
+			ds.DinnerAt = di.String
+		}
 	}
-	if wake.Valid {
-		ds.WakeTime = wake.String
+	// 跨表读 meal_settings 把 paused_until 三字段 join 上 — 给 UI 单点渲染。
+	pauses, err := s.GetMealPausedAll()
+	if err != nil {
+		return DailyState{}, fmt.Errorf("get daily state meal paused: %w", err)
 	}
-	if bf.Valid {
-		ds.BreakfastAt = bf.String
-	}
-	if lu.Valid {
-		ds.LunchAt = lu.String
-	}
-	if di.Valid {
-		ds.DinnerAt = di.String
-	}
+	ds.BreakfastPausedUntil = pauses["breakfast"]
+	ds.LunchPausedUntil = pauses["lunch"]
+	ds.DinnerPausedUntil = pauses["dinner"]
 	return ds, nil
 }
 

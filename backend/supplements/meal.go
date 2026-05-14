@@ -26,6 +26,8 @@ var mealRanges = []mealRange{
 
 // GenerateMealNotifications 扫今日三餐, 在合法时段内仍未记录的餐发 panel 通知,
 // 已记录的餐自动 dismiss 对应通知, 已过 valid range 仍未记的也 dismiss (过期清理)。
+// 已暂停的餐 (meal_settings.paused_until > now) 跟未记录路径一样跳过新生成,
+// 已存在的 active 通知一并 dismiss — 暂停 → 通知双向绑定, 跟 supplement.IsActive 同语义。
 //
 // source = "meal", source_ref = "meal:{key}:date:{date}" — 跟 supplement 的 ref 格式同构,
 // CreateNotificationIdempotent 唯一约束保证一天每餐最多一条。
@@ -33,6 +35,7 @@ var mealRanges = []mealRange{
 // 调用点:
 //   - main.go ticker 60s
 //   - handlePostMeal 写入后立即 (用户记完餐后立刻清掉对应通知)
+//   - handlePauseMeal 暂停/取消暂停后立即 (dismiss 暂停的, 复活取消的)
 func GenerateMealNotifications(s *store.Store, now time.Time) (int, error) {
 	today := dateutil.LogicalToday(now)
 	// 跨日清理: 昨天没记的早午晚餐通知不要堆到今天
@@ -52,6 +55,12 @@ func GenerateMealNotifications(s *store.Store, now time.Time) (int, error) {
 		"lunch":     state.LunchAt,
 		"dinner":    state.DinnerAt,
 	}
+	pausedUntil := map[string]*int64{
+		"breakfast": state.BreakfastPausedUntil,
+		"lunch":     state.LunchPausedUntil,
+		"dinner":    state.DinnerPausedUntil,
+	}
+	nowUnix := now.Unix()
 	nowMin := now.Hour()*60 + now.Minute()
 	created := 0
 
@@ -59,7 +68,14 @@ func GenerateMealNotifications(s *store.Store, now time.Time) (int, error) {
 		ref := fmt.Sprintf("meal:%s:date:%s", m.key, today)
 		// 已记录 → dismiss (idempotent, 没生成过 / 已 dismissed 都安全)
 		if recordedAt[m.key] != "" {
-			_ = s.DismissNotificationByRef(ref, now.Unix())
+			_ = s.DismissNotificationByRef(ref, nowUnix)
+			continue
+		}
+		// 暂停期内 → 跟"已记录"路径同样 dismiss 已 active 通知, 跳过新生成。
+		// 取消暂停后下次 tick 自动 INSERT (CreateNotificationIdempotent 看到没行),
+		// handlePauseMeal 取消时也会先 undismiss 老 ref 让 mac 端立刻看到。
+		if pu := pausedUntil[m.key]; pu != nil && *pu > nowUnix {
+			_ = s.DismissNotificationByRef(ref, nowUnix)
 			continue
 		}
 		// 不在合法时段 — 范围前不发, 范围后由下面 expire 清理
@@ -74,7 +90,7 @@ func GenerateMealNotifications(s *store.Store, now time.Time) (int, error) {
 			Title:     m.label,
 			Body:      body,
 			Level:     "info",
-			CreatedAt: now.Unix(),
+			CreatedAt: nowUnix,
 		}
 		ok, err := s.CreateNotificationIdempotent(n)
 		if err != nil {

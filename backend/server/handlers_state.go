@@ -229,6 +229,48 @@ func (s *Server) handlePostMeal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ds)
 }
 
+// handlePauseMeal POST /api/state/meal/{meal}/pause
+// body: {"until": <unix-seconds> | null}
+//   - 设暂停截止 (写 meal_settings.paused_until);null 取消暂停
+//   - 立即跑一次 GenerateMealNotifications:
+//       暂停场景 → 把该 meal 当前 active 通知 dismiss
+//       取消场景 → 先 undismiss 现有 ref, 让 mac 端无需等 INSERT 也能看到通知回归
+//   - meal ∈ {"breakfast","lunch","dinner"}
+//
+// 跟 supplement 的 handlePauseSupplement 同构 (paused_until / null = 取消)。
+func (s *Server) handlePauseMeal(w http.ResponseWriter, r *http.Request) {
+	meal := r.PathValue("meal")
+	if !store.IsValidMeal(meal) {
+		writeError(w, http.StatusBadRequest, errors.New("meal must be breakfast | lunch | dinner"))
+		return
+	}
+	var p struct {
+		Until *int64 `json:"until"`
+	}
+	if err := decodeJSON(r, &p); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.SetMealPausedUntil(meal, p.Until); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	// 取消暂停: 先 undismiss 现有 ref, 让 mac 端 ticker 下一帧看到通知回归 (在合法时段内的话)。
+	// CreateNotificationIdempotent 是 INSERT OR IGNORE, 若昨天的 ref 还在则不会重新创建。
+	if p.Until == nil {
+		today := dateutil.LogicalToday(time.Now())
+		ref := fmt.Sprintf("meal:%s:date:%s", meal, today)
+		_ = s.store.UndismissNotificationByRef(ref)
+	}
+	// 暂停场景由 GenerateMealNotifications 内部 dismiss; 取消场景由它内部 INSERT 新条 (老 ref 已 undismiss)。
+	if _, err := supplements.GenerateMealNotifications(s.store, time.Now()); err != nil {
+		log.Printf("meal notif gen (post-pause): %v", err)
+	}
+	today := dateutil.LogicalToday(time.Now())
+	ds, _ := s.store.GetDailyState(today)
+	writeJSON(w, http.StatusOK, ds)
+}
+
 // exprUsesMeal 检查 supplement window 时间表达式是否引用了某 meal 锚点。
 // 跟 supplements.ParseTimeExpr 的 anchor prefix 匹配规则一致 (HasPrefix), 仅识别
 // breakfast/lunch/dinner (wake 不算 meal, 跟 firstMealMiss 一致)。

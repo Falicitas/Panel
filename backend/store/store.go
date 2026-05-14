@@ -109,6 +109,11 @@ func (s *Store) migrate() error {
 			sleep_start TEXT NOT NULL DEFAULT '22:30'
 		);
 		INSERT OR IGNORE INTO state_settings (id) VALUES (1);
+		CREATE TABLE IF NOT EXISTS meal_settings (
+			meal         TEXT PRIMARY KEY CHECK (meal IN ('breakfast', 'lunch', 'dinner')),
+			paused_until INTEGER
+		);
+		INSERT OR IGNORE INTO meal_settings (meal) VALUES ('breakfast'), ('lunch'), ('dinner');
 		CREATE TABLE IF NOT EXISTS notifications (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			source TEXT NOT NULL,
