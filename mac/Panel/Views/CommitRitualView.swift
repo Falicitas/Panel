@@ -223,8 +223,9 @@ struct CommitRitualView: View {
         }
         .padding(.vertical, 28)
         .padding(.horizontal, 36)
-        // 卡片宽度贴最长项 (短词 morning 不会被撑到 580 显空旷, 长句 phone 也照样 fit)。
-        // 纵向继续按 SwiftUI 自动算高。
+        // 卡片宽度贴最长项 (短词 morning 不撑到 580 显空旷, 长句 phone 也 fit)。
+        // 最小 252 = RitualButton 可视宽 (frame 220 + padding 16×2), 防卡片比下方按钮窄。
+        .frame(minWidth: 252, alignment: .leading)
         .fixedSize(horizontal: true, vertical: false)
         .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 20))
         .overlay(
