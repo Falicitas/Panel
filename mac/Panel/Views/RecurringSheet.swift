@@ -105,25 +105,17 @@ struct RecurringSheet: View {
             Text(item.content)
                 .lineLimit(2)
             Spacer()
-            // 移段 menu: 三态 (morning / phone / free), 当前 kind 项 disable
-            Menu {
-                ForEach(RecurringKind.allCases, id: \.self) { kind in
-                    if kind != item.kind {
-                        Button {
-                            Task { await state.setRecurringKind(item, kind) }
-                        } label: {
-                            Label(Self.label(for: kind), systemImage: Self.iconName(for: kind))
-                        }
-                    }
-                }
+            // 循环切段: morning → phone → free → morning
+            // icon: 向下走 morning/phone, 回顶 free 用向上 — 跟原来 2 态时 视觉一致
+            Button {
+                let target = Self.nextKind(item.kind)
+                Task { await state.setRecurringKind(item, target) }
             } label: {
-                Image(systemName: "arrow.left.arrow.right.circle")
+                Image(systemName: item.kind == .free ? "arrow.up.circle" : "arrow.down.circle")
                     .foregroundStyle(.secondary)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("移到其他段")
+            .buttonStyle(.borderless)
+            .help("移到 \(Self.label(for: Self.nextKind(item.kind))) 段")
 
             Button {
                 Task { await state.deleteRecurring(item) }
@@ -133,6 +125,14 @@ struct RecurringSheet: View {
             }
             .buttonStyle(.borderless)
             .help("删除")
+        }
+    }
+
+    private static func nextKind(_ k: RecurringKind) -> RecurringKind {
+        switch k {
+        case .morning: return .phone
+        case .phone:   return .free
+        case .free:    return .morning
         }
     }
 
