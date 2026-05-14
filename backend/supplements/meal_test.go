@@ -107,6 +107,37 @@ func TestGenerateMealNotifications_PausedExpiredCreatesNew(t *testing.T) {
 	}
 }
 
+// TestGenerateMealNotifications_DisabledNotCreated 永久禁止的 meal 不发新通知 + dismiss 已 active。
+// 跟 paused 路径同语义但不带过期, 用户主动启用后才恢复。
+func TestGenerateMealNotifications_DisabledNotCreated(t *testing.T) {
+	s := openTestStore(t)
+	now := breakfastTime(t)
+
+	// 先正常生成一次通知
+	if _, err := GenerateMealNotifications(s, now); err != nil {
+		t.Fatalf("first gen: %v", err)
+	}
+	ref := "meal:breakfast:date:" + todayKey(now)
+	if n := notifByRef(t, s, ref); n == nil || n.DismissedAt != nil {
+		t.Fatalf("breakfast notif should be active before disable")
+	}
+
+	// 禁用 breakfast → 通知应 dismiss + 不再生成新的
+	if err := s.SetMealEnabled("breakfast", false); err != nil {
+		t.Fatalf("SetEnabled: %v", err)
+	}
+	created, err := GenerateMealNotifications(s, now)
+	if err != nil {
+		t.Fatalf("post-disable gen: %v", err)
+	}
+	if created != 0 {
+		t.Errorf("created = %d, want 0 (breakfast disabled)", created)
+	}
+	if n := notifByRef(t, s, ref); n == nil || n.DismissedAt == nil {
+		t.Errorf("breakfast notif should be dismissed after disable")
+	}
+}
+
 // TestGenerateMealNotifications_OtherMealsUnaffected 暂停 breakfast 不影响 lunch / dinner。
 func TestGenerateMealNotifications_OtherMealsUnaffected(t *testing.T) {
 	s := openTestStore(t)

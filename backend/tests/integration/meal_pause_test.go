@@ -24,6 +24,19 @@ func (e *testEnv) pauseMeal(meal string, until *int64) store.DailyState {
 	return ds
 }
 
+// enableMeal 调 POST /api/state/meal/{meal}/enable body {"enabled": ...}, 返回 DailyState。
+func (e *testEnv) enableMeal(meal string, enabled bool) store.DailyState {
+	e.t.Helper()
+	body := map[string]any{"enabled": enabled}
+	status, raw := e.post("/api/state/meal/"+meal+"/enable", body)
+	e.mustOK("POST enable meal", "enable meal", status, raw)
+	var ds store.DailyState
+	if err := json.Unmarshal(raw, &ds); err != nil {
+		e.t.Fatalf("unmarshal ds: %v body=%s", err, raw)
+	}
+	return ds
+}
+
 // nowInMealRange 查当前 wall-clock 在哪个 meal 区间内, 返回 meal 名 + 是否在某区间内。
 // 用于"复用 wall-clock 选合适 meal 测试"的策略 — 避免 mock time.Now()。
 func nowInMealRange() (string, bool) {
@@ -83,6 +96,78 @@ func TestMealPause_InvalidMealRejected(t *testing.T) {
 	status, _ := e.post("/api/state/meal/brunch/pause", map[string]any{"until": until})
 	if status != 400 {
 		t.Errorf("invalid meal status = %d, want 400", status)
+	}
+}
+
+// TestMealEnable_DailyStateExposesEnabled 启用/禁用后 GET /api/state/today 返
+// breakfast_enabled 字段。默认 true, 禁用后 false。
+func TestMealEnable_DailyStateExposesEnabled(t *testing.T) {
+	e := newTestEnv(t)
+	ds := e.enableMeal("breakfast", false)
+	if ds.BreakfastEnabled {
+		t.Errorf("BreakfastEnabled = true, want false")
+	}
+	if !ds.LunchEnabled || !ds.DinnerEnabled {
+		t.Errorf("lunch/dinner enabled 默认 true, 不该被影响")
+	}
+	// 启用回去
+	ds = e.enableMeal("breakfast", true)
+	if !ds.BreakfastEnabled {
+		t.Errorf("BreakfastEnabled = false 启用后应回 true")
+	}
+}
+
+// TestMealEnable_InvalidMealRejected POST /api/state/meal/brunch/enable 400。
+func TestMealEnable_InvalidMealRejected(t *testing.T) {
+	e := newTestEnv(t)
+	status, _ := e.post("/api/state/meal/brunch/enable", map[string]any{"enabled": false})
+	if status != 400 {
+		t.Errorf("invalid meal status = %d, want 400", status)
+	}
+}
+
+// TestMealEnable_NotificationDismissCascade 禁用 → 当前 active 通知 dismiss; 启用 → 复活。
+// 跟 TestMealPause_NotificationDismissCascade 同结构, 仅切 pause 为 enable 轴。
+func TestMealEnable_NotificationDismissCascade(t *testing.T) {
+	meal, inRange := nowInMealRange()
+	if !inRange {
+		t.Skip("wall clock not in any meal range, skip lifecycle test")
+	}
+	e := newTestEnv(t)
+
+	// 触发一次 generate (用 enable=true noop + kick GenerateMealNotifications)
+	e.enableMeal(meal, true)
+	ref := mealRef(meal, e.today)
+	if n := e.notifByRef(ref); n == nil || n.DismissedAt != nil {
+		t.Fatalf("notif should be active after enable-true kick: %+v", n)
+	}
+
+	// 禁用 → 通知 dismiss
+	e.enableMeal(meal, false)
+	e.assertNotifDismissed(ref, true)
+
+	// 启用 → 通知复活
+	e.enableMeal(meal, true)
+	e.assertNotifDismissed(ref, false)
+}
+
+// TestMealEnable_OrthogonalToPause enabled 跟 paused_until 两轴独立: 设 paused 不影响 enabled,
+// 反之亦然 (跟 supplement.enabled / paused_until 行为对齐, 防一轴覆盖另一轴的 bug)。
+func TestMealEnable_OrthogonalToPause(t *testing.T) {
+	e := newTestEnv(t)
+	until := time.Now().Add(7 * 24 * time.Hour).Unix()
+	e.pauseMeal("breakfast", &until)
+	ds := e.enableMeal("breakfast", false)
+	if ds.BreakfastPausedUntil == nil || *ds.BreakfastPausedUntil != until {
+		t.Errorf("disable 误覆盖 paused_until: %v", ds.BreakfastPausedUntil)
+	}
+	if ds.BreakfastEnabled {
+		t.Errorf("disable 后 enabled 应 false")
+	}
+	// 再 enable=true, paused_until 仍保留
+	ds = e.enableMeal("breakfast", true)
+	if ds.BreakfastPausedUntil == nil || *ds.BreakfastPausedUntil != until {
+		t.Errorf("enable 误覆盖 paused_until: %v", ds.BreakfastPausedUntil)
 	}
 }
 
