@@ -118,6 +118,34 @@ extension CommitRitualConfig {
             dayKind: .sleepNight
         )
     }()
+
+    static let morning: CommitRitualConfig = {
+        let items = [
+            "起床喝水",
+            "吃早餐",
+            "刷牙、洗澡",
+            "冲茶、喝茶",
+        ]
+        return CommitRitualConfig(
+            title: "晨间起床",
+            stage1: .init(
+                body: "起床后这 4 项依次做完",
+                bodyItems: items,
+                buttonTitle: "都做完了",
+                buttonSubtitle: "起身去把这 4 项做完",
+                systemImage: "sun.max"
+            ),
+            stage2: .init(
+                body: "再核对一次",
+                bodyItems: items,
+                buttonTitle: "确认开始一天",
+                buttonSubtitle: "5 秒后才可点",
+                systemImage: "checkmark.shield"
+            ),
+            countdownSec: 5,
+            commitKey: "morningRitualCommit"
+        )
+    }()
 }
 
 struct CommitRitualView: View {
