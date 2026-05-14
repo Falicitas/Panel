@@ -928,6 +928,26 @@ final class AppState {
         await jumpToFocus(text)
     }
 
+    /// 当 todolist 未锚定 / anchor 无 focus 时, JumpToFocusButton 的 fallback:
+    /// 跳到当日 micro 第一个未完成项。流程同 jumpToTodolistFocus, 区别在 contentMode = .micro,
+    /// jumpToFocus 内部走 micro 分支 (隐含锚定为当日, 不需 selectList)。
+    /// micro 无未完成项 → no-op (按钮 disabled)。
+    func jumpToMicroFocus() async {
+        guard let text = microFocusText, !text.isEmpty else { return }
+        selectedTab = .todolist
+        contentMode = .micro
+        splitVisibility = .doubleColumn
+        await jumpToFocus(text)
+    }
+
+    /// 当日 micro 第一个未完成项的 text (跳过 checked 和 skip), 用于 JumpToFocusButton
+    /// 在 todolist 无 focus 时 fallback 到 micro。语义对齐 DetailView.microFocus(today:)。
+    var microFocusText: String? {
+        guard let today = microToday else { return nil }
+        guard let first = today.items.first(where: { !$0.checked && !$0.skip }) else { return nil }
+        return first.text
+    }
+
     /// 改今日精听阈值 (分钟)。复用 PUT /api/english/settings, windows / enabled 保留。
     func setEnglishThresholdMin(_ min: Int) async {
         guard min > 0, min <= 240 else { return }
