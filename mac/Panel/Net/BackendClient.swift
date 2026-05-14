@@ -65,6 +65,7 @@ protocol BackendClient: Sendable {
     func getStateSettings() async throws -> StateSettings
     func putStateSettings(_ ss: StateSettings) async throws -> StateSettings
     func setMeal(meal: String, time: String?, clear: Bool) async throws -> DailyState
+    func pauseMeal(meal: String, until: Int64?) async throws -> DailyState
 
     // MARK: Notifications
     func listNotifications(all: Bool) async throws -> [PanelNotification]

@@ -137,6 +137,11 @@ struct DailyState: Codable, Hashable {
     var breakfastAt: String  // "HH:MM" or "" — 用户主动触发的早餐时刻
     var lunchAt: String
     var dinnerAt: String
+    // 三餐暂停截止 (unix 秒, nil = 未暂停)。跨日保留 (跟 supplement.pausedUntil 同语义)。
+    // backend 从 meal_settings 表 join 进 DailyState 返回, mac UI 单点取数据渲染暂停状态。
+    var breakfastPausedUntil: Int64?
+    var lunchPausedUntil: Int64?
+    var dinnerPausedUntil: Int64?
 
     enum CodingKeys: String, CodingKey {
         case date, mode
@@ -145,6 +150,9 @@ struct DailyState: Codable, Hashable {
         case breakfastAt = "breakfast_at"
         case lunchAt = "lunch_at"
         case dinnerAt = "dinner_at"
+        case breakfastPausedUntil = "breakfast_paused_until"
+        case lunchPausedUntil = "lunch_paused_until"
+        case dinnerPausedUntil = "dinner_paused_until"
     }
 }
 

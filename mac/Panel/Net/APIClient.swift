@@ -232,6 +232,14 @@ actor APIClient: BackendClient {
         return try await post("/api/state/meal", body: Body(meal: meal, time: time, clear: clear))
     }
 
+    /// 暂停某餐: until=nil 取消暂停。跟 pauseSupplement 同构。
+    /// 后端会立即跑 GenerateMealNotifications: 暂停时 dismiss 已 active 通知,
+    /// 取消时 undismiss + 重新生成 (在合法时段内则立即 active)。
+    func pauseMeal(meal: String, until: Int64?) async throws -> DailyState {
+        struct Body: Encodable { let until: Int64? }
+        return try await post("/api/state/meal/\(meal)/pause", body: Body(until: until))
+    }
+
     // MARK: - Notifications
 
     func listNotifications(all: Bool = false) async throws -> [PanelNotification] {

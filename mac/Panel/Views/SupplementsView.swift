@@ -19,7 +19,8 @@ struct SupplementsView: View {
                     MealsSection(
                         dailyState: state.dailyState,
                         onTrigger: { meal in Task { await state.triggerMeal(meal) } },
-                        onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } }
+                        onClear: { meal in Task { await state.triggerMeal(meal, clear: true) } },
+                        onPause: { meal, days in Task { await state.pauseMeal(meal, days: days) } }
                     )
                     AllListSection(
                         today: state.supplementsToday,
@@ -194,6 +195,7 @@ private struct MealsSection: View {
     let dailyState: DailyState?
     let onTrigger: (String) -> Void
     let onClear: (String) -> Void
+    let onPause: (String, Int) -> Void  // (meal, days) — days=0 取消
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -211,8 +213,10 @@ private struct MealsSection: View {
                     MealCard(
                         meta: meta,
                         recordedAt: recorded(meta.key),
+                        pausedUntil: pausedUntil(meta.key),
                         onTrigger: { onTrigger(meta.key) },
-                        onClear: { onClear(meta.key) }
+                        onClear: { onClear(meta.key) },
+                        onPause: { days in onPause(meta.key, days) }
                     )
                 }
             }
@@ -230,13 +234,25 @@ private struct MealsSection: View {
         }
         return v.isEmpty ? nil : v
     }
+
+    private func pausedUntil(_ key: String) -> Int64? {
+        guard let ds = dailyState else { return nil }
+        switch key {
+        case "breakfast": return ds.breakfastPausedUntil
+        case "lunch":     return ds.lunchPausedUntil
+        case "dinner":    return ds.dinnerPausedUntil
+        default:          return nil
+        }
+    }
 }
 
 private struct MealCard: View {
     let meta: MealMeta
     let recordedAt: String?
+    let pausedUntil: Int64?  // unix 秒, > now 时该餐处于暂停状态
     let onTrigger: () -> Void
     let onClear: () -> Void
+    let onPause: (Int) -> Void  // days, 0 = 取消暂停
 
     @Environment(AppState.self) private var state
 
@@ -247,12 +263,26 @@ private struct MealCard: View {
         return meta.validRangeMin.contains(mins)
     }
 
+    /// 当前是否处于暂停期: pausedUntil 不为 nil 且大于现在 unix。
+    private var isPaused: Bool {
+        guard let until = pausedUntil else { return false }
+        let _ = state.timeTick
+        return Int64(Date().timeIntervalSince1970) < until
+    }
+
+    /// 卡片主色: 已记 = 绿; 暂停 = 橙 (跟 supplement 暂停 chip 一致); 否则锚点色。
+    private var tint: Color {
+        if recordedAt != nil { return .green }
+        if isPaused { return .orange }
+        return Color.anchorAccent
+    }
+
     var body: some View {
         let _ = state.timeTick
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: meta.icon)
-                    .foregroundStyle(recordedAt != nil ? Color.green : Color.anchorAccent)
+                    .foregroundStyle(tint)
                     .imageScale(.large)
                 Text(meta.label)
                     .font(.title3.weight(.semibold))
@@ -261,7 +291,12 @@ private struct MealCard: View {
                     Text(at)
                         .font(.body.monospacedDigit())
                         .foregroundStyle(.green)
+                } else if isPaused, let until = pausedUntil {
+                    Text("暂停至 \(dateLabel(until))")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
+                pauseMenu
             }
             Text(meta.rangeLabel)
                 .font(.caption.monospacedDigit())
@@ -283,7 +318,11 @@ private struct MealCard: View {
                     .disabled(!inRange)
                     .help(inRange ? "记录当前时刻为 \(meta.label)" : "不在 \(meta.label) 时段")
                     Spacer()
-                    if !inRange {
+                    if isPaused {
+                        Text("已暂停")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else if !inRange {
                         Text("不在区间")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -293,17 +332,43 @@ private struct MealCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            (recordedAt != nil ? Color.green : Color.anchorAccent).opacity(0.06),
-            in: RoundedRectangle(cornerRadius: 10)
-        )
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(
-                    (recordedAt != nil ? Color.green : Color.anchorAccent).opacity(0.35),
-                    lineWidth: 1
-                )
+                .stroke(tint.opacity(0.35), lineWidth: 1)
         )
+    }
+
+    /// 暂停 menu — 跟 supplement ItemCard 的 pause Menu 风格一致 (icon + days options + 取消)。
+    /// icon 状态化:
+    ///   - paused → play.circle 橙, 提示限时暂停中
+    ///   - 正常   → pause.circle 灰, 提示点击暂停
+    @ViewBuilder
+    private var pauseMenu: some View {
+        Menu {
+            Button("暂停 1 天") { onPause(1) }
+            Button("暂停 7 天") { onPause(7) }
+            Button("暂停 14 天") { onPause(14) }
+            Button("暂停 30 天") { onPause(30) }
+            if isPaused {
+                Divider()
+                Button("取消暂停") { onPause(0) }
+            }
+        } label: {
+            Image(systemName: isPaused ? "play.circle" : "pause.circle")
+                .foregroundStyle(isPaused ? Color.orange : Color.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 28)
+        .help(isPaused ? "限时暂停中, 点击调整 / 取消" : "暂停 N 天 (这餐不催记录)")
+    }
+
+    private func dateLabel(_ unix: Int64) -> String {
+        let d = Date(timeIntervalSince1970: TimeInterval(unix))
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        return f.string(from: d)
     }
 }
 
