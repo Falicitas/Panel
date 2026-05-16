@@ -79,7 +79,8 @@ func (s *Server) handlePostTodayState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	// 当日首次进入普通模式 -> 注入复发 todo 到 micro 顶部 (PRD: 蒙版选普通时注入,选外出不注入)
+	// 当日首次进入普通模式 -> 注入 free 复发 todo 到 micro 顶部 (PRD: 蒙版选普通时注入,
+	// 选外出不注入)。morning/phone 各有 ritual 蒙版承接, 不再注入 micro。
 	wasFirstSet := cur.ModeSetAt == 0
 	if wasFirstSet && p.Mode == "normal" {
 		if err := s.injectRecurringIntoMicro(); err != nil {
@@ -97,15 +98,18 @@ func (s *Server) handlePostTodayState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ds)
 }
 
+// injectRecurringIntoMicro 把 free kind 的复发 todo 注入当日 micro 顶部。
+// morning → 晨间 CommitRitualView 蒙版, phone → 睡前 ritual 蒙版, 两者都有蒙版承接
+// 不再注入 micro md (早期 morning 也注入, 改蒙版后成冗余, 去掉)。
 func (s *Server) injectRecurringIntoMicro() error {
 	recur, err := s.store.ListRecurring()
 	if err != nil {
 		return err
 	}
-	// phone kind 只用于睡前 ritual 蒙版, 不注入 micro。
+	// 仅 free 注入 micro。
 	filtered := recur[:0]
 	for _, r := range recur {
-		if r.Kind == store.RecurringKindPhone {
+		if r.Kind != store.RecurringKindFree {
 			continue
 		}
 		filtered = append(filtered, r)
