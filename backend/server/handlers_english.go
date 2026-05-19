@@ -126,10 +126,15 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 			wr.Status = "unknown"
 		}
 		resp.Windows = append(resp.Windows, wr)
-		if wr.Reached {
-			resp.TodayDone = true
-		}
 	}
+
+	// 今日完成 (UI 顶部「完成 ✓ / 绿色」) 用全天总累计判定 —— 与同区进度条 /
+	// 「今日新学 X.X / N 分钟」标签同源 (totalMin, 含窗口外)。
+	// 不再按"某个单独窗口内 ≥ 阈值"判定: 那会让练习分散在多窗口/窗口外时,
+	// 进度条已满却迟迟不变绿 (issue-53)。各窗口的 wr.Reached(时段窗口区
+	// 「达到阈值 ✓」) 与窗口通知 dismiss/undismiss 仍按窗口, 不受此影响。
+	resp.TodayDone = settings.ThresholdMin > 0 &&
+		totalMin >= float64(settings.ThresholdMin)
 
 	// 当前推荐 audio = 最新未归档 (M0: today 不按 topic 过滤, 主动跳音频在 M1 走 candidate API)
 	audios, err := s.store.ListAudios(false, "")
