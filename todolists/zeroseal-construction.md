@@ -40,9 +40,9 @@
   
 - [ ] [用户] 申请 `gw.zeroseal.cn` DV SSL 证书(阿里云 SSL 证书服务,免费版即可,等**域名+备案下来后才能签**) [[[skip]]]
 
-- [ ] [用户] 验证 K ↔ TD 内网互通:`nc -zv <K 内网 IP> <secrets 端口>` from TD;`nc -zv pgm-2ze04krx1h1wk06d.pg.rds.aliyuncs.com 5432` from K 和 TD
+- [x] [用户] 验证 K ↔ TD 内网互通:`nc -zv <K 内网 IP> <secrets 端口>` from TD;`nc -zv pgm-2ze04krx1h1wk06d.pg.rds.aliyuncs.com 5432` from K 和 TD
 
-- [ ] [用户] K 上 `apt purge -y aliyun-assist aegis cloudmonitor logtail`(MVP 推进期可推迟到上线前做)
+- [ ] [用户] K 上 `apt purge -y aliyun-assist aegis cloudmonitor logtail`**(MVP 推进期可推迟到上线前做)** [[[skip]]]
 
 ### 阿里云工单(用户提交,基于 `ops/aliyun-tickets.md` 内容)
 

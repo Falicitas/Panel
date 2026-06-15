@@ -1,0 +1,6 @@
+
+
+「目标文档树」目前的目标文档树我不满意，对于Backend要拆成两个子项目，所以一共至少有三个项目。因为对于Backend来说，像用户充值、管理token的这些属于panel的是一个go项目。而对于completion以及varification这之后会被打包成一个静态的二进制文件放在TDX的环境中。那它又是属于另外一个go项目。Web也就不需要将landing page和panel分开了。但是到时候landing page路由下应该还会有个prd，毕竟landing page的商业化构思需要很多上下文。
+
+另外目前涉及到 varification 和 completion 的代码可以先删掉，之后我会在某个 cc session 重新写入 tdx 的一些注意事项。之前的代码都有些问题。所以，有关 TDX 的所谓信任模型还是什么都先删掉，可以保留非 varification 的功能，比如llm路由和支付那些。再次提醒，llm路由和verification，这两个要和其他的panel 拆开，我也不知到之前怎么推到这一步的。这两个不应该放在一个go项目下。
+
