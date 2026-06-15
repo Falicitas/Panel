@@ -428,6 +428,11 @@ actor APIClient: BackendClient {
         try await postNoBody("/api/english/review/\(itemID)/done")
     }
 
+    /// 一键把今日显示的全部到期项推进 stage (后端封顶 daily_limit)。
+    func reviewMarkAllDone() async throws {
+        try await postNoBody("/api/english/review/done-all")
+    }
+
     func reviewPostpone(itemID: Int64, toDate: String? = nil) async throws {
         struct Body: Encodable {
             let toDate: String?

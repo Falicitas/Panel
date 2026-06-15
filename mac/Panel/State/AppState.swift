@@ -544,6 +544,18 @@ final class AppState {
         }
     }
 
+    /// 一键全部复习: 今日显示的到期项全部 advance。完成后 reload review + today (头部数字要更新)。
+    func reviewMarkAllDone() async {
+        do {
+            try await api.reviewMarkAllDone()
+            await reloadEnglishReview()
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch {
+            self.lastError = error.localizedDescription
+        }
+    }
+
     /// 延后复习项 (默认 +1 天). 完成后 reload review (today 头部计数不变)。
     func reviewPostpone(itemID: Int64, toDate: String? = nil) async {
         do {
