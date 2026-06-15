@@ -25,6 +25,9 @@ struct PrimarySidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            // macOS 26 液态玻璃: 系统按列槽画侧栏玻璃卡, 右/左外边距交给系统默认
+            // (内容 padding 推不动卡片外缘)。这里只给首行补一点顶部内边距, 别贴通知栏。
+            .padding(.top, 12)
             .navigationTitle("Panel")
             StatusFooter()
         }
