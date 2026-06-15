@@ -9,6 +9,9 @@ import SwiftUI
 struct EnglishReviewSection: View {
     let review: EnglishReviewToday
 
+    @Environment(AppState.self) private var state
+    @State private var showDoneAllConfirm = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -19,6 +22,17 @@ struct EnglishReviewSection: View {
                     audioGroup(group)
                 }
             }
+        }
+        .confirmationDialog(
+            "标记今日全部 \(review.shownTotal) 段复习完成?", isPresented: $showDoneAllConfirm
+        ) {
+            Button("全部完成") {
+                Task { await state.reviewMarkAllDone() }
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这 \(review.shownTotal) 段都会推进到下一复习阶段.")
         }
     }
 
@@ -35,6 +49,17 @@ struct EnglishReviewSection: View {
                 Text("\(review.postponedTotal) 条因配额已延到明天")
                     .font(.caption)
                     .foregroundStyle(.orange)
+            }
+            if !review.groups.isEmpty {
+                Button {
+                    showDoneAllConfirm = true
+                } label: {
+                    Label("全部复习", systemImage: "checkmark.circle.fill")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .help("一键标记今日全部 \(review.shownTotal) 段复习完成")
             }
         }
     }

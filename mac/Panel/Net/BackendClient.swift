@@ -96,6 +96,7 @@ protocol BackendClient: Sendable {
     // MARK: English Review (issue-44)
     func getEnglishReviewToday() async throws -> EnglishReviewToday
     func reviewMarkDone(itemID: Int64) async throws
+    func reviewMarkAllDone() async throws
     func reviewPostpone(itemID: Int64, toDate: String?) async throws
     func reviewFinish(itemID: Int64) async throws
 }

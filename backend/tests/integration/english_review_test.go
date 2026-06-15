@@ -222,6 +222,84 @@ func TestEnglishReview_DonePostponeFinish(t *testing.T) {
 	}
 }
 
+// TestEnglishReview_DoneAll 一键全部复习: 今日 due 全部 advance 到 stage 1, 队列清空, 再点幂等。
+func TestEnglishReview_DoneAll(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "revAll", LocalPath: "/x/revall.mp3"})
+	seedThreeSegments(e, id)
+	for i := 0; i < 3; i++ {
+		if _, err := e.store.EnsureReviewItem(id, i, e.today, time.Now().Unix()); err != nil {
+			t.Fatalf("ensure %d: %v", i, err)
+		}
+	}
+
+	status, raw := e.post("/api/english/review/done-all", nil)
+	e.mustOK("POST", "/done-all", status, raw)
+
+	wantNext := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
+	for i := 0; i < 3; i++ {
+		got, _, _ := e.store.GetReviewItemBySeg(id, i)
+		if got.Stage != 1 {
+			t.Errorf("seg %d stage = %d, want 1", i, got.Stage)
+		}
+		if got.NextReviewAt != wantNext {
+			t.Errorf("seg %d next = %q, want %q", i, got.NextReviewAt, wantNext)
+		}
+	}
+	if due, _ := e.store.ListDueReviewItems(e.today); len(due) != 0 {
+		t.Errorf("due after done-all = %d, want 0", len(due))
+	}
+
+	// 队列已空, 再点一次仍 2xx (幂等 no-op)。
+	status, raw = e.post("/api/english/review/done-all", nil)
+	e.mustOK("POST", "/done-all (empty)", status, raw)
+}
+
+// TestEnglishReview_DoneAllRespectsCap due 超配额时 done-all 只 advance 封顶内的, 多余留 due。
+func TestEnglishReview_DoneAllRespectsCap(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "revCap", LocalPath: "/x/revcap.mp3"})
+	segs := make([]store.EnglishSegment, 7)
+	for i := range segs {
+		segs[i] = store.EnglishSegment{
+			Idx: i, StartMs: int64(i * 1000), EndMs: int64((i + 1) * 1000), Text: "s",
+		}
+	}
+	if err := e.store.ReplaceSegments(id, segs); err != nil {
+		t.Fatalf("replace segs: %v", err)
+	}
+	for i := 0; i < 7; i++ {
+		if _, err := e.store.EnsureReviewItem(id, i, e.today, time.Now().Unix()); err != nil {
+			t.Fatalf("ensure %d: %v", i, err)
+		}
+	}
+	es, _ := e.store.GetEnglishSettings()
+	es.ReviewDailyLimit = 5
+	if err := e.store.SetEnglishSettings(es); err != nil {
+		t.Fatalf("set settings: %v", err)
+	}
+
+	status, raw := e.post("/api/english/review/done-all", nil)
+	e.mustOK("POST", "/done-all", status, raw)
+
+	// seg_idx ASC 排序下前 5 段 (0..4) advance, 后 2 段 (5,6) 仍 stage 0 due。
+	for i := 0; i < 5; i++ {
+		got, _, _ := e.store.GetReviewItemBySeg(id, i)
+		if got.Stage != 1 {
+			t.Errorf("seg %d stage = %d, want 1 (within cap)", i, got.Stage)
+		}
+	}
+	for i := 5; i < 7; i++ {
+		got, _, _ := e.store.GetReviewItemBySeg(id, i)
+		if got.Stage != 0 {
+			t.Errorf("seg %d stage = %d, want 0 (beyond cap)", i, got.Stage)
+		}
+	}
+	if due, _ := e.store.ListDueReviewItems(e.today); len(due) != 2 {
+		t.Errorf("due after capped done-all = %d, want 2", len(due))
+	}
+}
+
 // TestEnglishReview_PostponeWithToDate body 显式带 to_date 时使用之。
 func TestEnglishReview_PostponeWithToDate(t *testing.T) {
 	e := newTestEnv(t)
