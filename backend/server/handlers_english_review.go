@@ -121,6 +121,47 @@ func (s *Server) handleReviewDone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// POST /api/english/review/done-all — 一键把今日显示的全部到期项推进 stage。
+//
+// 语义对齐 GET today 展示的那批: 取 ListDueReviewItems(today) 后封顶 daily_limit。
+// 正常 UI 流程进复习 tab 时 GET today 已把配额溢出延到次日, 此刻 due 即 shown;
+// 这里再封顶一次是防御 — 保证绝不 advance 超过用户看到过的条数。
+//
+// 逐条复用 AdvanceReviewItem; 单条失败 (已 finished/mastered/被并发删) 时 skip 并
+// log, 不中断整批 (跟 handleEnglishReviewToday 的溢出 postpone 同样 best-effort)。
+// 全部处理完返回 204。
+func (s *Server) handleReviewDoneAll(w http.ResponseWriter, r *http.Request) {
+	now := time.Now()
+	today := dateutil.LogicalToday(now)
+
+	settings, err := s.store.GetEnglishSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	limit := settings.ReviewDailyLimit
+	if limit <= 0 {
+		limit = defaultReviewDailyLimit
+	}
+
+	due, err := s.store.ListDueReviewItems(today)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(due) > limit {
+		due = due[:limit]
+	}
+
+	for _, it := range due {
+		if _, err := s.store.AdvanceReviewItem(it.ID, today, now.Unix()); err != nil {
+			log.Printf("done-all advance review %d: %v", it.ID, err)
+			continue
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/english/review/{id}/postpone
 // body: {to_date?: YYYY-MM-DD} (默认 +1 天)
 func (s *Server) handleReviewPostpone(w http.ResponseWriter, r *http.Request) {

@@ -93,6 +93,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/english/settings", s.handleGetEnglishSettings)
 	mux.HandleFunc("PUT /api/english/settings", s.handlePutEnglishSettings)
 	mux.HandleFunc("GET /api/english/review/today", s.handleEnglishReviewToday)
+	mux.HandleFunc("POST /api/english/review/done-all", s.handleReviewDoneAll)
 	mux.HandleFunc("POST /api/english/review/{id}/done", s.handleReviewDone)
 	mux.HandleFunc("POST /api/english/review/{id}/postpone", s.handleReviewPostpone)
 	mux.HandleFunc("POST /api/english/review/{id}/finish", s.handleReviewFinish)
