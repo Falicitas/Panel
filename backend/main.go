@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"panel/curfew"
 	"panel/english"
 	"panel/micro"
 	"panel/msgsource"
@@ -108,6 +109,9 @@ func main() {
 
 	// 英文练习音频源抓取: 启动 + 每 6h 扫一次,新条目下载到 ~/panel/data/english/{id}.mp3
 	go runEnglishFetchLoop(ctx, st, filepath.Join(dataDir, "english"))
+
+	// 夜间宵禁: 22:00–06:00 每 60s 检测, 窗口内 5 分钟倒计时后静默强制关机
+	go curfew.Run(ctx, curfew.Shutdown)
 
 	srv := server.New(repo, st, microRepo)
 	httpSrv := &http.Server{
