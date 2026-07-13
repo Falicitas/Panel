@@ -48,10 +48,10 @@
     >
     >   ```bash
     >   ls -l /dev/tdx_guest
-    >   crw------- 1 root root 10, 261 May 28 19:59 /dev/tdx_guest  # 字符设备，major 10 是内核 misc 字符设备类
+    >   crw------- 1 root root 10， 261 May 28 19:59 /dev/tdx_guest  # 字符设备，major 10 是内核 misc 字符设备类
     >   ```
     >
-    >   `dmesg` 一样，VM 内软件产生的文本和节点,root 能任意伪造,没有签名。
+    >   `dmesg` 一样，VM 内软件产生的文本和节点，root 能任意伪造，没有签名。
     >
     >   ```bash
     >   dmesg | grep -i tdx
@@ -62,7 +62,7 @@
     >   [38864.527634] systemd[1]: Detected confidential virtualization tdx.
     >   ```
     >
-    >   >   systemd 是 init 系统(PID 1),内核启动完成后由内核拉起,职责是初始化用户空间——挂载文件系统、启动各种服务和守护进程、管理系统直到关机。
+    >   >   systemd 是 init 系统(PID 1)，内核启动完成后由内核拉起，职责是初始化用户空间——挂载文件系统、启动各种服务和守护进程、管理系统直到关机。
 
 -   [x] 确认 TSM（Trusted Security Module，抽象层，硬件是 intel 会用 intel 的 tdx 能力） configfs 是 quote provider — 跑：
 
@@ -74,7 +74,7 @@
     应输出 `tdx_guest`。这是 backend 产 quote 的接口。
 
     ```bash
-    # inblob 能写,因为它注册了 write 回调
+    # inblob 能写，因为它注册了 write 回调
     head -c 64 /dev/urandom | sudo tee /sys/kernel/config/tsm/report/exp1/inblob > /dev/null
     ```
 
@@ -82,8 +82,8 @@
 
         ```c
         struct configfs_attribute {
-            const char *ca_name;       // 属性名,比如 "provider"
-            umode_t     ca_mode;       // 权限位,比如 0444(只读)
+            const char *ca_name;       // 属性名，比如 "provider"
+            umode_t     ca_mode;       // 权限位，比如 0444(只读)
             ssize_t (*show)(...);      // read 回调:cat 时调它。函数指针
             ssize_t (*store)(...);     // write 回调:echo something | tee 文件 时调它。函数指针
         };
@@ -99,10 +99,10 @@
         outblob     →  tsm_report_outblob_read         →  CONFIGFS_BIN_ATTR_RO  →  0444 (r--)
         ```
 
-        -   `_show` 结尾 = 读回调(cat 时调),`_write`/`_read` 结尾 = 二进制属性的读写回调。普通文本属性用 `_show`,二进制属性(inblob/outblob)用 `_read`/`_write`。
-        -   宏里 `RO`=只读、`WO`=只写,直接决定权限位。`BIN` 前缀=二进制属性。
+        -   `_show` 结尾 = 读回调(cat 时调)，`_write`/`_read` 结尾 = 二进制属性的读写回调。普通文本属性用 `_show`，二进制属性(inblob/outblob)用 `_read`/`_write`。
+        -   宏里 `RO`=只读、`WO`=只写，直接决定权限位。`BIN` 前缀=二进制属性。
         -   `provider_show` 里返回值的那行:`sysfs_emit(buf, "%s\n", provider.ops->name)` —— 你 cat 出 `tdx_guest` 就是这行。
-        -   `outblob_read` 调 `tsm_report_read`,里面 `ops->report_new(...)` 才是真正触发产 quote 的点。读 outblob = 触发硬件 attestation。
+        -   `outblob_read` 调 `tsm_report_read`，里面 `ops->report_new(...)` 才是真正触发产 quote 的点。读 outblob = 触发硬件 attestation。
 
         mkdir 触发的回调：
 
@@ -129,7 +129,7 @@
           tsm_report_attrs[] 数组收集 attr 地址
           → tsm_report_default_type.ct_attrs 持有数组
           → make_item 里 config_item_init_type_name 绑定 type
-          → configfs 遍历 ct_attrs,逐个建文件 + 接 .show/.store
+          → configfs 遍历 ct_attrs，逐个建文件 + 接 .show/.store
         ```
 
         对于 configfs 来说，其在 `/sys/kernel/config/tsm/report` 的管理机制就是上面所描述的。
@@ -140,10 +140,10 @@
         Quote
         ├── Header
         ├── TD Report Body(MRTD/RTMR0-3/report_data/TD attributes/TEE_TCB_SVN...)
-        └── Signature Data(签名区,内部又分层)
+        └── Signature Data(签名区，内部又分层)
             ├── Quote Signature ← 用 Attestation Key(AK)对 Header+Body 的 ECDSA 签名
             ├── Attestation Key(AK 公钥)
-            ├── QE Report ← Quoting Enclave 自己的 report,里面绑定了 AK 的 hash
+            ├── QE Report ← Quoting Enclave 自己的 report，里面绑定了 AK 的 hash
             ├── QE Report Signature ← 用 PCK 私钥对 QE Report 签名
             └── Certification Data
                 └── PCK Cert → Platform CA → Root CA(三张证书)
@@ -249,8 +249,8 @@
 -   [x] 装 canonical 的 guest 工具拿 tdeventlog — clone `https://github.com/canonical/tdx`，看 guest-tools 里的 tdeventlog（Python 脚本）
 
     -   ```bash
-        开机 → OVMF(firmware,初始化 + 提供 UEFI)
-              → GRUB(bootloader,加载 kernel/initrd/cmdline)
+        开机 → OVMF(firmware，初始化 + 提供 UEFI)
+              → GRUB(bootloader，加载 kernel/initrd/cmdline)
               → kernel
         ```
 
@@ -260,8 +260,8 @@
         boot 期间(每个组件重复):
           组件(TDVF/shik/GRUB/kernel)
             ├─ 算 digest
-            ├─ tdcall → 固件 extend 进 RTMR(固件被动,看不见)
-            └─ 自己往内存写 event log(软件主动,明文)← tdeventlog 之后读这个
+            ├─ tdcall → 固件 extend 进 RTMR(固件被动，看不见)
+            └─ 自己往内存写 event log(软件主动，明文)← tdeventlog 之后读这个
         
         attestation 时(你 cat outblob):
           tsm.c → tdcall(TDG.MR.REPORT)+ 填入 reportdata
@@ -276,8 +276,8 @@
 
         ```bash
         sudo tdeventlog 2>&1 | python3 eventlog_annotate.py
-        # 事件 0 — log 头(EV_NO_ACTION,RTMR0)
-        # `Spec ID Event03` + SHA384 声明。代表"event log 起点、用 SHA384",不 extend。认得它是开头标记即可。
+        # 事件 0 — log 头(EV_NO_ACTION，RTMR0)
+        # `Spec ID Event03` + SHA384 声明。代表"event log 起点、用 SHA384"，不 extend。认得它是开头标记即可。
         ==== TDX Event Log Entry - 0 [0xBAE1E000] ====
         RTMR              : 0
         Type              : 3 (EV_NO_ACTION)
@@ -293,8 +293,8 @@
         RAW DATA: ----------------------------------------------
         
         # ...
-        # **事件 13 — grubx64.efi(EV_EFI_BOOT_SERVICES_APPLICATION,RTMR1)**
-        # bootloader 二进制进 RTMR1 的代表。RTMR1 = kernel/bootloader 这层的锚点,看这一条就懂 RTMR1 装什么。
+        # **事件 13 — grubx64.efi(EV_EFI_BOOT_SERVICES_APPLICATION，RTMR1)**
+        # bootloader 二进制进 RTMR1 的代表。RTMR1 = kernel/bootloader 这层的锚点，看这一条就懂 RTMR1 装什么。
         ==== TDX Event Log Entry - 13 [0xBAE1E59B] ====
         RTMR              : 1
         Type              : 0x80000003 (EV_EFI_BOOT_SERVICES_APPLICATION)
@@ -320,8 +320,8 @@
         BAE1E67B  00 00 7F FF 04 00                                ......
         RAW DATA: ----------------------------------------------
         # ...
-        # **事件 19 — LOADED_IMAGE::LoadOptions(EV_EVENT_TAG,RTMR2)** ← 最重要
-        # 这就是 cmdline。你整个实验的命门,改 cmdline → 这条 digest 变 → RTMR2 变。
+        # **事件 19 — LOADED_IMAGE::LoadOptions(EV_EVENT_TAG，RTMR2)** ← 最重要
+        # 这就是 cmdline。你整个实验的命门，改 cmdline → 这条 digest 变 → RTMR2 变。
         ==== TDX Event Log Entry - 19 [0xBAE1E887] ====
         RTMR              : 2
         Type              : 0x6 (EV_EVENT_TAG)
@@ -338,7 +338,7 @@
         BAE1E8D7  5F 49 4D 41 47 45 3A 3A 4C 6F 61 64 4F 70 74 69  _IMAGE::LoadOpti
         BAE1E8E7  6F 6E 73 00                                      ons.
         RAW DATA: ----------------------------------------------
-        # **事件 20 — Linux initrd(EV_EVENT_TAG,RTMR2)**
+        # **事件 20 — Linux initrd(EV_EVENT_TAG，RTMR2)**
         # initrd 进 RTMR2。将来 verity rootfs 启动时这条闭合 initramfs 这一环。
         ==== TDX Event Log Entry - 20 [0xBAE1E8EB] ====
         RTMR              : 2
@@ -798,44 +798,49 @@ measure 确定性可复现。体现在机器重启一致性，以及不同 TD �
 
 ## Phase 4 — root hash 进 measurement(闭合链条)
 
-目的:把 verity root hash 灌进 cmdline 让它进 RTMR2,验证换 binary 必然导致 measurement 变。
-
-> 本轮 kernel/initrd/rootfs 全用 mkosi 产出(已确认 mkosi 的 vmlinuz 与云端 byte 一致,
-> 所以统一用 mkosi 这套,RTMR1 不会因换 kernel 而变)。挂 verity 走 mkosi initrd 里的
-> systemd-veritysetup,不用 dm-mod.create。
+>   相较于 phase 3，phase 4 开始前有两个增量，都在 `~/zeroseal-mkosi/`：
 >
-> Phase 1 已实测:cmdline 经 LOADED_IMAGE::LoadOptions 进 RTMR2,boot-time 路通。
-> 这一步不再验"cmdline 进不进 RTMR2",只验"binary→root hash→cmdline→RTMR2"上游因果。
+>   1.  overlay 里加了 tdx-guest/tsm 两个内核模块。路径 `overlay/usr/lib/modules/6.8.0-111-generic/kernel/drivers/virt/coco/`（tdx-guest/tdx-guest.ko.zst + tsm.ko.zst），从原版 Ubuntu 同版本模块树拷的。原因:mkosi 默认把模块精简到 1011 个(tools tree 的 initrd 白名单)，coco 模块被裁，导致 TD attestation 用的 tsm 没了。不能用 KernelModulesInclude(它是"只留匹配"语义，会把启动必需模块也裁了，158M 启动失败那次就是)，所以用 ExtraTrees 直接塞文件，只增 11K，不动其他模块。
+>   2.  overlay 里加了 `usr/lib/modules-load.d/tdx.conf`，内容一行 `tdx_guest`。原因:模块光在 rootfs 里不会自动加载，这行让 systemd 启动时 modprobe tdx_guest(它带起依赖 tsm)。depmod 由 mkosi 构建流程自动处理，modules.dep 已正确识别依赖，不用手动加。结果:tsm 注册出 `/sys/kernel/config/tsm/report/`，RTMR2 测量接口就绪。
+
+目的:把 verity root hash 灌进 cmdline 让它进 RTMR2，验证换 binary 必然导致 measurement 变。
+
+> 本轮 kernel/initrd/rootfs 全用 mkosi 产出(已确认 mkosi 的 vmlinuz 与云端 byte 一致，
+> 所以统一用 mkosi 这套，RTMR1 不会因换 kernel 而变)。挂 verity 走 mkosi initrd 里的
+> systemd-veritysetup，不用 dm-mod.create。
+>
+> Phase 1 已实测:cmdline 经 LOADED_IMAGE::LoadOptions 进 RTMR2，boot-time 路通。
+> 这一步不再验"cmdline 进不进 RTMR2"，只验"binary→root hash→cmdline→RTMR2"上游因果。
 
 - [ ] 确认 mkosi initrd 带 verity 挂载能力
-    - 🔍 用 mkosi 的 initrd 启动,挂只读 verity rootfs 靠 initrd 里的 systemd-veritysetup。
+    - 🔍 用 mkosi 的 initrd 启动，挂只读 verity rootfs 靠 initrd 里的 systemd-veritysetup。
       构建出 initrd 后先确认它包含 veritysetup 相关组件(Phase 3 出 initrd 时一并查)
 
-- [ ] 构造带 verity 的 cmdline — 用 roothash,不用 dm-mod.create
+- [ ] 构造带 verity 的 cmdline — 用 roothash，不用 dm-mod.create
 roothash=<ROOT_HASH> systemd.verity=1 root=<rootfs 分区>
     - ⚠️ 具体 cmdline 参数等 Phase 3 出了 root hash、确认 initrd 挂 verity 的方式后写准
       (systemd.verity 系列参数 vs 直接 root=/dev/mapper/... 取决于 initrd 配置)
-    - ⚠️ root hash 是 dm-verity 自己的 hash(sha256 算的 block 校验树),跟 RTMR 的
-      SHA384 是两套,别混
+    - ⚠️ root hash 是 dm-verity 自己的 hash(sha256 算的 block 校验树)，跟 RTMR 的
+      SHA384 是两套，别混
 
-- [ ] 关机 + 开机,重新 dump RTMR — 跟 baseline 比,RTMR2 应该变了
+- [ ] 关机 + 开机，重新 dump RTMR — 跟 baseline 比，RTMR2 应该变了
     - 🔍 "RTMR2 因 cmdline 改而变"Phase 1 测试 A 已证。这步真正确认的是下面测试 C/D 的
       上游因果(binary→root hash→cmdline)
-    - ⚠️ 换了 mkosi 的 kernel/initrd,RTMR1/RTMR2 基线相对纯云端会变(initrd 不同),
+    - ⚠️ 换了 mkosi 的 kernel/initrd，RTMR1/RTMR2 基线相对纯云端会变(initrd 不同)，
       要重新建基。比对用稳定态(非首次启动)的值
-    - ⚠️ TDX 实例内 reboot 被禁,走控制台关机 + 开机
+    - ⚠️ TDX 实例内 reboot 被禁，走控制台关机 + 开机
 
 - [ ] 破坏性测试 C(主路径):改 Go binary → 重跑 mkosi → 新 root hash → 新 cmdline →
       关机开机 → RTMR2 再变
     - 🔍 证明换 binary 必然导致 root hash 变、进而 RTMR2 变。攻击者想偷换 binary 又让
-      measurement 不变,做不到
-    - 注:"重做 rootfs"现在指重跑 mkosi build,不是手搓
+      measurement 不变，做不到
+    - 注:"重做 rootfs"现在指重跑 mkosi build，不是手搓
 
 - [ ] 破坏性测试 D:改 binary 但 cmdline 塞旧 root hash → verity 挂载失败 / 起不来
-    - 🔍 堵死另一条攻击路:想用旧 hash 骗 measurement,verity 这关过不了
+    - 🔍 堵死另一条攻击路:想用旧 hash 骗 measurement，verity 这关过不了
 
-- [ ] 启动路线:kernel byte 与云端一致、initrd/rootfs 都齐,本轮可以直接真从 verity
-      rootfs 启动(原"第一轮只验因果不真启动"的简化可不要了,门槛已经低了)
+- [ ] 启动路线:kernel byte 与云端一致、initrd/rootfs 都齐，本轮可以直接真从 verity
+      rootfs 启动(原"第一轮只验因果不真启动"的简化可不要了，门槛已经低了)
 
 ------
 
