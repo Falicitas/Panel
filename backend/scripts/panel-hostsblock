@@ -77,7 +77,8 @@ case "${1:-}" in
       exit 2
     }
     for e in "$@"; do
-      [[ "$e" == "Empty" || "$e" =~ ^[A-Za-z0-9*.:/_-]+$ ]] || {
+      # 例外表既有条目形态: 域名 / 10.* 通配 / 169.254/16 CIDR / <local>
+      [[ "$e" == "Empty" || "$e" =~ ^[A-Za-z0-9*.:/\<\>_-]+$ ]] || {
         echo "bad bypass entry: $e" >&2
         exit 2
       }

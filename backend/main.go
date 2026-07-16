@@ -141,7 +141,11 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
-	if err := hostsblock.Unblock(shutdownCtx, dataDir); err != nil {
+	// 退出清理给独立宽限: networksetup / zsh -i 启动动辄数秒,
+	// 5s 的 http ctx 实测会把 unblock 掐超时 (2026-07-16 19:05 日志)
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cleanupCancel()
+	if err := hostsblock.Unblock(cleanupCtx, dataDir); err != nil {
 		log.Printf("hostsblock: 退出清理: %v", err)
 	}
 }

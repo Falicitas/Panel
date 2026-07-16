@@ -125,13 +125,13 @@ func TestScriptSetBypass(t *testing.T) {
 		return 0
 	}
 
-	t.Run("整表替换原样转发 (含带空格斜杠的服务名)", func(t *testing.T) {
+	t.Run("整表替换原样转发 (含空格服务名与 <local>/CIDR 条目)", func(t *testing.T) {
 		if code := run("setbypass", "USB 10/100/1000 LAN",
-			"localhost", "10.*", "a.com"); code != 0 {
+			"localhost", "10.*", "<local>", "169.254/16", "a.com"); code != 0 {
 			t.Fatalf("exit=%d, want 0", code)
 		}
 		want := "-setproxybypassdomains\nUSB 10/100/1000 LAN\n" +
-			"localhost\n10.*\na.com\n"
+			"localhost\n10.*\n<local>\n169.254/16\na.com\n"
 		if got := readFile(t, logPath); got != want {
 			t.Errorf("networksetup 收到:\n%q\nwant:\n%q", got, want)
 		}

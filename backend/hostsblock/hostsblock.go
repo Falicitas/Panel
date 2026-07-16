@@ -37,8 +37,9 @@ const (
 	WindowEnv     = "PANEL_HOSTSBLOCK_WINDOW"
 	// Poll 收敛间隔。
 	Poll = 60 * time.Second
-	// cmdTimeout 单次脚本调用上限。
-	cmdTimeout = 15 * time.Second
+	// cmdTimeout 单次命令上限。networksetup -set* 实测单次可达十秒级
+	// (19:05:47→19:06:12 三个服务), 15s 偏紧, 放宽到 30s。
+	cmdTimeout = 30 * time.Second
 
 	hostsPath  = "/etc/hosts"
 	scriptPath = "/usr/local/bin/panel-hostsblock"

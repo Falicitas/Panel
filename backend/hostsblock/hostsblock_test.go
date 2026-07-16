@@ -149,9 +149,10 @@ func driveRun(t *testing.T, w *world, window time.Duration, start time.Time,
 	<-done
 }
 
-// userBypass 模拟用户已有的代理例外表 (Clash 常见默认), 全程必须原样保留。
+// userBypass 模拟用户已有的代理例外表 (Clash 常见默认 + macOS <local>
+// 记号, 实测 Thunderbolt Bridge 自带), 全程必须原样保留。
 func userBypass() []string {
-	return []string{"localhost", "127.*", "192.168.1.6", "10.*"}
+	return []string{"localhost", "127.*", "192.168.1.6", "10.*", "<local>"}
 }
 
 func TestRunLoop(t *testing.T) {
