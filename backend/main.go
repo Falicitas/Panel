@@ -13,6 +13,7 @@ import (
 
 	"panel/curfew"
 	"panel/english"
+	"panel/hostsblock"
 	"panel/micro"
 	"panel/msgsource"
 	"panel/server"
@@ -113,6 +114,10 @@ func main() {
 	// 夜间宵禁: 22:00–06:00 每 60s 检测, 窗口内 5 分钟倒计时后静默强制关机
 	go curfew.Run(ctx, curfew.Shutdown)
 
+	// 早间防刷: 启动后 2h 内把 data/blocked-sites.txt 里的网站在 /etc/hosts
+	// 层截断 (经 sudo panel-hostsblock 脚本), 到点自动恢复
+	go hostsblock.Run(ctx, dataDir)
+
 	srv := server.New(repo, st, microRepo)
 	httpSrv := &http.Server{
 		Addr:              listenAddr,
@@ -136,6 +141,9 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
+	if err := hostsblock.Unblock(shutdownCtx); err != nil {
+		log.Printf("hostsblock: 退出清理: %v", err)
+	}
 }
 
 func runEnglishFetchLoop(ctx context.Context, st *store.Store, englishDir string) {
