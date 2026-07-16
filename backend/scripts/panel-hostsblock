@@ -4,19 +4,25 @@
 # 用法:
 #   panel-hostsblock block <domain...>   重写标记块: 每域名两行 (0.0.0.0 + ::)
 #   panel-hostsblock unblock             删除标记块
+#   panel-hostsblock setbypass <service> <entry...|Empty>
+#                                        整表替换系统代理例外列表 (哑执行,
+#                                        目标表由后端算好传入; 代理开启时逼
+#                                        名单域直连, 直连才会命中 hosts 黑洞)
 #
 # 标记块外的内容原样保留; block 重复执行是幂等替换 (不叠加)。
-# 改完自动 flush DNS 缓存。
+# block/unblock 改完自动 flush DNS 缓存。
 #
 # 安装 (一次性; 必须 root 拥有且他人不可写, 否则 sudoers 授权等于任意提权):
 #   sudo install -o root -g wheel -m 755 \
 #     backend/scripts/panel-hostsblock /usr/local/bin/
 #   sudoers 单行: kinesis ALL=(root) NOPASSWD: /usr/local/bin/panel-hostsblock
 #
-# 测试钩子: 设 PANEL_HOSTS 指向替身文件 → 不需要 root, 且跳过 DNS flush。
+# 测试钩子: 设 PANEL_HOSTS 指向替身文件 → 不需要 root, 且跳过 DNS flush;
+# 设 PANEL_NETWORKSETUP 指向 stub 可执行文件 → setbypass 不动真网络设置。
 set -euo pipefail
 
 HOSTS="${PANEL_HOSTS:-/etc/hosts}"
+NETWORKSETUP="${PANEL_NETWORKSETUP:-/usr/sbin/networksetup}"
 BEGIN="# >>> panel-hostsblock >>>"
 END="# <<< panel-hostsblock <<<"
 
@@ -59,8 +65,27 @@ case "${1:-}" in
     strip | replace
     flush_dns
     ;;
+  setbypass)
+    shift
+    [ "$#" -ge 2 ] || {
+      echo "usage: panel-hostsblock setbypass <service> <entry...|Empty>" >&2
+      exit 2
+    }
+    svc="$1"; shift
+    [[ "$svc" =~ ^[A-Za-z0-9][A-Za-z0-9\ ./_-]*$ ]] || {
+      echo "bad service: $svc" >&2
+      exit 2
+    }
+    for e in "$@"; do
+      [[ "$e" == "Empty" || "$e" =~ ^[A-Za-z0-9*.:/_-]+$ ]] || {
+        echo "bad bypass entry: $e" >&2
+        exit 2
+      }
+    done
+    "$NETWORKSETUP" -setproxybypassdomains "$svc" "$@"
+    ;;
   *)
-    echo "usage: panel-hostsblock block <domain...> | unblock" >&2
+    echo "usage: panel-hostsblock block <domain...> | unblock | setbypass ..." >&2
     exit 2
     ;;
 esac

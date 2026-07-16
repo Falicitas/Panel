@@ -141,7 +141,7 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
-	if err := hostsblock.Unblock(shutdownCtx); err != nil {
+	if err := hostsblock.Unblock(shutdownCtx, dataDir); err != nil {
 		log.Printf("hostsblock: 退出清理: %v", err)
 	}
 }

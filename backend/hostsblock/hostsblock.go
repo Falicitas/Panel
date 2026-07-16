@@ -10,6 +10,8 @@
 //   - 写 /etc/hosts 需要 root → 经 sudoers 授权的专用脚本
 //     /usr/local/bin/panel-hostsblock (见 backend/scripts/), Go 侧只读 hosts
 //     判断幂等, 需要变更才 sudo 调脚本 (避免每分钟无谓 flush DNS)。
+//   - 系统代理 (Clash 等 127.0.0.1:7890) 会让浏览器绕过 hosts → 窗口内同步把
+//     名单域名加进代理例外表逼其直连, 见 bypass.go。
 //   - 每 60s 收敛一次: 窗口内块被手动删掉会自动修回; 窗口结束 unblock,
 //     失败则每 tick 重试直到成功才退出 (sudoers 没配好时错误去重打日志)。
 //   - 窗口计时用 now-start (monotonic, darwin 含睡眠时间), 改系统时钟不影响。
@@ -17,6 +19,7 @@ package hostsblock
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -73,17 +76,28 @@ func EffectiveWindow(raw string) time.Duration {
 	return d
 }
 
-// Unblock 立即解除拦截 (幂等, 无块时不调 sudo), 供进程退出时清理残留块。
-// 清理失败无妨: 下次启动会重新接管标记块并在窗口结束时解除。
-func Unblock(ctx context.Context) error {
-	d := deps{
+// productionDeps 组装生产依赖 (真 hosts / 真 exec / 真时钟)。
+func productionDeps(sites []string, window time.Duration) deps {
+	return deps{
+		sites:  sites,
+		window: window,
 		read: func() (string, error) {
 			b, err := os.ReadFile(hostsPath)
 			return string(b), err
 		},
 		exec: exec.Run,
+		now:  time.Now,
 	}
-	return ensure(ctx, d, false)
+}
+
+// Unblock 立即解除拦截 (幂等), 供进程退出时清理残留 (hosts 块 + 代理例外)。
+// 名单读不到时仍清 hosts 块 (例外表差集无从算, 残留交给下次启动窗口自愈)。
+func Unblock(ctx context.Context, dataDir string) error {
+	sites, _, err := LoadSites(filepath.Join(dataDir, sitesFile))
+	if err != nil {
+		sites = nil
+	}
+	return ensure(ctx, productionDeps(sites, 0), false)
 }
 
 // Run 阻塞: 加载名单, 启动即拦截, 窗口结束解除成功后返回。
@@ -100,16 +114,7 @@ func Run(ctx context.Context, dataDir string) {
 		log.Printf("hostsblock: 名单为空, 本次不拦截")
 		return
 	}
-	d := deps{
-		sites:  sites,
-		window: EffectiveWindow(os.Getenv(WindowEnv)),
-		read: func() (string, error) {
-			b, err := os.ReadFile(hostsPath)
-			return string(b), err
-		},
-		exec: exec.Run,
-		now:  time.Now,
-	}
+	d := productionDeps(sites, EffectiveWindow(os.Getenv(WindowEnv)))
 	tick := time.NewTicker(Poll)
 	defer tick.Stop()
 	run(ctx, d, tick.C)
@@ -149,8 +154,16 @@ func run(ctx context.Context, d deps, ticks <-chan time.Time) {
 	}
 }
 
-// ensure 幂等收敛: 已达标不动, 需要变更才 sudo 调脚本。
+// ensure 幂等收敛 hosts 标记块与系统代理例外表, 已达标不动。
+// 两条腿互不阻塞, 错误聚合返回 (代理例外失败不该拖住 hosts 收敛, 反之亦然)。
 func ensure(ctx context.Context, d deps, wantBlocked bool) error {
+	return errors.Join(
+		ensureHosts(ctx, d, wantBlocked),
+		ensureBypass(ctx, d, wantBlocked),
+	)
+}
+
+func ensureHosts(ctx context.Context, d deps, wantBlocked bool) error {
 	content, err := d.read()
 	if err != nil {
 		return fmt.Errorf("读 %s: %w", hostsPath, err)
@@ -167,8 +180,14 @@ func ensure(ctx context.Context, d deps, wantBlocked bool) error {
 	return runScript(ctx, d.exec, []string{"unblock"})
 }
 
+// runScript 经 sudo 调专用 root 脚本。每个参数单引号包裹 -- 例外表条目常含
+// "10.*" 这类 glob 字符, zsh 对无匹配 glob 会直接报错。
 func runScript(ctx context.Context, run runFn, args []string) error {
-	cmd := "sudo -n " + scriptPath + " " + strings.Join(args, " ")
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = "'" + a + "'"
+	}
+	cmd := "sudo -n " + scriptPath + " " + strings.Join(quoted, " ")
 	res, err := run(ctx, cmd, cmdTimeout, "")
 	if err != nil {
 		return fmt.Errorf("%s: %w", cmd, err)
