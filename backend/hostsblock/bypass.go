@@ -16,9 +16,19 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 )
 
 const networksetupBin = "/usr/sbin/networksetup"
+
+// svcCache 网络服务列表的进程内缓存。networksetup -listallnetworkservices
+// 在开机初期动辄十几秒甚至超时 (2026-07-17 11:52 实测两连超时, 整轮收敛
+// 报废等 60s), 而服务列表几乎不变 — 成功一次后整个进程生命周期复用。
+// Run goroutine 与退出清理 Unblock 可能并发调用, 加锁。
+type svcCache struct {
+	mu   sync.Mutex
+	list []string
+}
 
 // serviceRe 合法网络服务名 (含 "USB 10/100/1000 LAN" 这类带空格/斜杠的)。
 // 兼做安全过滤: 服务名会拼进 shell 命令行, 不匹配的直接跳过。
@@ -73,18 +83,36 @@ func targetBypass(cur, sites []string, blocked bool) []string {
 	return out
 }
 
-// ensureBypass 对每个启用的网络服务把代理例外表收敛到期望状态。
-func ensureBypass(ctx context.Context, d deps, wantBlocked bool) error {
+// listServices 返回启用的网络服务列表, 首次成功后走缓存。
+func listServices(ctx context.Context, d deps) ([]string, error) {
+	d.svcs.mu.Lock()
+	defer d.svcs.mu.Unlock()
+	if d.svcs.list != nil {
+		return d.svcs.list, nil
+	}
 	res, err := d.exec(ctx, networksetupBin+" -listallnetworkservices", cmdTimeout, "")
 	if err != nil {
-		return fmt.Errorf("列网络服务: %w", err)
+		return nil, fmt.Errorf("列网络服务: %w", err)
 	}
 	if res.ExitCode != 0 {
-		return fmt.Errorf("列网络服务: exit=%d stderr=%s",
+		return nil, fmt.Errorf("列网络服务: exit=%d stderr=%s",
 			res.ExitCode, strings.TrimSpace(res.Stderr))
 	}
+	svcs := parseServices(res.Stdout)
+	if len(svcs) > 0 {
+		d.svcs.list = svcs
+	}
+	return svcs, nil
+}
+
+// ensureBypass 对每个启用的网络服务把代理例外表收敛到期望状态。
+func ensureBypass(ctx context.Context, d deps, wantBlocked bool) error {
+	svcs, err := listServices(ctx, d)
+	if err != nil {
+		return err
+	}
 	var errs []string
-	for _, svc := range parseServices(res.Stdout) {
+	for _, svc := range svcs {
 		if err := ensureServiceBypass(ctx, d, svc, wantBlocked); err != nil {
 			errs = append(errs, err.Error())
 		}

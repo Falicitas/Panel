@@ -33,7 +33,7 @@ import (
 const (
 	// DefaultWindow 启动后的拦截时长; 可用环境变量 PANEL_HOSTSBLOCK_WINDOW
 	// 覆盖 (time.ParseDuration 格式, 如 "3m", 便于验证)。
-	DefaultWindow = 2 * time.Hour
+	DefaultWindow = 3 * time.Hour
 	WindowEnv     = "PANEL_HOSTSBLOCK_WINDOW"
 	// Poll 收敛间隔。
 	Poll = 60 * time.Second
@@ -57,6 +57,7 @@ type deps struct {
 	read   func() (string, error) // 读 hosts 全文
 	exec   runFn
 	now    func() time.Time
+	svcs   *svcCache // 网络服务列表缓存, 见 bypass.go
 }
 
 // Wanted 报告启动于 start 的进程在 now 时刻是否应处于拦截状态。
@@ -88,6 +89,7 @@ func productionDeps(sites []string, window time.Duration) deps {
 		},
 		exec: exec.Run,
 		now:  time.Now,
+		svcs: &svcCache{},
 	}
 }
 

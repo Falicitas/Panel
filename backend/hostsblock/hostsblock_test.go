@@ -61,6 +61,8 @@ type world struct {
 	bypass       []string // 服务 Wi-Fi 的代理例外表
 	cmds         []string
 	failUnblocks int          // 前 N 次 hosts unblock 返回 exit 1
+	listFails    int          // 前 N 次列网络服务超时 (模拟开机初期 networksetup 卡死)
+	listCalls    int          // 列网络服务被实际执行的次数 (验证缓存)
 	wipeAt       map[int]bool // 第 N 次 read (1-based) 前重置 hosts (模拟手滑删块)
 	reads        int
 }
@@ -86,6 +88,12 @@ func (w *world) exec(_ context.Context, cmd string, _ time.Duration, _ string) (
 	w.cmds = append(w.cmds, cmd)
 	switch {
 	case strings.HasPrefix(cmd, "/usr/sbin/networksetup -listallnetworkservices"):
+		w.listCalls++
+		if w.listFails > 0 {
+			w.listFails--
+			return exec.Result{ExitCode: -1, TimedOut: true,
+				Stderr: "[panel: timed out after 30s]"}, nil
+		}
 		out := "An asterisk (*) denotes that a network service is disabled.\n" +
 			"Wi-Fi\n*Thunderbolt Bridge\n"
 		return exec.Result{Stdout: out}, nil
@@ -136,6 +144,7 @@ func driveRun(t *testing.T, w *world, window time.Duration, start time.Time,
 		read:   w.read,
 		exec:   w.exec,
 		now:    func() time.Time { return start },
+		svcs:   &svcCache{},
 	}
 	tickCh := make(chan time.Time)
 	done := make(chan struct{})
@@ -186,6 +195,27 @@ func TestRunLoop(t *testing.T) {
 		}
 		if !slices.Equal(w.bypass, userBypass()) {
 			t.Errorf("最终 bypass = %v, want 还原 %v", w.bypass, userBypass())
+		}
+		if w.listCalls != 1 {
+			t.Errorf("列网络服务执行 %d 次, want 1 (缓存生效)", w.listCalls)
+		}
+	})
+	t.Run("开机初期列服务超时, 下个 tick 补上", func(t *testing.T) {
+		w := &world{hosts: plainHosts, bypass: userBypass(), listFails: 1}
+		driveRun(t, w, 2*time.Minute, t0,
+			[]time.Time{t0.Add(1 * time.Minute), t0.Add(3 * time.Minute)})
+		sudo := sudoCalls(w.cmds)
+		if len(sudo) != 4 {
+			t.Fatalf("sudo = %v, want 4 条 (bypass 迟一轮但补上)", sudo)
+		}
+		if !strings.Contains(sudo[1], " 'setbypass' ") {
+			t.Errorf("sudo[1] = %q, want 第二轮补写例外表", sudo[1])
+		}
+		if w.listCalls != 2 {
+			t.Errorf("列网络服务执行 %d 次, want 2 (超时一次+成功缓存)", w.listCalls)
+		}
+		if w.hosts != plainHosts || !slices.Equal(w.bypass, userBypass()) {
+			t.Errorf("最终未双双还原: hosts=%q bypass=%v", w.hosts, w.bypass)
 		}
 	})
 	t.Run("用户例外表为空时, 解除用 Empty 清表", func(t *testing.T) {
@@ -254,6 +284,7 @@ func TestRunLoop(t *testing.T) {
 			read:   w.read,
 			exec:   w.exec,
 			now:    func() time.Time { return t0 },
+			svcs:   &svcCache{},
 		}
 		done := make(chan struct{})
 		go func() {
