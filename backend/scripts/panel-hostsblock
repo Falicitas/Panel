@@ -1,0 +1,92 @@
+#!/bin/bash
+# panel-hostsblock — 管理 /etc/hosts 里 panel 专属的拦截标记块 (root 执行)。
+#
+# 用法:
+#   panel-hostsblock block <domain...>   重写标记块: 每域名两行 (0.0.0.0 + ::)
+#   panel-hostsblock unblock             删除标记块
+#   panel-hostsblock setbypass <service> <entry...|Empty>
+#                                        整表替换系统代理例外列表 (哑执行,
+#                                        目标表由后端算好传入; 代理开启时逼
+#                                        名单域直连, 直连才会命中 hosts 黑洞)
+#
+# 标记块外的内容原样保留; block 重复执行是幂等替换 (不叠加)。
+# block/unblock 改完自动 flush DNS 缓存。
+#
+# 安装 (一次性; 必须 root 拥有且他人不可写, 否则 sudoers 授权等于任意提权):
+#   sudo install -o root -g wheel -m 755 \
+#     backend/scripts/panel-hostsblock /usr/local/bin/
+#   sudoers 单行: kinesis ALL=(root) NOPASSWD: /usr/local/bin/panel-hostsblock
+#
+# 测试钩子: 设 PANEL_HOSTS 指向替身文件 → 不需要 root, 且跳过 DNS flush;
+# 设 PANEL_NETWORKSETUP 指向 stub 可执行文件 → setbypass 不动真网络设置。
+set -euo pipefail
+
+HOSTS="${PANEL_HOSTS:-/etc/hosts}"
+NETWORKSETUP="${PANEL_NETWORKSETUP:-/usr/sbin/networksetup}"
+BEGIN="# >>> panel-hostsblock >>>"
+END="# <<< panel-hostsblock <<<"
+
+# strip: 输出去掉标记块后的现有内容
+strip() {
+  awk -v b="$BEGIN" -v e="$END" '$0==b{skip=1} !skip{print} $0==e{skip=0}' "$HOSTS"
+}
+
+# replace: 从 stdin 读新全文, 同目录 tmp + mv 原子替换, 保持 0644
+replace() {
+  local tmp
+  tmp=$(mktemp "${HOSTS}.panel.XXXXXX")
+  cat > "$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$HOSTS"
+}
+
+flush_dns() {
+  [ -n "${PANEL_HOSTS:-}" ] && return 0
+  dscacheutil -flushcache || true
+  killall -HUP mDNSResponder 2>/dev/null || true
+}
+
+case "${1:-}" in
+  block)
+    shift
+    [ "$#" -ge 1 ] || { echo "usage: panel-hostsblock block <domain...>" >&2; exit 2; }
+    for d in "$@"; do
+      [[ "$d" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "bad domain: $d" >&2; exit 2; }
+    done
+    {
+      strip
+      echo "$BEGIN"
+      for d in "$@"; do printf '0.0.0.0 %s\n:: %s\n' "$d" "$d"; done
+      echo "$END"
+    } | replace
+    flush_dns
+    ;;
+  unblock)
+    strip | replace
+    flush_dns
+    ;;
+  setbypass)
+    shift
+    [ "$#" -ge 2 ] || {
+      echo "usage: panel-hostsblock setbypass <service> <entry...|Empty>" >&2
+      exit 2
+    }
+    svc="$1"; shift
+    [[ "$svc" =~ ^[A-Za-z0-9][A-Za-z0-9\ ./_-]*$ ]] || {
+      echo "bad service: $svc" >&2
+      exit 2
+    }
+    for e in "$@"; do
+      # 例外表既有条目形态: 域名 / 10.* 通配 / 169.254/16 CIDR / <local>
+      [[ "$e" == "Empty" || "$e" =~ ^[A-Za-z0-9*.:/\<\>_-]+$ ]] || {
+        echo "bad bypass entry: $e" >&2
+        exit 2
+      }
+    done
+    "$NETWORKSETUP" -setproxybypassdomains "$svc" "$@"
+    ;;
+  *)
+    echo "usage: panel-hostsblock block <domain...> | unblock | setbypass ..." >&2
+    exit 2
+    ;;
+esac
