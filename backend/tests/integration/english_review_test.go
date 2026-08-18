@@ -2,6 +2,7 @@ package integration
 
 import (
 	"encoding/json"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 type reviewItemRespJSON struct {
 	store.ReviewItem
 	OverdueDays int                  `json:"overdue_days"`
+	DoneToday   bool                 `json:"done_today"`
 	Segment     store.EnglishSegment `json:"segment"`
 }
 
@@ -22,12 +24,66 @@ type reviewGroupRespJSON struct {
 }
 
 type reviewTodayRespJSON struct {
-	Date           string                `json:"date"`
-	DailyLimit     int                   `json:"daily_limit"`
-	DueTotal       int                   `json:"due_total"`
-	ShownTotal     int                   `json:"shown_total"`
-	PostponedTotal int                   `json:"postponed_total"`
-	Groups         []reviewGroupRespJSON `json:"groups"`
+	Date          string                `json:"date"`
+	DailyLimit    int                   `json:"daily_limit"`
+	DoneToday     int                   `json:"done_today"`
+	DueTotal      int                   `json:"due_total"`
+	PendingShown  int                   `json:"pending_shown"`
+	DeferredTotal int                   `json:"deferred_total"`
+	Groups        []reviewGroupRespJSON `json:"groups"`
+}
+
+// seedDueReviewItems 给 audio 灌 n 段并全部入队 due today (绕过勾选路径直接造队列)。
+func seedDueReviewItems(t *testing.T, e *testEnv, audioID int64, n int) {
+	t.Helper()
+	segs := make([]store.EnglishSegment, n)
+	for i := range segs {
+		segs[i] = store.EnglishSegment{
+			Idx: i, StartMs: int64(i * 1000), EndMs: int64((i + 1) * 1000), Text: "s",
+		}
+	}
+	if err := e.store.ReplaceSegments(audioID, segs); err != nil {
+		t.Fatalf("replace segs: %v", err)
+	}
+	for i := 0; i < n; i++ {
+		if _, err := e.store.EnsureReviewItem(audioID, i, e.today, time.Now().Unix()); err != nil {
+			t.Fatalf("ensure %d: %v", i, err)
+		}
+	}
+}
+
+// setReviewLimit 改每日复习配额。
+func setReviewLimit(t *testing.T, e *testEnv, limit int) {
+	t.Helper()
+	es, err := e.store.GetEnglishSettings()
+	if err != nil {
+		t.Fatalf("get settings: %v", err)
+	}
+	es.ReviewDailyLimit = limit
+	if err := e.store.SetEnglishSettings(es); err != nil {
+		t.Fatalf("set settings: %v", err)
+	}
+}
+
+// getReviewToday GET /review/today 并解析。
+func getReviewToday(t *testing.T, e *testEnv) reviewTodayRespJSON {
+	t.Helper()
+	status, raw := e.get("/api/english/review/today")
+	e.mustOK("GET", "/review/today", status, raw)
+	var resp reviewTodayRespJSON
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	return resp
+}
+
+// flatItems 把分组拍平成一条队列 (断言前缀顺序用)。
+func flatItems(resp reviewTodayRespJSON) []reviewItemRespJSON {
+	out := []reviewItemRespJSON{}
+	for _, g := range resp.Groups {
+		out = append(out, g.Items...)
+	}
+	return out
 }
 
 // TestEnglishReview_CheckEnqueues 验证勾选段落 → review queue 入队 stage=0 next=tomorrow。
@@ -104,68 +160,191 @@ func TestEnglishReview_UncheckRemoves(t *testing.T) {
 }
 
 // TestEnglishReview_TodayQuotaOverflow 30 条 due + limit 5 → shown 5, postponed 25。
-func TestEnglishReview_TodayQuotaOverflow(t *testing.T) {
+// TestEnglishReview_QuotaIsDisplayCapOnly 配额只裁展示, 绝不写库 —
+// 溢出的条目 next_review_at 原地不动 (老实现会把它们 postpone 到次日)。
+func TestEnglishReview_QuotaIsDisplayCapOnly(t *testing.T) {
 	e := newTestEnv(t)
 	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "rev3", LocalPath: "/x/rev3.mp3"})
-	// 注入 30 段并模拟全部 due today (直接绕 store 入队避免靠勾选制造)
-	segs := make([]store.EnglishSegment, 30)
-	for i := 0; i < 30; i++ {
-		segs[i] = store.EnglishSegment{
-			Idx: i, StartMs: int64(i * 1000), EndMs: int64((i + 1) * 1000), Text: "s",
-		}
-	}
-	if err := e.store.ReplaceSegments(id, segs); err != nil {
-		t.Fatalf("replace segs: %v", err)
-	}
-	for i := 0; i < 30; i++ {
-		if _, err := e.store.EnsureReviewItem(id, i, e.today, time.Now().Unix()); err != nil {
-			t.Fatalf("ensure %d: %v", i, err)
-		}
-	}
+	seedDueReviewItems(t, e, id, 30)
+	setReviewLimit(t, e, 5)
 
-	// 改 settings 配额到 5
-	es, _ := e.store.GetEnglishSettings()
-	es.ReviewDailyLimit = 5
-	if err := e.store.SetEnglishSettings(es); err != nil {
-		t.Fatalf("set settings: %v", err)
-	}
-
-	status, raw := e.get("/api/english/review/today")
-	e.mustOK("GET", "/review/today", status, raw)
-	var resp reviewTodayRespJSON
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
+	resp := getReviewToday(t, e)
 	if resp.DailyLimit != 5 {
 		t.Errorf("daily_limit = %d, want 5", resp.DailyLimit)
 	}
 	if resp.DueTotal != 30 {
 		t.Errorf("due_total = %d, want 30", resp.DueTotal)
 	}
-	if resp.ShownTotal != 5 {
-		t.Errorf("shown_total = %d, want 5", resp.ShownTotal)
+	if resp.PendingShown != 5 {
+		t.Errorf("pending_shown = %d, want 5", resp.PendingShown)
 	}
-	if resp.PostponedTotal != 25 {
-		t.Errorf("postponed_total = %d, want 25", resp.PostponedTotal)
+	if resp.DeferredTotal != 25 {
+		t.Errorf("deferred_total = %d, want 25", resp.DeferredTotal)
 	}
-	if len(resp.Groups) != 1 {
-		t.Fatalf("groups = %d, want 1", len(resp.Groups))
+	if resp.DoneToday != 0 {
+		t.Errorf("done_today = %d, want 0", resp.DoneToday)
 	}
-	if len(resp.Groups[0].Items) != 5 {
-		t.Errorf("group[0] items = %d, want 5", len(resp.Groups[0].Items))
+	if len(resp.Groups) != 1 || len(resp.Groups[0].Items) != 5 {
+		t.Fatalf("groups shape wrong: %+v", resp.Groups)
 	}
 
-	// 验证溢出的 25 条 next_review_at 已经被 postpone 到明天
-	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
-	postponedCount := 0
+	// 关键: 30 条 next_review_at 一条都没被改动
 	for i := 0; i < 30; i++ {
 		it, _, _ := e.store.GetReviewItemBySeg(id, i)
-		if it.NextReviewAt == tomorrow {
-			postponedCount++
+		if it.NextReviewAt != e.today {
+			t.Fatalf("seg %d next = %q, want %q (配额不该写库)", i, it.NextReviewAt, e.today)
+		}
+		if it.PostponedCount != 0 {
+			t.Fatalf("seg %d postponed_count = %d, want 0", i, it.PostponedCount)
 		}
 	}
-	if postponedCount != 25 {
-		t.Errorf("postponed in db = %d, want 25", postponedCount)
+}
+
+// TestEnglishReview_LimitLowerThenRaiseRestores 配额调小再调大, 条目全回来。
+// 复现用户实测: 配额 10 / 10 条没复习 → 改 5 → 改回 10, 老实现只剩 5 条。
+func TestEnglishReview_LimitLowerThenRaiseRestores(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "revLimit", LocalPath: "/x/revlimit.mp3"})
+	seedDueReviewItems(t, e, id, 10)
+
+	setReviewLimit(t, e, 10)
+	if got := getReviewToday(t, e).PendingShown; got != 10 {
+		t.Fatalf("limit=10: pending_shown = %d, want 10", got)
+	}
+
+	setReviewLimit(t, e, 5)
+	resp := getReviewToday(t, e)
+	if resp.PendingShown != 5 || resp.DeferredTotal != 5 {
+		t.Fatalf("limit=5: pending=%d deferred=%d, want 5/5", resp.PendingShown, resp.DeferredTotal)
+	}
+
+	setReviewLimit(t, e, 10)
+	resp = getReviewToday(t, e)
+	if resp.PendingShown != 10 {
+		t.Errorf("limit 回 10: pending_shown = %d, want 10 (条目该全回来)", resp.PendingShown)
+	}
+	if resp.DueTotal != 10 {
+		t.Errorf("limit 回 10: due_total = %d, want 10", resp.DueTotal)
+	}
+}
+
+// TestEnglishReview_DoneItemsStayInQueue 复习完的不收起来, 常驻队列前缀;
+// 配额调到低于已完成数, 那几条照样在。
+func TestEnglishReview_DoneItemsStayInQueue(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "revStay", LocalPath: "/x/revstay.mp3"})
+	seedDueReviewItems(t, e, id, 10)
+	setReviewLimit(t, e, 10)
+
+	// 挑中间两段复习 (乱序复习才能验出"前缀"而不是"原地")
+	for _, segIdx := range []int{3, 7} {
+		it, _, _ := e.store.GetReviewItemBySeg(id, segIdx)
+		status, raw := e.post("/api/english/review/"+i64s(it.ID)+"/done", nil)
+		e.mustOK("POST", "/done", status, raw)
+	}
+
+	resp := getReviewToday(t, e)
+	if resp.DoneToday != 2 {
+		t.Errorf("done_today = %d, want 2", resp.DoneToday)
+	}
+	if resp.DueTotal != 8 || resp.PendingShown != 8 {
+		t.Errorf("due=%d pending=%d, want 8/8", resp.DueTotal, resp.PendingShown)
+	}
+	items := flatItems(resp)
+	if len(items) != 10 {
+		t.Fatalf("队列行数 = %d, want 10 (2 已完成 + 8 待复习)", len(items))
+	}
+	// 已完成的排前缀, 按复习先后
+	if items[0].SegIdx != 3 || !items[0].DoneToday {
+		t.Errorf("items[0] = seg %d done=%v, want seg 3 done=true", items[0].SegIdx, items[0].DoneToday)
+	}
+	if items[1].SegIdx != 7 || !items[1].DoneToday {
+		t.Errorf("items[1] = seg %d done=%v, want seg 7 done=true", items[1].SegIdx, items[1].DoneToday)
+	}
+	for _, it := range items[2:] {
+		if it.DoneToday {
+			t.Errorf("seg %d 不该标 done_today", it.SegIdx)
+		}
+	}
+
+	// 配额压到 1 (< 已完成 2): 待复习清零, 已完成的 2 条仍在
+	setReviewLimit(t, e, 1)
+	resp = getReviewToday(t, e)
+	if resp.PendingShown != 0 {
+		t.Errorf("limit=1: pending_shown = %d, want 0", resp.PendingShown)
+	}
+	items = flatItems(resp)
+	if len(items) != 2 {
+		t.Fatalf("limit=1: 队列行数 = %d, want 2 (已完成不受配额裁剪)", len(items))
+	}
+	for _, it := range items {
+		if !it.DoneToday {
+			t.Errorf("limit=1: seg %d 该是已完成行", it.SegIdx)
+		}
+	}
+
+	// 配额调回 10: 8 条待复习回来
+	if got := getReviewTodayAfterLimit(t, e, 10); got.PendingShown != 8 {
+		t.Errorf("limit 回 10: pending_shown = %d, want 8", got.PendingShown)
+	}
+}
+
+func getReviewTodayAfterLimit(t *testing.T, e *testEnv, limit int) reviewTodayRespJSON {
+	t.Helper()
+	setReviewLimit(t, e, limit)
+	return getReviewToday(t, e)
+}
+
+// TestEnglishReview_RaiseLimitAfterAllDoneRevealsMore 复现用户实测:
+// 配额 6 / 6 条全复习完 → 配额改 10, 该再冒出 4 条待复习 (老实现一条不出)。
+func TestEnglishReview_RaiseLimitAfterAllDoneRevealsMore(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "revRaise", LocalPath: "/x/revraise.mp3"})
+	seedDueReviewItems(t, e, id, 10)
+	setReviewLimit(t, e, 6)
+
+	if got := getReviewToday(t, e).PendingShown; got != 6 {
+		t.Fatalf("limit=6: pending_shown = %d, want 6", got)
+	}
+	status, raw := e.post("/api/english/review/done-all", nil)
+	e.mustOK("POST", "/done-all", status, raw)
+
+	resp := getReviewToday(t, e)
+	if resp.DoneToday != 6 || resp.PendingShown != 0 || resp.DueTotal != 4 {
+		t.Fatalf("全复习完: done=%d pending=%d due=%d, want 6/0/4",
+			resp.DoneToday, resp.PendingShown, resp.DueTotal)
+	}
+	if n := len(flatItems(resp)); n != 6 {
+		t.Errorf("全复习完队列行数 = %d, want 6 (都是已完成)", n)
+	}
+
+	setReviewLimit(t, e, 10)
+	resp = getReviewToday(t, e)
+	if resp.DoneToday != 6 || resp.PendingShown != 4 {
+		t.Errorf("配额改 10: done=%d pending=%d, want 6/4", resp.DoneToday, resp.PendingShown)
+	}
+	if n := len(flatItems(resp)); n != 10 {
+		t.Errorf("配额改 10: 队列行数 = %d, want 10", n)
+	}
+}
+
+// TestEnglishReview_DoneTwiceSameDayConflicts 同一逻辑日重复 done 返回 409, stage 不多跳。
+func TestEnglishReview_DoneTwiceSameDayConflicts(t *testing.T) {
+	e := newTestEnv(t)
+	id := e.seedEnglishAudio(seedEnglishAudioOpts{Ref: "revDup", LocalPath: "/x/revdup.mp3"})
+	seedDueReviewItems(t, e, id, 1)
+
+	it, _, _ := e.store.GetReviewItemBySeg(id, 0)
+	status, raw := e.post("/api/english/review/"+i64s(it.ID)+"/done", nil)
+	e.mustOK("POST", "/done", status, raw)
+
+	status, _ = e.post("/api/english/review/"+i64s(it.ID)+"/done", nil)
+	if status != http.StatusConflict {
+		t.Errorf("第二次 done status = %d, want 409", status)
+	}
+	got, _, _ := e.store.GetReviewItemBySeg(id, 0)
+	if got.Stage != 1 {
+		t.Errorf("stage = %d, want 1 (重复 done 不该多跳)", got.Stage)
 	}
 }
 
@@ -250,7 +429,7 @@ func TestEnglishReview_DoneAll(t *testing.T) {
 		t.Errorf("due after done-all = %d, want 0", len(due))
 	}
 
-	// 队列已空, 再点一次仍 2xx (幂等 no-op)。
+	// 再点一次仍 2xx: 已完成数顶掉配额 + due 已空, 双重 no-op。
 	status, raw = e.post("/api/english/review/done-all", nil)
 	e.mustOK("POST", "/done-all (empty)", status, raw)
 }

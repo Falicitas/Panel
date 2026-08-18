@@ -50,3 +50,37 @@ func TestLogicalToday(t *testing.T) {
 		}
 	})
 }
+
+// TestLogicalDayRangeUnix 区间必须跟 LogicalToday 自洽: 区间内每个时刻的
+// LogicalToday 都等于该逻辑日, 区间外一步就换日。
+func TestLogicalDayRangeUnix(t *testing.T) {
+	const date = "2026-04-30"
+	start, end, err := LogicalDayRangeUnix(date)
+	if err != nil {
+		t.Fatalf("range: %v", err)
+	}
+	wantStart := time.Date(2026, 4, 30, DayStartHour, 0, 0, 0, time.Local).Unix()
+	if start != wantStart {
+		t.Errorf("start = %d, want %d (当地 %02d:00)", start, wantStart, DayStartHour)
+	}
+	if end-start != 86400 {
+		t.Errorf("end-start = %d, want 86400", end-start)
+	}
+	for _, ts := range []int64{start, start + 1, start + 43200, end - 1} {
+		if got := LogicalToday(time.Unix(ts, 0)); got != date {
+			t.Errorf("LogicalToday(%d) = %s, want %s (区间内)", ts, got, date)
+		}
+	}
+	if got := LogicalToday(time.Unix(start-1, 0)); got != "2026-04-29" {
+		t.Errorf("start-1 逻辑日 = %s, want 2026-04-29", got)
+	}
+	if got := LogicalToday(time.Unix(end, 0)); got != "2026-05-01" {
+		t.Errorf("end 逻辑日 = %s, want 2026-05-01", got)
+	}
+}
+
+func TestLogicalDayRangeUnix_BadDate(t *testing.T) {
+	if _, _, err := LogicalDayRangeUnix("2026/04/30"); err == nil {
+		t.Error("非法日期该报错")
+	}
+}

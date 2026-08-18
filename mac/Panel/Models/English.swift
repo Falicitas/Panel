@@ -175,6 +175,7 @@ struct EnglishReviewItem: Codable, Identifiable, Hashable, Sendable {
     let finishedAt: Int64?
     let masteredAt: Int64?
     let overdueDays: Int           // today - next_review_at; 0 = 当天
+    let doneToday: Bool            // 今天已复习完; 常驻队列前缀, 灰掉不给操作按钮
     let segment: EnglishSegment    // server 富化避免前端二次 fetch
 
     enum CodingKeys: String, CodingKey {
@@ -188,6 +189,7 @@ struct EnglishReviewItem: Codable, Identifiable, Hashable, Sendable {
         case finishedAt = "finished_at"
         case masteredAt = "mastered_at"
         case overdueDays = "overdue_days"
+        case doneToday = "done_today"
     }
 }
 
@@ -201,17 +203,22 @@ struct EnglishReviewGroup: Codable, Hashable, Sendable {
 struct EnglishReviewToday: Codable, Hashable, Sendable {
     let date: String
     let dailyLimit: Int
-    let dueTotal: Int        // 全部到期数
-    let shownTotal: Int      // = min(dueTotal, dailyLimit)
-    let postponedTotal: Int  // 因配额溢出本次自动延到次日的条数
+    let doneToday: Int       // 今日已完成; 不受配额裁剪, 常驻队列前缀
+    let dueTotal: Int        // 还没复习的到期总数
+    let pendingShown: Int    // 本次派发的待复习条数 = min(dueTotal, max(0, dailyLimit - doneToday))
+    let deferredTotal: Int   // dueTotal - pendingShown, 超出今日配额, 明天再来
     let groups: [EnglishReviewGroup]
+
+    /// 队列总行数 = 已完成前缀 + 本次派发的待复习。
+    var queuedTotal: Int { doneToday + pendingShown }
 
     enum CodingKeys: String, CodingKey {
         case date, groups
         case dailyLimit = "daily_limit"
+        case doneToday = "done_today"
         case dueTotal = "due_total"
-        case shownTotal = "shown_total"
-        case postponedTotal = "postponed_total"
+        case pendingShown = "pending_shown"
+        case deferredTotal = "deferred_total"
     }
 }
 
