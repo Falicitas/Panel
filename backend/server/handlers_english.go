@@ -70,10 +70,7 @@ func (s *Server) handleEnglishToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reviewLimit := settings.ReviewDailyLimit
-	if reviewLimit <= 0 {
-		reviewLimit = defaultReviewDailyLimit
-	}
+	reviewLimit := reviewLimitOf(settings)
 	reviewDone, err := s.store.CountReviewDoneToday(today)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

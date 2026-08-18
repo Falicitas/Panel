@@ -19,8 +19,10 @@ const defaultReviewDailyLimit = 15
 type reviewItemResp struct {
 	store.ReviewItem
 	// OverdueDays = today - next_review_at (天). 0 = 当天, >0 = 已经过去 N 天没复习。
-	OverdueDays int                  `json:"overdue_days"`
-	Segment     store.EnglishSegment `json:"segment"`
+	OverdueDays int `json:"overdue_days"`
+	// DoneToday = 今天已经复习完的行. 常驻队列前缀展示, UI 灰掉 + 不给操作按钮。
+	DoneToday bool                 `json:"done_today"`
+	Segment   store.EnglishSegment `json:"segment"`
 }
 
 type reviewGroupResp struct {
@@ -29,79 +31,105 @@ type reviewGroupResp struct {
 }
 
 type reviewTodayResp struct {
-	Date           string            `json:"date"`
-	DailyLimit     int               `json:"daily_limit"`
-	DueTotal       int               `json:"due_total"`       // 全部到期数 (不限 cap)
-	ShownTotal     int               `json:"shown_total"`     // = min(due_total, daily_limit)
-	PostponedTotal int               `json:"postponed_total"` // 因配额溢出本次自动延到次日的条数
-	Groups         []reviewGroupResp `json:"groups"`
+	Date       string `json:"date"`
+	DailyLimit int    `json:"daily_limit"`
+	// DoneToday = 今日已完成条数. 不受配额裁剪, 永远全量留在队列前缀。
+	DoneToday int `json:"done_today"`
+	// DueTotal = 还没复习的到期总数 (不限 cap)。
+	DueTotal int `json:"due_total"`
+	// PendingShown = 本次派发的待复习条数 = min(due_total, max(0, daily_limit-done_today))。
+	PendingShown int `json:"pending_shown"`
+	// DeferredTotal = due_total - pending_shown, 超出今日配额没派的, 明天再来 (库里不动)。
+	DeferredTotal int               `json:"deferred_total"`
+	Groups        []reviewGroupResp `json:"groups"`
+}
+
+// reviewLimitOf 取每日配额, <= 0 (老库初始 / 字段缺省) 时 fallback 默认值。
+func reviewLimitOf(settings store.EnglishSettings) int {
+	if settings.ReviewDailyLimit <= 0 {
+		return defaultReviewDailyLimit
+	}
+	return settings.ReviewDailyLimit
+}
+
+// reviewPendingQuota 算今天还能派几条待复习: 配额是"当日总量", 已完成的先扣掉。
+// 已完成 >= 配额时返回 0 (队列只剩已完成的前缀)。
+func reviewPendingQuota(limit, doneCount int) int {
+	if q := limit - doneCount; q > 0 {
+		return q
+	}
+	return 0
 }
 
 // GET /api/english/review/today
 //
 // 算法:
-//  1. ListDueReviewItems(today) — 已按 next_review_at ASC 排序
-//  2. 超出 settings.ReviewDailyLimit 的部分自动 PostponeReviewItem 到次日 (落地"配额溢出 = 类似延后")
-//  3. 按 audio 分组 + 富化 segment 文本/timestamp + audio 元数据
+//  1. ListReviewItemsDoneToday(today) — 今天已复习完的, 全量, 排队列前缀
+//  2. ListDueReviewItems(today) — 还没复习的到期项, 已按 next_review_at ASC 排序
+//  3. 待复习只派 max(0, daily_limit - 已完成) 条, 剩下的留在库里等明天
+//  4. 已完成 ++ 待派 一起按 audio 分组 + 富化 segment 文本/timestamp + audio 元数据
 //
-// 幂等性: 用户上午看到 N 条, 下午再 GET 仍是同一组 N 条 (溢出已落地次日)。
-// 跨日积压: ORDER BY next_review_at ASC 让逾期最久的先冒出, UI 用 OverdueDays 角标提示。
+// 配额是纯展示上限 — 这里绝不写库。历史上溢出部分会被 PostponeReviewItem 推到次日,
+// 结果配额调小再调大条目回不来 (10→5→10 只剩 5 条), 现在改成不落地。
+//
+// 已完成的行 next_review_at 已经是未来日期, 不在 due 里, 所以复习完不会从队列消失;
+// 完成一条 → 已完成 +1 / 待派 -1, 总行数不变, 队列不跳。
 func (s *Server) handleEnglishReviewToday(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	today := dateutil.LogicalToday(now)
-	tomorrow, err := nextLogicalDate(today)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("compute tomorrow: %w", err))
-		return
-	}
 
 	settings, err := s.store.GetEnglishSettings()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	limit := settings.ReviewDailyLimit
-	if limit <= 0 {
-		limit = defaultReviewDailyLimit
-	}
+	limit := reviewLimitOf(settings)
 
-	dueAll, err := s.store.ListDueReviewItems(today)
+	doneToday, err := s.store.ListReviewItemsDoneToday(today)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	due, err := s.store.ListDueReviewItems(today)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	dueTotal := len(dueAll)
-	postponedTotal := 0
-	if dueTotal > limit {
-		overflow := dueAll[limit:]
-		for _, it := range overflow {
-			if _, perr := s.store.PostponeReviewItem(it.ID, tomorrow, now.Unix()); perr != nil {
-				log.Printf("auto postpone review item %d: %v", it.ID, perr)
-				continue
-			}
-			postponedTotal++
-		}
-		dueAll = dueAll[:limit]
+	pending := due
+	if quota := reviewPendingQuota(limit, len(doneToday)); quota < len(pending) {
+		pending = pending[:quota]
 	}
 
-	groups, err := buildReviewGroups(s.store, dueAll, today)
+	doneIDs := make(map[int64]bool, len(doneToday))
+	for _, it := range doneToday {
+		doneIDs[it.ID] = true
+	}
+	display := make([]store.ReviewItem, 0, len(doneToday)+len(pending))
+	display = append(display, doneToday...)
+	display = append(display, pending...)
+
+	groups, err := buildReviewGroups(s.store, display, today, doneIDs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, reviewTodayResp{
-		Date:           today,
-		DailyLimit:     limit,
-		DueTotal:       dueTotal,
-		ShownTotal:     len(dueAll),
-		PostponedTotal: postponedTotal,
-		Groups:         groups,
+		Date:          today,
+		DailyLimit:    limit,
+		DoneToday:     len(doneToday),
+		DueTotal:      len(due),
+		PendingShown:  len(pending),
+		DeferredTotal: len(due) - len(pending),
+		Groups:        groups,
 	})
 }
 
 // POST /api/english/review/{id}/done — 推进 stage. 5 stage 后 mastered。
+//
+// 同一逻辑日内只允许推进一次, 重复请求 409。已完成的行现在常驻队列 (灰掉不给按钮),
+// 但陈旧 UI / 直接打 API 仍可能再点一次 — 放过去会白跳一个 stage。
 func (s *Server) handleReviewDone(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
@@ -110,6 +138,15 @@ func (s *Server) handleReviewDone(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	today := dateutil.LogicalToday(now)
+	dup, err := s.store.IsReviewItemDoneToday(id, today)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if dup {
+		writeError(w, http.StatusConflict, fmt.Errorf("review item %d already reviewed today", id))
+		return
+	}
 	if _, err := s.store.AdvanceReviewItem(id, today, now.Unix()); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, err)
@@ -121,15 +158,14 @@ func (s *Server) handleReviewDone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// POST /api/english/review/done-all — 一键把今日显示的全部到期项推进 stage。
+// POST /api/english/review/done-all — 一键把今日派发的待复习项全部推进 stage。
 //
-// 语义对齐 GET today 展示的那批: 取 ListDueReviewItems(today) 后封顶 daily_limit。
-// 正常 UI 流程进复习 tab 时 GET today 已把配额溢出延到次日, 此刻 due 即 shown;
-// 这里再封顶一次是防御 — 保证绝不 advance 超过用户看到过的条数。
+// 语义对齐 GET today 派发的那批: ListDueReviewItems(today) 取前
+// max(0, daily_limit - 今日已完成) 条 — 保证绝不 advance 超过用户看到过的条数,
+// 也保证连点两次第二次是 no-op (第一次做完已完成数就顶满配额了)。
 //
 // 逐条复用 AdvanceReviewItem; 单条失败 (已 finished/mastered/被并发删) 时 skip 并
-// log, 不中断整批 (跟 handleEnglishReviewToday 的溢出 postpone 同样 best-effort)。
-// 全部处理完返回 204。
+// log, 不中断整批。全部处理完返回 204。
 func (s *Server) handleReviewDoneAll(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	today := dateutil.LogicalToday(now)
@@ -139,18 +175,18 @@ func (s *Server) handleReviewDoneAll(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	limit := settings.ReviewDailyLimit
-	if limit <= 0 {
-		limit = defaultReviewDailyLimit
+	doneCount, err := s.store.CountReviewDoneToday(today)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
-
 	due, err := s.store.ListDueReviewItems(today)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if len(due) > limit {
-		due = due[:limit]
+	if quota := reviewPendingQuota(reviewLimitOf(settings), doneCount); quota < len(due) {
+		due = due[:quota]
 	}
 
 	for _, it := range due {
@@ -217,11 +253,17 @@ func (s *Server) handleReviewFinish(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// buildReviewGroups 把 due 列表按 audio_id 分组 + 富化 segment 文本/timestamp + audio 元数据。
+// buildReviewGroups 把展示列表按 audio_id 分组 + 富化 segment 文本/timestamp + audio 元数据。
+//
+// items 顺序 = 已完成在前 / 待复习在后, 分组保留 audio 首次出现的次序, 组内也保留原顺序 —
+// 已完成的行因此稳定停在队列前缀, 不会因为 next_review_at 被推到未来而排到末尾。
+// doneIDs 标出哪些是今日已完成 (UI 据此灰掉 + 收起操作按钮)。
 //
 // 富化失败 (audio 或 segment 找不到) 时 skip 该 item 并 log warn — 不阻断响应,
 // 让 UI 还能渲染其余条目 (孤儿可能因 ReplaceSegments / DeleteAudio 没及时清理留下)。
-func buildReviewGroups(s *store.Store, due []store.ReviewItem, today string) ([]reviewGroupResp, error) {
+func buildReviewGroups(
+	s *store.Store, due []store.ReviewItem, today string, doneIDs map[int64]bool,
+) ([]reviewGroupResp, error) {
 	if len(due) == 0 {
 		return []reviewGroupResp{}, nil
 	}
@@ -277,6 +319,7 @@ func buildReviewGroups(s *store.Store, due []store.ReviewItem, today string) ([]
 		item := reviewItemResp{
 			ReviewItem:  it,
 			OverdueDays: overdue,
+			DoneToday:   doneIDs[it.ID],
 			Segment:     seg,
 		}
 		g, exists := groupMap[it.AudioID]
