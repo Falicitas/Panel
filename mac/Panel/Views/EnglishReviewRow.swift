@@ -6,6 +6,9 @@ import SwiftUI
 /// 重置 stage), 而是对 review_queue 行的 stage 推进 / 延后 / 永久跳过.
 ///
 /// 完成 / 跳过弹 confirmationDialog (默认行为 Enter 触发主按钮); 延后无确认 (高频低风险).
+///
+/// item.doneToday = 今天已复习完的行. 不从队列消失, 就地灰掉 + 收起三个操作按钮
+/// 换成「已完成」标记; 播放 / 锚定 / 看字幕仍可用 (复习完还想再听一遍很常见).
 struct EnglishReviewRow: View {
     let audio: EnglishAudio
     let item: EnglishReviewItem
@@ -31,9 +34,14 @@ struct EnglishReviewRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 36, alignment: .trailing)
                 textArea
-                completeButton
-                postponeButton
-                finishButton
+                    .opacity(item.doneToday ? 0.55 : 1)
+                if item.doneToday {
+                    doneBadge
+                } else {
+                    completeButton
+                    postponeButton
+                    finishButton
+                }
             }
             stageMetaRow
             if bound {
@@ -139,6 +147,16 @@ struct EnglishReviewRow: View {
         .help(audio.localPath.isEmpty ? "本地 mp3 不存在" : (playing ? "暂停" : (bound ? "继续" : "播放此句")))
     }
 
+    /// 已完成行的右侧标记, 占掉原来三个按钮的位置。
+    @ViewBuilder
+    private var doneBadge: some View {
+        Label("已完成", systemImage: "checkmark.circle.fill")
+            .labelStyle(.titleAndIcon)
+            .font(.subheadline)
+            .foregroundStyle(.green)
+            .help("今天已复习过这一段, 明天起才会再进队列")
+    }
+
     @ViewBuilder
     private var completeButton: some View {
         Button {
@@ -180,10 +198,10 @@ struct EnglishReviewRow: View {
     private var stageMetaRow: some View {
         HStack(spacing: 8) {
             Spacer().frame(width: 36 + 12 + 24)
-            Text(stageProgressText)
+            Text(item.doneToday ? "已完成 · \(stageProgressText)" : stageProgressText)
                 .font(.caption)
-                .foregroundStyle(stageColor)
-            if item.overdueDays > 0 {
+                .foregroundStyle(item.doneToday ? Color.green : stageColor)
+            if item.overdueDays > 0 && !item.doneToday {
                 Text("过去第 \(item.overdueDays) 天")
                     .font(.caption)
                     .foregroundStyle(.orange)

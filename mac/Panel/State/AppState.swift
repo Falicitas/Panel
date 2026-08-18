@@ -533,9 +533,16 @@ final class AppState {
     }
 
     /// 复习项推进到下一阶段 (advance). 完成后 reload review + today (today 头部数字要更新)。
+    ///
+    /// 后端对同一逻辑日重复推进回 409 — 那条本来就已经复习过了 (陈旧 UI 抢跑),
+    /// 不当报错, 刷一下让它显示成已完成即可。
     func reviewMarkDone(itemID: Int64) async {
         do {
             try await api.reviewMarkDone(itemID: itemID)
+            await reloadEnglishReview()
+            await reloadEnglishToday()
+            self.lastError = nil
+        } catch let err as APIError where err.status == 409 {
             await reloadEnglishReview()
             await reloadEnglishToday()
             self.lastError = nil

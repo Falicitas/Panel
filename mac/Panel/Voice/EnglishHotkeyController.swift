@@ -72,7 +72,7 @@ final class EnglishHotkeyController {
     /// 解锁定段 → 实际 audio + segment + source. 三种 nil 路径:
     ///   - 没锚定 → nil
     ///   - 锚定指向 .learn 但 currentAudio / segments 不匹配 (audio 切了 / 段被改了) → nil
-    ///   - 锚定指向 .review 但复习队列里没这条 (已 finish / mastered / 配额延后) → nil
+    ///   - 锚定指向 .review 但复习队列里没这条 (已 finish / 超出配额没派 / 队列已换天) → nil
     private func anchoredSegment() -> (audio: EnglishAudio, segment: EnglishSegment, source: PlaySource)? {
         guard let st = stateRef, let anchor = st.englishAnchor else { return nil }
 
@@ -191,6 +191,7 @@ final class EnglishHotkeyController {
     ///   - 没锚定
     ///   - 列表为空 (currentAudio 无 / segments 空 / review groups 空)
     ///   - 锚定段不在当前列表里 (audio 切了 / segments 重新生成 / review item 已 finish)
+///     注: 复习完的段仍留在队列里 (标 doneToday), 锚定不会因为"点了完成"而失效
     ///   - source 是 .whole / .archive (UI 不暴露锚定那两个 source, 防御性 beep)
     ///
     /// 副作用: anchorShowText reset = false (新段从隐藏字幕开始); 不停当前播放。

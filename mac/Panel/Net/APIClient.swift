@@ -2,6 +2,9 @@ import Foundation
 
 struct APIError: LocalizedError {
     let message: String
+    /// HTTP 状态码 (拿得到时). 调用方靠它区分"真失败"和"语义上已经是想要的状态"
+    /// — 例如复习项重复标完成回 409, 那条本来就已经复习过了, 刷新一下即可。
+    var status: Int?
     var errorDescription: String? { message }
 }
 
@@ -428,7 +431,7 @@ actor APIClient: BackendClient {
         try await postNoBody("/api/english/review/\(itemID)/done")
     }
 
-    /// 一键把今日显示的全部到期项推进 stage (后端封顶 daily_limit)。
+    /// 一键把今日派发的待复习项推进 stage (后端按 daily_limit - 今日已完成 封顶)。
     func reviewMarkAllDone() async throws {
         try await postNoBody("/api/english/review/done-all")
     }
@@ -457,7 +460,8 @@ actor APIClient: BackendClient {
         req.httpMethod = "POST"
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw APIError(message: "POST \(path) failed (status \((resp as? HTTPURLResponse)?.statusCode ?? -1))")
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError(message: "POST \(path) failed (status \(code))", status: code)
         }
     }
 
