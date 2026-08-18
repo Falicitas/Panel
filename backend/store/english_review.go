@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"panel/dateutil"
 	"panel/english/review"
 )
 
@@ -140,7 +141,7 @@ func (s *Store) AdvanceReviewItem(id int64, today string, nowUnix int64) (Review
 
 // PostponeReviewItem 把 next_review_at 改为 newDate, postponed_count++。不动 stage。
 //
-// 用于: 用户主动延后 + handler 在配额溢出时自动延到次日。
+// 只在用户主动点延后时调。配额溢出不再走这里 — 每日配额是纯展示上限, 不落库。
 // 已 finished/mastered 的行报错。
 func (s *Store) PostponeReviewItem(id int64, newDate string, nowUnix int64) (ReviewItem, error) {
 	cur, err := s.getReviewItemByID(id)
@@ -232,23 +233,82 @@ func (s *Store) GetReviewItemBySeg(audioID int64, segIdx int) (ReviewItem, bool,
 	return it, true, nil
 }
 
-// CountReviewDoneToday 统计今日已完成 (advance) 的复习条数。
+// reviewDoneTodayCond 是"今日已完成复习"的统一判定 (占位符: last_advanced_at 区间的 start, end):
+//   - stage > 0: 排掉只入队没复习过的行 (EnsureReviewItem 也会写 last_advanced_at)
+//   - last_advanced_at 落在 today 的逻辑日区间 [06:00, 次日 06:00)
+//   - finished_at IS NULL: 复习完又被用户永久跳过的不再露面
 //
-// 判定: stage > 0 (即至少 advance 过一次) 且 last_advanced_at 落在 today 的本地日历日。
-// 不包含: 仅入队 stage=0 (未真正复习); finished (用户主动跳过, 不算复习完成); 早于今天的旧 advance。
-func (s *Store) CountReviewDoneToday(today string) (int, error) {
-	var count int
-	err := s.db.QueryRow(
-		`SELECT COUNT(*)
+// 已 mastered 的算在内 — 今天复到毕业的那条同样该留在队列里让用户看见。
+const reviewDoneTodayCond = `stage > 0
+		    AND last_advanced_at >= ? AND last_advanced_at < ?
+		    AND finished_at IS NULL`
+
+// ListReviewItemsDoneToday 返回今日已完成复习的项, ORDER BY last_advanced_at ASC (先复的排前面)。
+//
+// 这批行的 next_review_at 已经被 AdvanceReviewItem 推到未来, 所以不会再出现在
+// ListDueReviewItems 里 — 队列要把它们常驻在前缀展示, 必须单独查这一份。
+func (s *Store) ListReviewItemsDoneToday(today string) ([]ReviewItem, error) {
+	start, end, err := dateutil.LogicalDayRangeUnix(today)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(
+		`SELECT `+reviewCols+`
 		   FROM english_review_queue
-		  WHERE stage > 0
-		    AND date(last_advanced_at, 'unixepoch', 'localtime') = ?`,
-		today,
+		  WHERE `+reviewDoneTodayCond+`
+		  ORDER BY last_advanced_at ASC, audio_id ASC, seg_idx ASC`,
+		start, end,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list review done today=%q: %w", today, err)
+	}
+	defer rows.Close()
+	out := []ReviewItem{}
+	for rows.Next() {
+		it, err := scanReviewItem(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan review done row: %w", err)
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// CountReviewDoneToday 统计今日已完成 (advance) 的复习条数 = len(ListReviewItemsDoneToday)。
+// 判定见 reviewDoneTodayCond。
+func (s *Store) CountReviewDoneToday(today string) (int, error) {
+	start, end, err := dateutil.LogicalDayRangeUnix(today)
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	err = s.db.QueryRow(
+		`SELECT COUNT(*) FROM english_review_queue WHERE `+reviewDoneTodayCond,
+		start, end,
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count review done today=%q: %w", today, err)
 	}
 	return count, nil
+}
+
+// IsReviewItemDoneToday 判断单行今天是否已经推进过, 供 handler 挡重复 advance
+// (队列现在常驻显示已完成行, 陈旧 UI 再点一次不该白跳一个 stage)。
+func (s *Store) IsReviewItemDoneToday(id int64, today string) (bool, error) {
+	start, end, err := dateutil.LogicalDayRangeUnix(today)
+	if err != nil {
+		return false, err
+	}
+	var n int
+	err = s.db.QueryRow(
+		`SELECT COUNT(*) FROM english_review_queue
+		  WHERE id=? AND `+reviewDoneTodayCond,
+		id, start, end,
+	).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("check review %d done today=%q: %w", id, today, err)
+	}
+	return n > 0, nil
 }
 
 func (s *Store) getReviewItemByID(id int64) (ReviewItem, error) {

@@ -4,14 +4,22 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
+	"panel/dateutil"
 	"panel/english/review"
 )
 
 const (
 	testToday    = "2026-05-10"
 	testTomorrow = "2026-05-11"
-	testNowUnix  = int64(1778457600) // 2026-05-10 12:00 UTC, 不影响日期算法
+)
+
+// 时间戳按本地时区算 — "今日已完成"的判定用逻辑日区间 [当地 06:00, 次日 06:00),
+// 写死一个 UTC 常量会随测试机时区落到隔壁那天去。
+var (
+	testNowUnix       = time.Date(2026, 5, 10, 12, 0, 0, 0, time.Local).Unix()
+	testYesterdayUnix = time.Date(2026, 5, 9, 12, 0, 0, 0, time.Local).Unix()
 )
 
 func TestEnsureReviewItem_Insert(t *testing.T) {
@@ -247,8 +255,7 @@ func TestCountReviewDoneToday(t *testing.T) {
 	// 昨天 advance 不算 (last_advanced_at 在昨天)
 	_, _ = s.EnsureReviewItem(3, 0, testTomorrow, testNowUnix)
 	id3 := mustID(t, s, 3, 0)
-	yesterdayUnix := int64(1778371200) // 2026-05-09 12:00 UTC
-	_, _ = s.AdvanceReviewItem(id3, "2026-05-09", yesterdayUnix)
+	_, _ = s.AdvanceReviewItem(id3, "2026-05-09", testYesterdayUnix)
 	// 今天 finish 不算
 	_, _ = s.EnsureReviewItem(4, 0, testTomorrow, testNowUnix)
 	id4 := mustID(t, s, 4, 0)
@@ -260,6 +267,109 @@ func TestCountReviewDoneToday(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("count = %d, want 1 (only audio 2)", count)
+	}
+}
+
+// TestListReviewItemsDoneToday 今日已完成集合的判定 + 排序 (队列前缀就靠它)。
+func TestListReviewItemsDoneToday(t *testing.T) {
+	s := newTestStore(t)
+	adv := func(audioID int64, today string, at int64) {
+		t.Helper()
+		_, _ = s.EnsureReviewItem(audioID, 0, testTomorrow, testNowUnix)
+		if _, err := s.AdvanceReviewItem(mustID(t, s, audioID, 0), today, at); err != nil {
+			t.Fatalf("advance audio %d: %v", audioID, err)
+		}
+	}
+	// 1: 只入队 stage=0 → 不算 (EnsureReviewItem 也写 last_advanced_at)
+	_, _ = s.EnsureReviewItem(1, 0, testTomorrow, testNowUnix)
+	// 2 / 6: 今天 advance → 算, 按 last_advanced_at ASC 排
+	adv(6, testToday, testNowUnix+10)
+	adv(2, testToday, testNowUnix+20)
+	// 3: 昨天 advance → 不算
+	adv(3, "2026-05-09", testYesterdayUnix)
+	// 4: 今天 advance 后被永久跳过 → 不算
+	adv(4, testToday, testNowUnix+40)
+	if err := s.FinishReviewItem(mustID(t, s, 4, 0), testNowUnix); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	// 5: 今天一路复到 mastered → 仍算 (毕业那条也该留在队列里看见)
+	_, _ = s.EnsureReviewItem(5, 0, testTomorrow, testNowUnix)
+	for i := 0; i < review.MasteredStage; i++ {
+		if _, err := s.AdvanceReviewItem(mustID(t, s, 5, 0), testToday, testNowUnix+30+int64(i)); err != nil {
+			t.Fatalf("advance to mastered: %v", err)
+		}
+	}
+
+	got, err := s.ListReviewItemsDoneToday(testToday)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	wantAudio := []int64{6, 2, 5}
+	if len(got) != len(wantAudio) {
+		t.Fatalf("len = %d, want %d: %+v", len(got), len(wantAudio), got)
+	}
+	for i, want := range wantAudio {
+		if got[i].AudioID != want {
+			t.Errorf("[%d] audio = %d, want %d (last_advanced_at ASC)", i, got[i].AudioID, want)
+		}
+	}
+
+	count, err := s.CountReviewDoneToday(testToday)
+	if err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != len(got) {
+		t.Errorf("count = %d, want %d (跟 list 同一判定)", count, len(got))
+	}
+}
+
+// TestListReviewItemsDoneToday_LogicalDayBoundary 日界按逻辑日 (当地 06:00) 切, 不是日历日。
+func TestListReviewItemsDoneToday_LogicalDayBoundary(t *testing.T) {
+	s := newTestStore(t)
+	start, end, err := dateutil.LogicalDayRangeUnix(testToday)
+	if err != nil {
+		t.Fatalf("range: %v", err)
+	}
+	cases := []struct {
+		audioID int64
+		at      int64
+		want    bool
+	}{
+		{1, start - 1, false},
+		{2, start, true},
+		{3, end - 1, true},
+		{4, end, false},
+	}
+	for _, c := range cases {
+		_, _ = s.EnsureReviewItem(c.audioID, 0, testTomorrow, testNowUnix)
+		if _, err := s.AdvanceReviewItem(mustID(t, s, c.audioID, 0), testToday, c.at); err != nil {
+			t.Fatalf("advance audio %d: %v", c.audioID, err)
+		}
+	}
+	for _, c := range cases {
+		got, err := s.IsReviewItemDoneToday(mustID(t, s, c.audioID, 0), testToday)
+		if err != nil {
+			t.Fatalf("is done audio %d: %v", c.audioID, err)
+		}
+		if got != c.want {
+			t.Errorf("audio %d at %d: done = %v, want %v", c.audioID, c.at, got, c.want)
+		}
+	}
+}
+
+// TestIsReviewItemDoneToday_NotAdvanced 只入队没复习 / 不存在的行都是 false。
+func TestIsReviewItemDoneToday_NotAdvanced(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.EnsureReviewItem(1, 0, testTomorrow, testNowUnix)
+	got, err := s.IsReviewItemDoneToday(mustID(t, s, 1, 0), testToday)
+	if err != nil {
+		t.Fatalf("is done: %v", err)
+	}
+	if got {
+		t.Error("stage=0 不该算今日已完成")
+	}
+	if got, err = s.IsReviewItemDoneToday(999, testToday); err != nil || got {
+		t.Errorf("不存在的行 = %v (err %v), want false", got, err)
 	}
 }
 
@@ -295,4 +405,3 @@ func mustID(t *testing.T, s *Store, audioID int64, segIdx int) int64 {
 	}
 	return it.ID
 }
-
