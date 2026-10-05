@@ -12,7 +12,7 @@ struct PanelApp: App {
             ContentView()
                 .environment(state)
                 .environment(SegmentPlayer.shared)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 560, minHeight: 560)
                 .background(WindowAccessor { window in
                     // 去掉 titlebar 与下方 NotificationBar 之间那条 1-2px 分隔线。
                     // 保留 traffic lights / "Panel" 标题, 只消除 separator (macOS 11+)。
