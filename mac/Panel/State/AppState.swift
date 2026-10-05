@@ -7,7 +7,7 @@ enum ContentMode: String { case todolist, micro }
 @MainActor
 @Observable
 final class AppState {
-    var selectedTab: AppTab = .todolist
+    var selectedTab: AppTab = .dualNotes
     let dualNotes = DualNotesController()
     var contentMode: ContentMode = .todolist
     var isDetailLoading: Bool = false
