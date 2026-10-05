@@ -19,6 +19,12 @@
     <div id="find-location"></div>
   </section>
   <div id="rangebar" class="rangebar"><button id="older-page">← 前 10 天</button><span id="range-label"></span><button id="newer-page">后 10 天 →</button><button id="today-page">回到今天</button></div>
+  <div id="column-ratio-controls" class="column-ratio-controls" role="group" aria-label="专注模式栏宽比例">
+    <label class="ratio-left" for="focus-left-ratio">左栏 <input id="focus-left-ratio" type="number" min="20" max="80" step="1" value="50" inputmode="numeric" aria-label="左栏宽度百分比">％</label>
+    <input id="focus-ratio-slider" type="range" min="20" max="80" step="1" value="50" aria-label="调节左栏宽度">
+    <output id="focus-right-ratio" for="focus-left-ratio focus-ratio-slider">右栏 50％</output>
+    <button id="reset-column-ratio" type="button">均分</button>
+  </div>
   <div id="notice" class="notice" role="status" hidden></div>
   <div id="errors" class="errors" aria-live="polite"></div>
   <main id="days" aria-label="按日期排列的双栏记录"></main>
