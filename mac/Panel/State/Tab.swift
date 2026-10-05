@@ -1,7 +1,8 @@
 import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    // 常用的保健品和英文在前，Todolist 紧接英文；后 3 个暂未启用。
+    // 双栏在首位，Todolist 紧接英文；财务、记录和 Bash 暂未启用。
+    case dualNotes
     case supplements
     case english
     case todolist
@@ -13,6 +14,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     var label: String {
         switch self {
+        case .dualNotes:   "双栏"
         case .todolist:    "Todolist"
         case .supplements: "食物/保健品"
         case .english:     "英文"
@@ -24,6 +26,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     var icon: String {
         switch self {
+        case .dualNotes:   "rectangle.split.2x1"
         case .todolist:    "checklist"
         case .supplements: "pills"
         case .english:     "headphones"
@@ -33,18 +36,18 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// 测试期前 3 个 enabled, 后 3 个 disabled (sidebar 灰显, 不可切)。
+    /// 已启用的模块可从侧栏切换，其余模块暂时灰显。
     /// 原代码已有可用功能不删, 后续解禁只需把 case 加回 true 分支。
     var isEnabled: Bool {
         switch self {
-        case .todolist, .supplements, .english: true
+        case .dualNotes, .todolist, .supplements, .english: true
         case .finance, .records, .bash:         false
         }
     }
 
     var comingSoonHint: String {
         switch self {
-        case .todolist, .supplements, .english: ""
+        case .dualNotes, .todolist, .supplements, .english: ""
         case .finance, .records, .bash:         "测试期暂停, 优先 todolist / 保健品 / 英文"
         }
     }

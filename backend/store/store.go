@@ -38,6 +38,11 @@ func (s *Store) migrate() error {
 			key   TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		);
+		CREATE TABLE IF NOT EXISTS dual_notes_days (
+			date      TEXT PRIMARY KEY,
+			revision  INTEGER NOT NULL CHECK (revision > 0),
+			rows_json TEXT NOT NULL
+		);
 		CREATE TABLE IF NOT EXISTS recurring_todos (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			content    TEXT NOT NULL,

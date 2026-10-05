@@ -49,6 +49,21 @@ actor APIClient: BackendClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
+    func getDualNotes(end: String, days: Int) async throws -> DualNotesPage {
+        try await get("/api/dual-notes?end=\(encode(end))&days=\(days)")
+    }
+
+    func putDualNotes(_ day: DualNotesDay) async throws -> DualNotesDay {
+        struct Payload: Encodable {
+            let revision: Int
+            let rows: [DualNotesRow]
+        }
+        return try await put(
+            "/api/dual-notes/\(encode(day.date))",
+            body: Payload(revision: day.revision, rows: day.rows)
+        )
+    }
+
     func listTodolists() async throws -> TodolistListResponse {
         try await get("/api/todolists")
     }
@@ -516,7 +531,7 @@ actor APIClient: BackendClient {
         }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
-            throw APIError(message: "HTTP \(http.statusCode): \(body)")
+            throw APIError(message: "HTTP \(http.statusCode): \(body)", status: http.statusCode)
         }
         return try decoder.decode(T.self, from: data)
     }

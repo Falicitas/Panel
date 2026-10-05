@@ -22,7 +22,11 @@ targets:
       - path: Panel
         excludes:
           - "Resources/editor/**"
+          - "Resources/dual-notes/**"
       - path: Panel/Resources/editor
+        type: folder
+        buildPhase: resources
+      - path: Panel/Resources/dual-notes
         type: folder
         buildPhase: resources
     settings:

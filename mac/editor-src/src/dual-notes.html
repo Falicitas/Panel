@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>双栏</title>
+  <link rel="stylesheet" href="bundle.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="heading"><h1>双栏</h1><span id="save-status" role="status">正在加载…</span></div>
+    <nav class="mode-switch" aria-label="显示范围"><button id="focus-mode" aria-pressed="true">专注</button><button id="overview-mode" aria-pressed="false">总览</button></nav>
+    <button id="find-toggle" title="查找当前范围（⌘F）">查找 <kbd>⌘F</kbd></button>
+  </header>
+  <section id="findbar" class="findbar" hidden aria-label="查找">
+    <input id="find-input" type="search" placeholder="查找当前范围" aria-label="查找内容" autocomplete="off" spellcheck="false">
+    <span id="find-count" role="status">输入要查找的内容</span>
+    <button id="find-prev" title="上一处（Shift＋Enter）" aria-label="上一处">↑</button><button id="find-next" title="下一处（Enter）" aria-label="下一处">↓</button><button id="find-close" aria-label="关闭查找">×</button>
+    <div id="find-location"></div>
+  </section>
+  <div id="rangebar" class="rangebar"><button id="older-page">← 前 10 天</button><span id="range-label"></span><button id="newer-page">后 10 天 →</button><button id="today-page">回到今天</button></div>
+  <div id="notice" class="notice" role="status" hidden></div>
+  <div id="errors" class="errors" aria-live="polite"></div>
+  <main id="days" aria-label="按日期排列的双栏记录"></main>
+  <dialog id="conflict-dialog">
+    <h2>保留草稿并重新加载</h2><p>已保存版本有更新。重新加载前，将把你当前的草稿保留在本机恢复区；不会用草稿覆盖已保存版本。</p>
+    <p>重新加载后可打开“保留的草稿”，逐格复制需要的内容。</p>
+    <div class="dialog-actions"><button id="conflict-cancel">返回继续编辑</button><button id="conflict-reload">保留草稿并重新加载</button></div>
+  </dialog>
+  <dialog id="recovery-dialog"><h2>保留的草稿</h2><p>以下是重新加载前保留的 Markdown，可选择文字复制到当前记录。</p><div id="recovery-content"></div><div class="dialog-actions"><button id="recovery-close">关闭</button></div></dialog>
+  <script src="bundle.js"></script>
+</body>
+</html>
