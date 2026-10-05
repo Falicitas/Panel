@@ -5,7 +5,8 @@
   "description": "Panel WYSIWYG editor — MilkDown Crepe (frame-dark theme) bundled into mac/Panel/Resources/editor/",
   "scripts": {
     "build": "node build.mjs",
-    "watch": "node build.mjs --watch"
+    "watch": "node build.mjs --watch",
+    "test:dual-notes": "node src/dual-notes-test.mjs"
   },
   "dependencies": {
     "@milkdown/crepe": "^7.20.0",

@@ -8,6 +8,7 @@ enum ContentMode: String { case todolist, micro }
 @Observable
 final class AppState {
     var selectedTab: AppTab = .todolist
+    let dualNotes = DualNotesController()
     var contentMode: ContentMode = .todolist
     var isDetailLoading: Bool = false
     /// 专注模式:折叠 sidebar + content 列,只显示 detail。

@@ -1,8 +1,11 @@
 import * as esbuild from 'esbuild'
-import { copyFile, readFile } from 'node:fs/promises'
+import { copyFile, readFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
-const OUT_DIR = path.resolve('../Panel/Resources/editor')
+const targets = [
+  { entry: 'src/main.ts', html: 'src/index.html', directory: 'editor' },
+  { entry: 'src/dual-notes.ts', html: 'src/dual-notes.html', directory: 'dual-notes' },
+]
 
 const watch = process.argv.includes('--watch')
 
@@ -22,34 +25,38 @@ const wrapDarkInMediaQuery = {
   },
 }
 
-const ctx = await esbuild.context({
-  entryPoints: ['src/main.ts'],
-  bundle: true,
-  format: 'iife',
-  target: 'es2020',
-  outfile: path.join(OUT_DIR, 'bundle.js'),
-  plugins: [wrapDarkInMediaQuery],
-  loader: {
-    '.css': 'css',
-    '.svg': 'dataurl',
-    '.woff': 'dataurl',
-    '.woff2': 'dataurl',
-    '.ttf': 'dataurl',
-    '.otf': 'dataurl',
-    '.eot': 'dataurl',
-  },
-  sourcemap: false,
-  minify: !watch,
-  logLevel: 'info',
-})
+for (const target of targets) {
+  const outDir = path.resolve('../Panel/Resources', target.directory)
+  await mkdir(outDir, { recursive: true })
+  const ctx = await esbuild.context({
+    entryPoints: [target.entry],
+    bundle: true,
+    format: 'iife',
+    target: 'es2020',
+    outfile: path.join(outDir, 'bundle.js'),
+    plugins: [wrapDarkInMediaQuery],
+    loader: {
+      '.css': 'css',
+      '.svg': 'dataurl',
+      '.woff': 'dataurl',
+      '.woff2': 'dataurl',
+      '.ttf': 'dataurl',
+      '.otf': 'dataurl',
+      '.eot': 'dataurl',
+    },
+    sourcemap: false,
+    minify: !watch,
+    logLevel: 'info',
+  })
 
-await copyFile('src/index.html', path.join(OUT_DIR, 'index.html'))
+  await copyFile(target.html, path.join(outDir, 'index.html'))
 
-if (watch) {
-  await ctx.watch()
-  console.log('watching…')
-} else {
-  await ctx.rebuild()
-  await ctx.dispose()
-  console.log('build complete →', OUT_DIR)
+  if (watch) {
+    await ctx.watch()
+    console.log('watching…')
+  } else {
+    await ctx.rebuild()
+    await ctx.dispose()
+    console.log('build complete →', outDir)
+  }
 }
