@@ -162,22 +162,22 @@ struct DetailView: View {
 
     private var fontSmallerButton: some View {
         Button {
-            state.editorPageZoom = max(0.7, state.editorPageZoom - 0.1)
+            state.performPageZoom(.zoomOut)
         } label: {
             Image(systemName: "textformat.size.smaller")
         }
-        .help("缩小字号")
-        .disabled(state.editorPageZoom <= 0.7)
+        .help("缩小页面（⌘－）")
+        .disabled(!state.canZoomOut)
     }
 
     private var fontLargerButton: some View {
         Button {
-            state.editorPageZoom = min(1.8, state.editorPageZoom + 0.1)
+            state.performPageZoom(.zoomIn)
         } label: {
             Image(systemName: "textformat.size.larger")
         }
-        .help("放大字号")
-        .disabled(state.editorPageZoom >= 1.8)
+        .help("放大页面（⌘＋）")
+        .disabled(!state.canZoomIn)
     }
 
     /// 顶部 find bar — cmd+F 显示, ESC 关闭。输入即时搜索, 回车跳下一个, 显示 X / Y 匹配数。

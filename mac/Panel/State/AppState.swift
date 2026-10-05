@@ -18,7 +18,18 @@ final class AppState {
     }
     private static let zoomKey = "editor.pageZoom"
     private static func loadZoom() -> Double {
-        (UserDefaults.standard.object(forKey: zoomKey) as? Double) ?? 1.0
+        PageZoom.normalized((UserDefaults.standard.object(forKey: zoomKey) as? Double) ?? 1.0)
+    }
+    var supportsPageZoom: Bool { selectedTab == .dualNotes || selectedTab == .todolist }
+    var canZoomIn: Bool { supportsPageZoom && editorPageZoom < PageZoom.maximum }
+    var canZoomOut: Bool { supportsPageZoom && editorPageZoom > PageZoom.minimum }
+    var pageZoomPercent: Int { Int((editorPageZoom * 100).rounded()) }
+
+    @discardableResult
+    func performPageZoom(_ action: PageZoom.Action) -> Bool {
+        guard supportsPageZoom else { return false }
+        editorPageZoom = PageZoom.applying(action, to: editorPageZoom)
+        return true
     }
     var active: [ListEntry] = []
     var done: [ListEntry] = []
