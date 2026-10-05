@@ -42,6 +42,16 @@ function receive(message: BridgeResponse): void {
 }
 
 function element<T extends HTMLElement>(id: string): T { return document.getElementById(id) as T }
+
+// The toolbar can wrap in a narrow window or when the native web view is zoomed.
+// Keep the sticky find bar directly below its measured height rather than assuming one row.
+const topbar = document.querySelector<HTMLElement>('.topbar')!
+function updateTopbarOffset(): void {
+  document.documentElement.style.setProperty('--dual-topbar-height', `${topbar.getBoundingClientRect().height}px`)
+}
+new ResizeObserver(updateTopbarOffset).observe(topbar)
+updateTopbarOffset()
+
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const result = document.createElement(tag)
   result.className = className

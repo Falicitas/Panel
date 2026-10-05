@@ -20,7 +20,7 @@ kbd { font-size: 11px; color: var(--muted); margin-left: 8px; font-family: inher
 .rangebar button { font-size: 12px; background: transparent; border-color: transparent; }
 .focus-range button { display: none; }
 .focus-range { justify-content: flex-start; padding: 19px 32px 0; }
-.findbar { position: sticky; z-index: 29; top: 70px; display: grid; grid-template-columns: minmax(150px, 1fr) auto auto auto auto; gap: 8px; align-items: center; padding: 12px 30px 9px; border-bottom: 1px solid var(--line); background: var(--surface); box-shadow: 0 4px 10px #00000004; }
+.findbar { position: sticky; z-index: 29; top: var(--dual-topbar-height, 70px); display: grid; grid-template-columns: minmax(150px, 1fr) auto auto auto auto; gap: 8px; align-items: center; padding: 12px 30px 9px; border-bottom: 1px solid var(--line); background: var(--surface); box-shadow: 0 4px 10px #00000004; }
 .findbar input { width: 100%; }
 #find-count { min-width: 60px; color: var(--muted); font-size: 12px; text-align: center; }
 #find-location { grid-column: 1 / -1; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -80,6 +80,7 @@ main { padding: 8px 32px 60px; max-width: 1600px; margin: auto; }
 .cell-preview > :last-child { margin-bottom: 0; }
 .cell-preview table { border-collapse: collapse; width: 100%; }
 .cell-preview td, .cell-preview th { border: 1px solid var(--line); padding: 5px; }
+.cell-preview img { max-width: 100%; height: auto; }
 .cell-failure { color: var(--warn); padding: 12px; }
 .add-rows { display: flex; align-items: center; gap: 8px; margin: 11px 0 0; }
 .add-rows button { color: var(--muted); font-size: 12px; background: transparent; border-color: transparent; }
@@ -114,4 +115,43 @@ dialog p { color: var(--muted); }
   .note-cell .milkdown .ProseMirror, .cell-preview { padding: 14px !important; }
   .column-headings span { padding-left: 14px; }
   .rangebar { gap: 6px; }
+}
+@media (max-width: 560px) {
+  .topbar { flex-wrap: wrap; padding-inline: 14px; gap: 10px; }
+  .heading { min-width: 0; }
+  .heading h1 { flex-shrink: 0; white-space: nowrap; }
+  #save-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .findbar { grid-template-columns: minmax(0, 1fr) repeat(3, auto); padding-inline: 14px; gap: 6px; }
+  #find-input { grid-column: 1 / -1; }
+  #find-count { min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rangebar { flex-wrap: wrap; padding-inline: 14px; }
+  .rangebar:not(.focus-range) #range-label { flex-basis: 100%; order: -1; text-align: center; }
+  #range-label { min-width: 0; overflow-wrap: anywhere; }
+  main { padding-left: 23px; padding-right: 12px; }
+  .day-heading { gap: 8px 10px; }
+  .day-heading h2 { min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+  .column-headings span { padding-inline: 10px; overflow-wrap: anywhere; }
+  .note-cell .milkdown .ProseMirror, .cell-preview { padding: 12px 10px !important; }
+  .cell-preview { overflow-x: auto; }
+  .note-cell .milkdown-table-block .table-wrapper { max-width: 100%; overflow-x: auto; }
+  .add-rows { flex-wrap: wrap; gap: 6px; }
+  .add-rows input { flex: 0 0 58px; }
+  .errors, .notice { margin-inline: 14px; }
+  .error-line { flex-wrap: wrap; overflow-wrap: anywhere; }
+  .error-line > span { min-width: 0; }
+  dialog { padding: 18px; overflow-wrap: anywhere; }
+  .dialog-actions { flex-wrap: wrap; }
+  .dialog-actions button, .error-line button { max-width: 100%; white-space: normal; }
+}
+@media (max-width: 440px) {
+  .heading { flex-basis: 100%; }
+  #save-status { max-width: none; }
+  #find-toggle { margin-left: auto; }
+}
+@media (max-width: 280px) {
+  .topbar, .findbar, .rangebar { padding-inline: 10px; }
+  .findbar button { padding-inline: 8px; }
+  .note-cell .milkdown .ProseMirror, .cell-preview { padding-inline: 7px !important; }
+  .column-headings span { padding-inline: 7px; }
+  .add-divider { display: none; }
 }
