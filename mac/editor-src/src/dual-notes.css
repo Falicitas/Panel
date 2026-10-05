@@ -34,10 +34,13 @@ kbd { font-size: 11px; color: var(--muted); margin-left: 8px; font-family: inher
 main { padding: 8px 32px 60px; max-width: 1600px; margin: auto; }
 .day-section { padding-top: 25px; margin-bottom: 25px; }
 .day-section + .day-section { border-top: 1px solid var(--line); padding-top: 27px; }
-.day-heading { display: flex; align-items: baseline; gap: 14px; margin: 0 1px 13px; }
+.day-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px; margin: 0 1px 13px; }
 .day-heading h2 { font-weight: 600; font-size: 17px; margin: 0; }
 .date-year { color: var(--muted); font-size: 11px; }
 .day-status { margin-left: auto; color: var(--muted); font-size: 11px; }
+.day-copy { font-size: 12px; padding: 4px 10px; color: var(--accent); background: transparent; }
+.day-copy-feedback { margin: -4px 0 12px; color: var(--warn); font-size: 12px; }
+.day-copy-feedback:empty { display: none; }
 .today-tag { margin-left: 9px; font-size: 10px; font-weight: 500; padding: 3px 7px; border-radius: 4px; color: var(--accent); background: var(--tint); vertical-align: middle; }
 .note-table { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .column-headings { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); color: var(--muted); font-size: 12px; background: var(--tint); border-radius: 9px 9px 0 0; border-bottom: 1px solid var(--line); }

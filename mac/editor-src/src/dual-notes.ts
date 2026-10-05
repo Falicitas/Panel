@@ -1,4 +1,5 @@
 import { Crepe } from '@milkdown/crepe'
+import { formatDayForClipboard } from './dual-notes-export'
 import { codeBlockPlugins, decorateCodePreview } from './dual-notes-code'
 import { editorViewCtx, parserCtx } from '@milkdown/kit/core'
 import { DOMSerializer, type Node as ProseNode } from '@milkdown/kit/prose/model'
@@ -294,6 +295,37 @@ function readableDate(date: string): string {
   return `${month} 月 ${day} 日 · ${week}`
 }
 
+function dayCopyControl(date: string): { control: HTMLButtonElement; feedback: HTMLElement } {
+  const feedback = node('p', 'day-copy-feedback')
+  feedback.setAttribute('role', 'status')
+  feedback.setAttribute('aria-live', 'polite')
+  let reset: ReturnType<typeof setTimeout> | undefined
+  const control = button('复制当天', async () => {
+    clearTimeout(reset)
+    control.disabled = true
+    control.textContent = '复制中…'
+    feedback.textContent = ''
+    try {
+      // Capture the last keystroke before formatting; copying works even while saving is offline.
+      captureAll()
+      const current = store.states.get(date)?.day
+      if (!current) throw new Error('这一天的记录尚未加载，请重试。')
+      const text = formatDayForClipboard(current)
+      await request<{ copied: boolean }>('copy', { text })
+      control.textContent = '已复制'
+      reset = setTimeout(() => { control.textContent = '复制当天' }, 2000)
+    } catch (error) {
+      control.textContent = '重新复制'
+      feedback.textContent = `复制失败：${(error as Error).message}`
+    } finally { control.disabled = false }
+  })
+  control.classList.add('day-copy')
+  control.setAttribute('aria-label', `复制 ${date} 的双栏内容`)
+  control.setAttribute('aria-live', 'polite')
+  control.title = '复制这一天的全部双栏，按行整理，适合粘贴给 AI。'
+  return { control, feedback }
+}
+
 function renderDay(day: NoteDay): HTMLElement {
   const section = node('section', 'day-section')
   section.dataset.date = day.date
@@ -303,8 +335,9 @@ function renderDay(day: NoteDay): HTMLElement {
   header.append(title, node('span', 'date-year', day.date))
   const badge = node('span', 'day-status')
   dayBadges.set(day.date, badge)
-  header.append(badge)
-  section.append(header)
+  const copy = dayCopyControl(day.date)
+  header.append(badge, copy.control)
+  section.append(header, copy.feedback)
   const table = node('div', 'note-table')
   const columns = node('div', 'column-headings')
   columns.append(node('span', '', '不用电脑'), node('span', '', '用电脑 or AI'))

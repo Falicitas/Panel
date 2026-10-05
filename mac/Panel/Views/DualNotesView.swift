@@ -148,6 +148,16 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
                 }
                 let saved = try await APIClient.shared.putDualNotes(day)
                 reply(request.requestId, data: saved)
+            case "copy":
+                guard let text = request.text, !text.isEmpty else {
+                    throw APIError(message: "没有可复制的内容。")
+                }
+                let clipboard = NSPasteboard.general
+                clipboard.clearContents()
+                guard clipboard.setString(text, forType: .string) else {
+                    throw APIError(message: "未能写入剪贴板，请重试。")
+                }
+                reply(request.requestId, data: ["copied": true])
             default:
                 throw APIError(message: "不支持的双栏操作。")
             }
@@ -238,6 +248,7 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
         let end: String?
         let days: Int?
         let day: DualNotesDay?
+        let text: String?
     }
 
     private struct BridgeSuccess<T: Encodable>: Encodable {
