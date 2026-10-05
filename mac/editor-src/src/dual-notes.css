@@ -75,11 +75,9 @@ main { padding: 8px 32px 60px; max-width: 1600px; margin: auto; }
 .note-cell pre .tok-invalid, .note-cell pre .tok-deleted { color: #bb3535; }
 .note-cell pre .find-hit-active, .note-cell pre .find-hit-active * { color: #1e211e; }
 
-.note-cell .milkdown .ProseMirror .placeholder:before { color: var(--muted); opacity: .7; }
 .cell-preview { padding: 17px 22px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.8; cursor: text; }
 .cell-preview > :first-child { margin-top: 0; }
 .cell-preview > :last-child { margin-bottom: 0; }
-.cell-preview .placeholder { color: var(--muted); opacity: .7; }
 .cell-preview table { border-collapse: collapse; width: 100%; }
 .cell-preview td, .cell-preview th { border: 1px solid var(--line); padding: 5px; }
 .cell-failure { color: var(--warn); padding: 12px; }
