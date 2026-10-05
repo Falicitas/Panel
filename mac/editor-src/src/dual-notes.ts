@@ -81,6 +81,42 @@ let conflictBusy = false
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 const dayBadges = new Map<string, HTMLElement>()
 
+const focusRatioKey = 'panel.dual-notes.focus-left-ratio'
+function normalizedRatio(raw: string | null, fallback = 50): number {
+  if (raw === null || !raw.trim()) return fallback
+  const value = Number(raw)
+  return Number.isFinite(value) ? Math.max(20, Math.min(80, Math.round(value))) : fallback
+}
+let focusLeftRatio = (() => {
+  try { return normalizedRatio(localStorage.getItem(focusRatioKey)) }
+  catch { return 50 }
+})()
+
+// Column width is presentation state: update CSS only, leaving editor instances and note saves alone.
+function applyFocusColumnRatio(syncNumber = false): void {
+  const focused = mode === 'focus'
+  element('column-ratio-controls').hidden = !focused
+  const left = focused ? focusLeftRatio : 50
+  element('days').style.setProperty('--dual-left-share', `${left}fr`)
+  element('days').style.setProperty('--dual-right-share', `${100 - left}fr`)
+  const number = element<HTMLInputElement>('focus-left-ratio')
+  if (syncNumber || document.activeElement !== number) number.value = String(focusLeftRatio)
+  const slider = element<HTMLInputElement>('focus-ratio-slider')
+  slider.value = String(focusLeftRatio)
+  slider.setAttribute('aria-valuetext', `左栏 ${focusLeftRatio}％，右栏 ${100 - focusLeftRatio}％`)
+  element('focus-right-ratio').textContent = `右栏 ${100 - focusLeftRatio}％`
+  element<HTMLButtonElement>('reset-column-ratio').disabled = focusLeftRatio === 50
+}
+function setFocusColumnRatio(value: number, syncNumber: boolean): void {
+  const changed = focusLeftRatio !== value
+  focusLeftRatio = value
+  applyFocusColumnRatio(syncNumber)
+  if (changed) {
+    // A display preference failing to persist must not interrupt note editing or draft storage.
+    try { localStorage.setItem(focusRatioKey, String(value)) } catch { /* Keep the ratio for this session. */ }
+  }
+}
+
 function readDraft(date: string): NoteDay | undefined {
   try {
     const value = localStorage.getItem(draftPrefix + date)
@@ -400,6 +436,7 @@ async function disposeCells(): Promise<void> {
 }
 
 function rangeControls(): void {
+  applyFocusColumnRatio()
   element('focus-mode').setAttribute('aria-pressed', String(mode === 'focus'))
   element('overview-mode').setAttribute('aria-pressed', String(mode === 'overview'))
   element('rangebar').classList.toggle('focus-range', mode === 'focus')
@@ -620,6 +657,21 @@ element('conflict-cancel').addEventListener('click', () => { if (!conflictBusy) 
 element('conflict-dialog').addEventListener('cancel', event => { if (conflictBusy) event.preventDefault() })
 element('recovery-close').addEventListener('click', () => element<HTMLDialogElement>('recovery-dialog').close())
 element('focus-mode').addEventListener('click', () => { if (mode !== 'focus') void navigate('focus', 0) })
+const ratioNumber = element<HTMLInputElement>('focus-left-ratio')
+ratioNumber.addEventListener('input', () => {
+  const value = Number(ratioNumber.value)
+  // Let users clear the field or type an intermediate value before correcting on blur/Enter.
+  if (ratioNumber.value.trim() && Number.isInteger(value) && value >= 20 && value <= 80) setFocusColumnRatio(value, false)
+})
+const commitRatioNumber = () => setFocusColumnRatio(normalizedRatio(ratioNumber.value, focusLeftRatio), true)
+ratioNumber.addEventListener('blur', commitRatioNumber)
+ratioNumber.addEventListener('keydown', event => {
+  if (event.key === 'Enter') { event.preventDefault(); commitRatioNumber() }
+})
+element<HTMLInputElement>('focus-ratio-slider').addEventListener('input', event => {
+  setFocusColumnRatio(normalizedRatio((event.target as HTMLInputElement).value, focusLeftRatio), true)
+})
+element('reset-column-ratio').addEventListener('click', () => setFocusColumnRatio(50, true))
 element('overview-mode').addEventListener('click', () => { if (mode !== 'overview') void navigate('overview', 0) })
 element('older-page').addEventListener('click', () => void navigate('overview', page + 1))
 element('newer-page').addEventListener('click', () => void navigate('overview', page - 1))
