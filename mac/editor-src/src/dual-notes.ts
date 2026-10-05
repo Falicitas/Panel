@@ -79,7 +79,6 @@ let parser: ((markdown: string) => ProseNode) | undefined
 let conflictDate: string | null = null
 let conflictBusy = false
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
-const dayBadges = new Map<string, HTMLElement>()
 
 const focusRatioKey = 'panel.dual-notes.focus-left-ratio'
 function normalizedRatio(raw: string | null, fallback = 50): number {
@@ -136,23 +135,12 @@ function saveDraft(state: DayState): void {
 }
 const store = new DayStore(day => request<NoteDay>('save', { day }), state => {
   saveDraft(state)
-  updateStatus()
+  updateErrors()
 })
 
-function updateStatus(): void {
+function updateErrors(): void {
   const states = [...store.states.values()]
   const failed = states.filter(state => !!state.error)
-  const dirty = states.filter(state => state.dirty)
-  const status = element('save-status')
-  status.textContent = loading ? '正在加载…' : failed.length ? `${failed.length} 天尚未保存` : states.some(state => state.saving) ? '正在保存…' : dirty.length ? '有待保存的修改' : loadFailure ? '未加载' : '已保存到本机'
-  status.classList.toggle('warning', failed.length > 0 || !!loadFailure)
-  for (const state of states) {
-    const badge = dayBadges.get(state.day.date)
-    if (badge) {
-      badge.textContent = state.conflict ? '版本冲突 · 草稿保留' : state.error ? '尚未保存' : state.saving ? '保存中' : state.dirty ? '待保存' : ''
-      badge.classList.toggle('warning', !!state.error)
-    }
-  }
   const errors = element('errors')
   errors.replaceChildren()
   if (storageFailure) errors.append(node('div', 'error-line', '本机草稿备份不可用。尚未保存的内容仍在当前页面，请在关闭前重试保存。'))
@@ -378,10 +366,8 @@ function renderDay(day: NoteDay): HTMLElement {
   const title = node('h2', '', readableDate(day.date))
   if (day.date === today) title.append(node('span', 'today-tag', '今天'))
   header.append(title, node('span', 'date-year', day.date))
-  const badge = node('span', 'day-status')
-  dayBadges.set(day.date, badge)
   const copy = dayCopyControl(day.date)
-  header.append(badge, copy.control)
+  header.append(copy.control)
   section.append(header, copy.feedback)
   const table = node('div', 'note-table')
   const columns = node('div', 'column-headings')
@@ -460,7 +446,7 @@ async function navigate(nextMode: 'focus' | 'overview', nextPage: number): Promi
   loadFailure = null
   matches = []; activeMatch = -1
   findJumpGeneration++
-  rangeControls(); updateStatus(); updateFindUI()
+  rangeControls(); updateErrors(); updateFindUI()
   try {
     const result = await request<{ days: NoteDay[] }>('load', { end: dates[dates.length - 1], days: dates.length })
     if (generation !== renderGeneration) return
@@ -473,7 +459,6 @@ async function navigate(nextMode: 'focus' | 'overview', nextPage: number): Promi
     })
     await disposeCells()
     if (generation !== renderGeneration) return
-    dayBadges.clear()
     const main = element('days')
     main.replaceChildren(...records.map(renderDay))
     const first = cells.values().next().value as Cell | undefined
@@ -482,7 +467,7 @@ async function navigate(nextMode: 'focus' | 'overview', nextPage: number): Promi
     for (const cell of cells.values()) if (!cell.crepe) drawPreview(cell)
     loading = false
     element('days').inert = false
-    rangeControls(); updateStatus(); rebuildFind(false)
+    rangeControls(); updateErrors(); rebuildFind(false)
     window.scrollTo({ top: 0 })
     for (const date of dates) {
       const state = store.states.get(date)!
@@ -497,7 +482,7 @@ async function navigate(nextMode: 'focus' | 'overview', nextPage: number): Promi
     if (generation !== renderGeneration) return
     element('days').inert = false
     element('days').replaceChildren(node('p', 'empty-message', '记录尚未加载，请重试。已有修改仍保留。'))
-    rangeControls(); updateStatus()
+    rangeControls(); updateErrors()
   }
 }
 
@@ -646,7 +631,7 @@ element('conflict-reload').addEventListener('click', async () => {
   } catch (error) {
     element('notice').hidden = false
     element('notice').textContent = `未能重新加载，当前草稿仍保留：${(error as Error).message}`
-    updateStatus()
+    updateErrors()
   } finally {
     control.disabled = false
     conflictBusy = false
