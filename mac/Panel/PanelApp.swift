@@ -11,8 +11,10 @@ struct PanelApp: App {
         WindowGroup {
             ContentView()
                 .environment(state)
+                .focusedSceneValue(\.pageZoomState, state)
                 .environment(SegmentPlayer.shared)
                 .frame(minWidth: 560, minHeight: 560)
+                .background(PageZoomShortcuts { state.performPageZoom($0) })
                 .background(WindowAccessor { window in
                     // 去掉 titlebar 与下方 NotificationBar 之间那条 1-2px 分隔线。
                     // 保留 traffic lights / "Panel" 标题, 只消除 separator (macOS 11+)。
@@ -30,6 +32,7 @@ struct PanelApp: App {
                 }
         }
         .windowResizability(.contentMinSize)
+        .commands { PageZoomCommands() }
 
         Settings {
             VoiceSettingsView()
@@ -57,4 +60,37 @@ private struct WindowAccessor: NSViewRepresentable {
         return v
     }
     func updateNSView(_: NSView, context: Context) {}
+}
+
+private struct PageZoomStateKey: FocusedValueKey {
+    typealias Value = AppState
+}
+
+private extension FocusedValues {
+    var pageZoomState: AppState? {
+        get { self[PageZoomStateKey.self] }
+        set { self[PageZoomStateKey.self] = newValue }
+    }
+}
+
+private struct PageZoomCommands: Commands {
+    @FocusedValue(\.pageZoomState) private var state
+
+    var body: some Commands {
+        CommandGroup(after: .toolbar) {
+            Divider()
+            Button("放大页面") { state?.performPageZoom(.zoomIn) }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(state?.canZoomIn != true)
+            Button("缩小页面") { state?.performPageZoom(.zoomOut) }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(state?.canZoomOut != true)
+            Button("实际大小（100％）") { state?.performPageZoom(.reset) }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(state?.supportsPageZoom != true)
+            if let state, state.supportsPageZoom {
+                Text("页面缩放：\(state.pageZoomPercent)％")
+            }
+        }
+    }
 }
