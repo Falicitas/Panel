@@ -1,10 +1,10 @@
 import SwiftUI
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    // 顺序按用户优先: 测试期 1 todolist → 2 保健品 → 3 英文 是核心,后 3 个 disabled。
-    case todolist
+    // 常用的保健品和英文在前，Todolist 紧接英文；后 3 个暂未启用。
     case supplements
     case english
+    case todolist
     case finance
     case records
     case bash
