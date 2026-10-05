@@ -208,8 +208,8 @@ async function mountCell(cell: Cell, focus = false): Promise<void> {
         [Crepe.Feature.CodeMirror]: false,
         [Crepe.Feature.Latex]: false,
         [Crepe.Feature.TopBar]: false,
+        [Crepe.Feature.Placeholder]: false,
       },
-      featureConfigs: { [Crepe.Feature.Placeholder]: { text: '从这里开始，回车可继续写…', mode: 'doc' } },
     })
     cell.crepe = crepe
     crepe.editor.use(searchPlugin(cell)).use(codeBlockPlugins())
@@ -253,8 +253,7 @@ function docFor(cell: Cell): ProseNode | null {
 function drawPreview(cell: Cell): void {
   const doc = docFor(cell)
   const preview = node('div', 'cell-preview')
-  if (!markdownFor(cell).trim()) preview.append(node('p', 'placeholder', '从这里开始，回车可继续写…'))
-  else if (doc) preview.append(DOMSerializer.fromSchema(doc.type.schema).serializeFragment(doc.content))
+  if (doc) preview.append(DOMSerializer.fromSchema(doc.type.schema).serializeFragment(doc.content))
   else preview.textContent = markdownFor(cell)
   cell.root.replaceChildren(preview)
   void decorateCodePreview(preview)
