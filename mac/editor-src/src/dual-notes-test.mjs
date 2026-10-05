@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process'
 
 const temporary = await mkdtemp(path.join(tmpdir(), 'panel-dual-notes-test-'))
 try {
-  const outfile = path.join(temporary, 'dual-notes-core.test.mjs')
-  await build({ entryPoints: ['src/dual-notes-core.test.mjs'], bundle: true, platform: 'node', format: 'esm', outfile })
-  const run = spawnSync(process.execPath, ['--test', outfile], { stdio: 'inherit', env: { ...process.env, TZ: 'America/Los_Angeles' } })
+  const entries = ['src/dual-notes-core.test.mjs', 'src/dual-notes-code.test.mjs']
+  await build({ entryPoints: entries, bundle: true, platform: 'node', format: 'esm', outdir: temporary, outExtension: { '.js': '.mjs' } })
+  const run = spawnSync(process.execPath, ['--test', ...entries.map(entry => path.join(temporary, path.basename(entry)))], { stdio: 'inherit', env: { ...process.env, TZ: 'America/Los_Angeles' } })
   process.exitCode = run.status ?? 1
 } finally { await rm(temporary, { recursive: true, force: true }) }

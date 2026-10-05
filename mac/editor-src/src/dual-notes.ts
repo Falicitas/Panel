@@ -1,4 +1,5 @@
 import { Crepe } from '@milkdown/crepe'
+import { codeBlockPlugins, decorateCodePreview } from './dual-notes-code'
 import { editorViewCtx, parserCtx } from '@milkdown/kit/core'
 import { DOMSerializer, type Node as ProseNode } from '@milkdown/kit/prose/model'
 import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state'
@@ -210,7 +211,7 @@ async function mountCell(cell: Cell, focus = false): Promise<void> {
       featureConfigs: { [Crepe.Feature.Placeholder]: { text: '从这里开始，回车可继续写…', mode: 'doc' } },
     })
     cell.crepe = crepe
-    crepe.editor.use(searchPlugin(cell))
+    crepe.editor.use(searchPlugin(cell)).use(codeBlockPlugins())
     await crepe.create()
     if (!cell.alive) { await crepe.destroy(); return }
     cell.baseline = crepe.getMarkdown()
@@ -255,6 +256,7 @@ function drawPreview(cell: Cell): void {
   else if (doc) preview.append(DOMSerializer.fromSchema(doc.type.schema).serializeFragment(doc.content))
   else preview.textContent = markdownFor(cell)
   cell.root.replaceChildren(preview)
+  void decorateCodePreview(preview)
 }
 const observer = new IntersectionObserver(entries => {
   for (const entry of entries) {

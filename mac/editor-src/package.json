@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@milkdown/crepe": "^7.20.0",
-    "@milkdown/kit": "^7.5.0"
+    "@milkdown/kit": "^7.5.0",
+    "@codemirror/language-data": "^6.5.2",
+    "@lezer/highlight": "^1.2.3"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

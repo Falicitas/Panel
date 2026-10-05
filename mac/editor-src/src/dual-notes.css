@@ -60,6 +60,18 @@ main { padding: 8px 32px 60px; max-width: 1600px; margin: auto; }
 .note-cell .milkdown .ProseMirror h3 { font-size: 17px; }
 .note-cell .milkdown .ProseMirror pre, .cell-preview pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.65; background: var(--tint); border: 1px solid var(--line); padding: 12px; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .note-cell .milkdown .ProseMirror pre code { background: none; padding: 0; color: inherit; font: inherit; }
+.note-cell pre[data-code-language]::before { content: attr(data-code-language); display: block; margin: -2px 0 9px; color: var(--muted); font: 11px/1.5 -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; user-select: none; pointer-events: none; }
+.note-cell pre { --code-keyword: #a626a4; --code-string: #407830; --code-number: #986801; --code-type: #986801; --code-name: #1d5795; --code-comment: #747b74; --code-meta: #795d93; }
+.note-cell pre .tok-keyword, .note-cell pre .tok-operator { color: var(--code-keyword); }
+.note-cell pre .tok-string, .note-cell pre .tok-string2, .note-cell pre .tok-inserted { color: var(--code-string); }
+.note-cell pre .tok-number, .note-cell pre .tok-bool, .note-cell pre .tok-atom, .note-cell pre .tok-literal { color: var(--code-number); }
+.note-cell pre .tok-typeName, .note-cell pre .tok-className, .note-cell pre .tok-namespace { color: var(--code-type); }
+.note-cell pre .tok-propertyName, .note-cell pre .tok-definition, .note-cell pre .tok-variableName2, .note-cell pre .tok-labelName { color: var(--code-name); }
+.note-cell pre .tok-comment { color: var(--code-comment); font-style: italic; }
+.note-cell pre .tok-meta, .note-cell pre .tok-macroName { color: var(--code-meta); }
+.note-cell pre .tok-invalid, .note-cell pre .tok-deleted { color: #bb3535; }
+.note-cell pre .find-hit-active, .note-cell pre .find-hit-active * { color: #1e211e; }
+
 .note-cell .milkdown .ProseMirror .placeholder:before { color: var(--muted); opacity: .7; }
 .cell-preview { padding: 17px 22px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.8; cursor: text; }
 .cell-preview > :first-child { margin-top: 0; }
@@ -87,6 +99,8 @@ dialog p { color: var(--muted); }
 @media (prefers-color-scheme: dark) {
   :root { --page: #202320; --surface: #252925; --ink: #e2e6df; --muted: #8e998f; --line: #3b443c; --accent: #a1b79e; --tint: #2c342d; --warn: #e4ad7b; }
   .note-cell .milkdown { --crepe-color-background: var(--surface); --crepe-color-on-background: var(--ink); }
+  .note-cell pre { --code-keyword: #c792ea; --code-string: #a8cf8d; --code-number: #efbb82; --code-type: #ead18b; --code-name: #8cbce8; --code-comment: #97a299; --code-meta: #cba6e4; }
+  .note-cell pre .tok-invalid, .note-cell pre .tok-deleted { color: #f38b8b; }
 }
 @media (max-width: 720px) {
   .topbar { padding: 13px 18px; gap: 12px; }
