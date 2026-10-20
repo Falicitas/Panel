@@ -140,13 +140,13 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
                       days == 1 || days == 10 else {
                     throw APIError(message: "无效的日期范围。")
                 }
-                let page = try await APIClient.shared.getDualNotes(end: end, days: days)
+                let page = try await DualNotesClient.shared.getDualNotes(end: end, days: days)
                 reply(request.requestId, data: page)
             case "save":
                 guard let day = request.day else {
                     throw APIError(message: "缺少要保存的双栏内容。")
                 }
-                let saved = try await APIClient.shared.putDualNotes(day)
+                let saved = try await DualNotesClient.shared.putDualNotes(day)
                 reply(request.requestId, data: saved)
             case "copy":
                 guard let text = request.text, !text.isEmpty else {

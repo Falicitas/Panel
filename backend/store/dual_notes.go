@@ -11,6 +11,29 @@ import (
 	"time"
 )
 
+// OpenDualNotes opens the existing notes table without running migrations for
+// supplements, English practice, or any other Panel feature.
+func OpenDualNotes(path string) (*Store, error) {
+	return open(path, func(s *Store) error {
+		// Keep the timeout on the sole connection used by reads, writes, and
+		// backups. Another process may briefly hold the shared database lock.
+		s.db.SetMaxOpenConns(1)
+		if _, err := s.db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
+			return err
+		}
+		return s.migrateDualNotes()
+	})
+}
+
+func (s *Store) migrateDualNotes() error {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS dual_notes_days (
+		date      TEXT PRIMARY KEY,
+		revision  INTEGER NOT NULL CHECK (revision > 0),
+		rows_json TEXT NOT NULL
+	)`)
+	return err
+}
+
 const (
 	MaxDualNotesBytes = 4 << 20
 	MaxDualNotesRows  = 1000
