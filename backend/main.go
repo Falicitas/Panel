@@ -75,7 +75,7 @@ func main() {
 	_ = msgsource.NewMock("wechat")
 
 	// 数据库每日备份: 启动 + 每 6h 扫一次,缺当日备份则 VACUUM INTO,保留 7 份
-	go runBackupLoop(ctx, st, backupsDir)
+	go st.RunDailyBackups(ctx, backupsDir)
 
 	// 食物保健品 + 英文练习 + 三餐通知生成器: 每 60s 扫一次, active window 写 notification (幂等)
 	go func() {
@@ -183,43 +183,6 @@ func runEnglishFetchLoop(ctx context.Context, st *store.Store, englishDir string
 			return
 		case <-tick.C:
 			runOnce()
-		}
-	}
-}
-
-func runBackupLoop(ctx context.Context, st *store.Store, dir string) {
-	const keep = 7
-	ensureBackup := func(t time.Time) {
-		dstPath := filepath.Join(dir, store.DailyBackupName(t))
-		if _, err := os.Stat(dstPath); err == nil {
-			return
-		}
-		tmpPath := dstPath + ".tmp"
-		_ = os.Remove(tmpPath)
-		if err := st.Backup(ctx, tmpPath); err != nil {
-			log.Printf("backup: %v", err)
-			return
-		}
-		if err := os.Rename(tmpPath, dstPath); err != nil {
-			log.Printf("backup rename: %v", err)
-			return
-		}
-		log.Printf("backup: %s", dstPath)
-		if removed, err := store.RotateBackups(dir, keep); err != nil {
-			log.Printf("backup rotate: %v", err)
-		} else if removed > 0 {
-			log.Printf("backup rotate: removed %d", removed)
-		}
-	}
-	ensureBackup(time.Now())
-	tick := time.NewTicker(6 * time.Hour)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case t := <-tick.C:
-			ensureBackup(t)
 		}
 	}
 }

@@ -1,4 +1,4 @@
-package server
+package dualnotes
 
 import (
 	"encoding/json"

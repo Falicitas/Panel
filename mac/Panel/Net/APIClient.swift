@@ -49,21 +49,6 @@ actor APIClient: BackendClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    func getDualNotes(end: String, days: Int) async throws -> DualNotesPage {
-        try await get("/api/dual-notes?end=\(encode(end))&days=\(days)")
-    }
-
-    func putDualNotes(_ day: DualNotesDay) async throws -> DualNotesDay {
-        struct Payload: Encodable {
-            let revision: Int
-            let rows: [DualNotesRow]
-        }
-        return try await put(
-            "/api/dual-notes/\(encode(day.date))",
-            body: Payload(revision: day.revision, rows: day.rows)
-        )
-    }
-
     func listTodolists() async throws -> TodolistListResponse {
         try await get("/api/todolists")
     }
@@ -528,6 +513,61 @@ actor APIClient: BackendClient {
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else {
             throw APIError(message: "non-HTTP response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw APIError(message: "HTTP \(http.statusCode): \(body)", status: http.statusCode)
+        }
+        return try decoder.decode(T.self, from: data)
+    }
+}
+
+/// 双栏使用独立进程和连接池，其他模块的后端关闭时仍可读取和保存。
+actor DualNotesClient {
+    static let shared = DualNotesClient()
+
+    private static let baseURL = URL(string: "http://127.0.0.1:8090")!
+    private let session: URLSession
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
+
+    init(session: URLSession = URLSession(configuration: .ephemeral)) {
+        self.session = session
+    }
+
+    func getDualNotes(end: String, days: Int) async throws -> DualNotesPage {
+        var components = URLComponents(
+            url: Self.baseURL.appendingPathComponent("api/dual-notes"),
+            resolvingAgainstBaseURL: true
+        )!
+        components.queryItems = [
+            URLQueryItem(name: "end", value: end),
+            URLQueryItem(name: "days", value: String(days))
+        ]
+        guard let url = components.url else {
+            throw APIError(message: "无效的双栏日期范围。")
+        }
+        return try await send(URLRequest(url: url))
+    }
+
+    func putDualNotes(_ day: DualNotesDay) async throws -> DualNotesDay {
+        struct Payload: Encodable {
+            let revision: Int
+            let rows: [DualNotesRow]
+        }
+        let url = Self.baseURL.appendingPathComponent("api/dual-notes")
+            .appendingPathComponent(day.date)
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Payload(revision: day.revision, rows: day.rows))
+        return try await send(request)
+    }
+
+    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError(message: "双栏服务返回了无效响应。")
         }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""

@@ -14,6 +14,10 @@ type Store struct {
 }
 
 func Open(path string) (*Store, error) {
+	return open(path, (*Store).migrate)
+}
+
+func open(path string, migrate func(*Store) error) (*Store, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -23,7 +27,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 	s := &Store{db: db}
-	if err := s.migrate(); err != nil {
+	if err := migrate(s); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -33,15 +37,13 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate() error {
+	if err := s.migrateDualNotes(); err != nil {
+		return err
+	}
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS settings (
 			key   TEXT PRIMARY KEY,
 			value TEXT NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS dual_notes_days (
-			date      TEXT PRIMARY KEY,
-			revision  INTEGER NOT NULL CHECK (revision > 0),
-			rows_json TEXT NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS recurring_todos (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,

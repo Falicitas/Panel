@@ -10,7 +10,8 @@ struct ContentView: View {
             .alert(
                 "加载错误",
                 isPresented: Binding(
-                    get: { state.lastError != nil },
+                    // 双栏服务独立运行，其他模块的错误只在对应区域显示。
+                    get: { state.selectedTab != .dualNotes && state.lastError != nil },
                     set: { if !$0 { state.lastError = nil } }
                 ),
                 actions: { Button("OK", role: .cancel) {} },

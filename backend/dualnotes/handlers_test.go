@@ -1,4 +1,4 @@
-package server
+package dualnotes
 
 import (
 	"bytes"
@@ -16,12 +16,12 @@ import (
 
 func dualNotesHandler(t *testing.T) http.Handler {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "notes.db"))
+	st, err := store.OpenDualNotes(filepath.Join(t.TempDir(), "notes.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	return New(nil, st, nil).Routes()
+	return New(st).Routes()
 }
 
 func dualNotesRequest(t *testing.T, h http.Handler, method, path, body string, status int) *httptest.ResponseRecorder {
