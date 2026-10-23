@@ -51,15 +51,23 @@ struct PanelApp: App {
 private struct WindowAccessor: NSViewRepresentable {
     let onWindow: (NSWindow) -> Void
     func makeNSView(context: Context) -> NSView {
-        let v = NSView()
+        let v = StartupFocusView()
         DispatchQueue.main.async {
             if let w = v.window {
                 onWindow(w)
+                // 只在窗口创建时设置中性的初始焦点，避免工具栏按钮被自动选中。
+                w.initialFirstResponder = v
+                w.makeFirstResponder(v)
             }
         }
         return v
     }
     func updateNSView(_: NSView, context: Context) {}
+}
+
+/// 可接收初始键盘焦点的空视图，不绘制焦点环，也不拦截后续键盘导航。
+private final class StartupFocusView: NSView {
+    override var acceptsFirstResponder: Bool { true }
 }
 
 private struct PageZoomStateKey: FocusedValueKey {
