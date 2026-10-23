@@ -98,8 +98,8 @@ function applyFocusColumnRatio(syncNumber = false): void {
   const focused = mode === 'focus'
   element('column-ratio-controls').hidden = !focused
   const left = focused ? focusLeftRatio : 50
-  element('days').style.setProperty('--dual-left-share', `${left}fr`)
-  element('days').style.setProperty('--dual-right-share', `${100 - left}fr`)
+  element('days').style.setProperty('--dual-left-share', `${left}%`)
+  element('days').style.setProperty('--dual-right-share', `${100 - left}%`)
   const number = element<HTMLInputElement>('focus-left-ratio')
   if (syncNumber || document.activeElement !== number) number.value = String(focusLeftRatio)
   const slider = element<HTMLInputElement>('focus-ratio-slider')
