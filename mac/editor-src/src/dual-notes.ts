@@ -429,7 +429,7 @@ function rangeControls(): void {
   element('focus-mode').setAttribute('aria-pressed', String(mode === 'focus'))
   element('overview-mode').setAttribute('aria-pressed', String(mode === 'overview'))
   element('rangebar').classList.toggle('focus-range', mode === 'focus')
-  element('range-label').textContent = mode === 'focus' ? `${today} · 只看今天` : `${visibleDates[0]} — ${visibleDates[visibleDates.length - 1]}`
+  element('range-label').textContent = mode === 'focus' ? `${today} · 只看今天` : `${visibleDates[visibleDates.length - 1]} — ${visibleDates[0]}`
   element<HTMLButtonElement>('newer-page').disabled = page === 0 || loading
   element<HTMLButtonElement>('today-page').disabled = page === 0 || loading
   element<HTMLButtonElement>('older-page').disabled = loading
@@ -451,7 +451,7 @@ async function navigate(nextMode: 'focus' | 'overview', nextPage: number): Promi
   findJumpGeneration++
   rangeControls(); updateErrors(); updateFindUI()
   try {
-    const result = await request<{ days: NoteDay[] }>('load', { end: dates[dates.length - 1], days: dates.length })
+    const result = await request<{ days: NoteDay[] }>('load', { end: dates[0], days: dates.length })
     if (generation !== renderGeneration) return
     if (!Array.isArray(result.days)) throw new Error('本地服务返回了无效的日期数据')
     const records = dates.map(date => {
