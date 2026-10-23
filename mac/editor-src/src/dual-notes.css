@@ -159,3 +159,14 @@ dialog p { color: var(--muted); }
   .add-divider { display: none; }
   .column-ratio-controls { padding-inline: 8px; }
 }
+
+/* 公式选中时编辑源码，离开后显示 KaTeX。 */
+.panel-math .math-source { display: none; }
+.panel-math .math-preview { cursor: text; }
+.ProseMirror-focused .panel-math.math-editing > .math-source { display: inline; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+.ProseMirror-focused .panel-math.math-editing > .math-source::before,
+.ProseMirror-focused .panel-math.math-editing > .math-source::after { content: attr(data-delimiter); color: var(--muted); }
+.ProseMirror-focused .panel-math.math-editing > .math-preview { display: none; }
+[data-panel-math="block"] { margin: 12px 0; overflow-x: auto; }
+.panel-math .katex-display { margin: 0; padding: 8px 0; }
+.panel-math .katex { white-space: nowrap; }

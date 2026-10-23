@@ -6,13 +6,16 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
-    "test:dual-notes": "node src/dual-notes-test.mjs"
+    "test:dual-notes": "node src/dual-notes-test.mjs",
+    "test:math": "bash test-math.sh"
   },
   "dependencies": {
+    "@codemirror/language-data": "^6.5.2",
+    "@lezer/highlight": "^1.2.3",
     "@milkdown/crepe": "^7.20.0",
     "@milkdown/kit": "^7.5.0",
-    "@codemirror/language-data": "^6.5.2",
-    "@lezer/highlight": "^1.2.3"
+    "katex": "^0.16.45",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

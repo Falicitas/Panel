@@ -1,4 +1,6 @@
 import { Crepe } from '@milkdown/crepe'
+import { mathPlugins, configureMath } from './dual-notes-math'
+import 'katex/dist/katex.min.css'
 import { formatDayForClipboard } from './dual-notes-export'
 import { codeBlockPlugins, decorateCodePreview } from './dual-notes-code'
 import { editorViewCtx, parserCtx } from '@milkdown/kit/core'
@@ -240,13 +242,14 @@ async function mountCell(cell: Cell, focus = false): Promise<void> {
       root: cell.root, defaultValue: markdown,
       features: {
         [Crepe.Feature.CodeMirror]: false,
+        // Formula support below preserves the existing native code-block editor.
         [Crepe.Feature.Latex]: false,
         [Crepe.Feature.TopBar]: false,
         [Crepe.Feature.Placeholder]: false,
       },
     })
     cell.crepe = crepe
-    crepe.editor.use(searchPlugin(cell)).use(codeBlockPlugins())
+    crepe.editor.config(configureMath).use(searchPlugin(cell)).use(codeBlockPlugins()).use(mathPlugins())
     await crepe.create()
     if (!cell.alive) { await crepe.destroy(); return }
     cell.baseline = crepe.getMarkdown()
