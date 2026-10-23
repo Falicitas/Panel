@@ -11,8 +11,8 @@ final class AppState {
     let dualNotes = DualNotesController()
     var contentMode: ContentMode = .todolist
     var isDetailLoading: Bool = false
-    /// 专注模式:折叠 sidebar + content 列,只显示 detail。
-    var splitVisibility: NavigationSplitViewVisibility = .all
+    /// 启动时收起侧栏和二级列表，可通过工具栏按钮重新展开。
+    var splitVisibility: NavigationSplitViewVisibility = .doubleColumn
     var editorPageZoom: Double = AppState.loadZoom() {
         didSet { UserDefaults.standard.set(editorPageZoom, forKey: Self.zoomKey) }
     }
