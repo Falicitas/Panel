@@ -33,3 +33,7 @@ launchctl bootout gui/$(id -u)/com.kinesis.panel.dual-notes
 
 验证：`cd backend && go test ./... -race`，以及
 `./mac/test-dual-notes-client.sh`。集成测试使用临时数据库和随机本地端口。
+
+双栏支持行内公式 `$E=mc^2$` 和独立公式块（`$$` 各占一行，中间写公式）。
+点击公式可修改 LaTeX 源码，移开光标后显示 KaTeX 渲染；普通美元符号写为 `\$`。
+公式编辑、渲染和保存回归：在 `mac/editor-src` 运行 `npm run test:math`。
