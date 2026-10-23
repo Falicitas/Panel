@@ -8,10 +8,11 @@ export function shiftDate(key: string, offset: number): string {
   return dateKey(new Date(year, month - 1, day + offset, 12))
 }
 
+/** Display dates newest first; the first date is the inclusive API range end. */
 export function dateWindow(today: string, mode: 'focus' | 'overview', page = 0): string[] {
   const count = mode === 'focus' ? 1 : 10
   const end = shiftDate(today, mode === 'focus' ? 0 : -Math.max(0, page) * 10)
-  return Array.from({ length: count }, (_, index) => shiftDate(end, index - count + 1))
+  return Array.from({ length: count }, (_, index) => shiftDate(end, -index))
 }
 
 export type Side = 'left' | 'right'

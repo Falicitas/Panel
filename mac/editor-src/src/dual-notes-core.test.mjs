@@ -5,16 +5,19 @@ import { dateWindow, shiftDate, searchBlocks, DayStore, recoverDay } from './dua
 
 const day = (text = 'initial', revision = 0) => ({ date: '2026-10-05', revision, rows: [{ id: 'first', left: text, right: '' }] })
 
-test('calendar pages count backward from today without gaps, including leap days and DST boundaries', () => {
+test('overview displays newest days first with contiguous calendar pages across month, leap day and DST boundaries', () => {
   assert.deepEqual(dateWindow('2026-10-05', 'focus', 8), ['2026-10-05'])
   const current = dateWindow('2026-10-05', 'overview')
   const previous = dateWindow('2026-10-05', 'overview', 1)
-  assert.equal(current.length, 10)
-  assert.equal(current[0], '2026-09-26')
-  assert.equal(current[9], '2026-10-05')
-  assert.equal(previous[9], shiftDate(current[0], -1))
-  assert.equal(shiftDate('2024-03-01', -1), '2024-02-29')
-  assert.equal(shiftDate('2026-03-08', 1), '2026-03-09')
+  assert.deepEqual(current, [
+    '2026-10-05', '2026-10-04', '2026-10-03', '2026-10-02', '2026-10-01',
+    '2026-09-30', '2026-09-29', '2026-09-28', '2026-09-27', '2026-09-26',
+  ])
+  assert.equal(previous.length, 10)
+  assert.equal(previous[0], shiftDate(current[9], -1))
+  assert.equal(previous[9], '2026-09-16')
+  assert.deepEqual(dateWindow('2024-03-01', 'overview').slice(0, 3), ['2024-03-01', '2024-02-29', '2024-02-28'])
+  assert.deepEqual(dateWindow('2026-03-09', 'overview').slice(0, 3), ['2026-03-09', '2026-03-08', '2026-03-07'])
 })
 
 test('literal search crosses rich marks, includes code lines, preserves positions and is case insensitive', () => {
