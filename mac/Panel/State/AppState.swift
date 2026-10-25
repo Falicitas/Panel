@@ -20,7 +20,7 @@ final class AppState {
     private static func loadZoom() -> Double {
         PageZoom.normalized((UserDefaults.standard.object(forKey: zoomKey) as? Double) ?? 1.0)
     }
-    var supportsPageZoom: Bool { selectedTab == .dualNotes || selectedTab == .todolist }
+    var supportsPageZoom: Bool { selectedTab == .dualNotes || selectedTab == .todolist || selectedTab == .autodl }
     var canZoomIn: Bool { supportsPageZoom && editorPageZoom < PageZoom.maximum }
     var canZoomOut: Bool { supportsPageZoom && editorPageZoom > PageZoom.minimum }
     var pageZoomPercent: Int { Int((editorPageZoom * 100).rounded()) }

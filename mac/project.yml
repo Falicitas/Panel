@@ -18,6 +18,15 @@ targets:
   Panel:
     type: application
     platform: macOS
+    info:
+      path: Panel/Resources/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            "127.0.0.1":
+              NSExceptionAllowsInsecureHTTPLoads: true
     sources:
       - path: Panel
         excludes:
