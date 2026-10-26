@@ -34,6 +34,11 @@
   <div id="notice" class="notice" role="status" hidden></div>
   <div id="errors" class="errors" aria-live="polite"></div>
   <main id="days" aria-label="按日期排列的双栏记录"></main>
+  <dialog id="tail-delete-dialog" aria-labelledby="tail-delete-title">
+    <h2 id="tail-delete-title">确认删除</h2>
+    <p id="tail-delete-message"></p>
+    <div class="dialog-actions"><button id="tail-delete-cancel" autofocus>取消</button><button id="tail-delete-confirm">删除</button></div>
+  </dialog>
   <dialog id="workspace-migrate-dialog" aria-labelledby="workspace-migrate-title">
     <h2 id="workspace-migrate-title">迁移至最新月</h2>
     <p id="workspace-migrate-destination"></p>
