@@ -6,6 +6,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case supplements
     case english
     case todolist
+    case autodl
     case finance
     case records
     case bash
@@ -16,6 +17,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .dualNotes:   "双栏"
         case .todolist:    "Todolist"
+        case .autodl:      "AutoDL"
         case .supplements: "食物/保健品"
         case .english:     "英文"
         case .finance:     "财务"
@@ -28,6 +30,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .dualNotes:   "rectangle.split.2x1"
         case .todolist:    "checklist"
+        case .autodl:      "cpu"
         case .supplements: "pills"
         case .english:     "headphones"
         case .finance:     "creditcard"
@@ -40,14 +43,14 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     /// 原代码已有可用功能不删, 后续解禁只需把 case 加回 true 分支。
     var isEnabled: Bool {
         switch self {
-        case .dualNotes, .todolist, .supplements, .english: true
+        case .dualNotes, .todolist, .supplements, .english, .autodl: true
         case .finance, .records, .bash:         false
         }
     }
 
     var comingSoonHint: String {
         switch self {
-        case .dualNotes, .todolist, .supplements, .english: ""
+        case .dualNotes, .todolist, .supplements, .english, .autodl: ""
         case .finance, .records, .bash:         "测试期暂停, 优先 todolist / 保健品 / 英文"
         }
     }
