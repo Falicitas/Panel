@@ -9,5 +9,7 @@ cp "$workspace_resources/index.html" "$workspace_resources/bundle.js" \
 xcrun swiftc tests/WorkspaceWebView.swift \
   -module-cache-path "$workspace_test_dir/module-cache" \
   -o "$workspace_test_dir/workspace-webview"
-"$workspace_test_dir/workspace-webview" "$workspace_test_dir/index.html" \
-  "$PWD/tests/short-term-workspace.js"
+for workspace_script in short-term-workspace.js workspace-migration.js; do
+  "$workspace_test_dir/workspace-webview" "$workspace_test_dir/index.html" \
+    "$PWD/tests/$workspace_script"
+done

@@ -11,6 +11,7 @@ import { $prose } from '@milkdown/kit/utils'
 import { dateKey, dateWindow, DayStore, recoverDay, searchBlocks, type NoteDay, type DayState, type Side, type SearchMatch, type TextBlock } from './dual-notes-core'
 import '@milkdown/crepe/theme/common/style.css'
 import { monthKey, shiftMonth, validMonth, validWorkspace, WorkspaceStore, recoverWorkspace, type MonthWorkspace, type WorkspaceTable, type WorkspaceState } from './short-term-workspace-core'
+import { WorkspaceCopier, validWorkspaceCopy, type WorkspaceCopyRequest, type WorkspaceCopyResult } from './short-term-workspace-copy'
 import '@milkdown/crepe/theme/classic.css'
 import '@milkdown/crepe/theme/classic-dark.css'
 import './dual-notes.css'
@@ -88,6 +89,13 @@ let conflictMonth: string | null = null
 let conflictBusy = false
 let workspaceOrder: { month: string; ids: string[] } | null = null
 let draggedWorkspaceTable: string | null = null
+type MigrationChoice = { id: string; header: string }
+let workspaceMigration: { sourceMonth: string; targetMonth: string; choices: MigrationChoice[]; selected: Set<string> } | null = null
+let migrationBusy = false
+const pendingCopyKey = 'panel.short-term-workspace.pending-copy'
+let rememberedCopyHeaders: MigrationChoice[] = []
+let copyRecoveryError: string | null = null
+let workspaceCopier: WorkspaceCopier
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
 const focusRatioKey = 'panel.dual-notes.focus-left-ratio'
@@ -165,10 +173,42 @@ function saveWorkspaceDraft(state: WorkspaceState): void {
     else localStorage.removeItem(key)
   } catch { storageFailure = true }
 }
-const workspaceStore = new WorkspaceStore(workspace => request<MonthWorkspace>('saveWorkspace', { workspace }), state => {
+const workspaceStore = new WorkspaceStore(workspace => {
+  if (workspaceCopier?.pending?.targetMonth === workspace.month) return Promise.reject(new Error('请先确认上次迁移结果，再编辑目标月份。'))
+  return request<MonthWorkspace>('saveWorkspace', { workspace })
+}, state => {
   saveWorkspaceDraft(state)
   updateErrors()
 })
+function readPendingCopy(): WorkspaceCopyRequest | null {
+  try {
+    const raw = localStorage.getItem(pendingCopyKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!validWorkspaceCopy(parsed.request)) throw new Error('无法读取上次迁移的请求。')
+    rememberedCopyHeaders = Array.isArray(parsed.headers) ? parsed.headers.filter((item: MigrationChoice) => item && typeof item.id === 'string' && typeof item.header === 'string') : []
+    return parsed.request
+  } catch {
+    copyRecoveryError = '无法读取上次迁移状态，请保留当前页面，暂勿再次迁移。'
+    return null
+  }
+}
+function rememberCopy(copy: WorkspaceCopyRequest | null): void {
+  try {
+    if (copy) {
+      const source = workspaceStore.states.get(copy.sourceMonth)?.workspace
+      const headers = copy.tableIds.map(id => ({ id, header: source?.tables.find(table => table.id === id)?.header ?? rememberedCopyHeaders.find(table => table.id === id)?.header ?? '' }))
+      localStorage.setItem(pendingCopyKey, JSON.stringify({ request: copy, headers }))
+      rememberedCopyHeaders = headers
+    } else {
+      localStorage.removeItem(pendingCopyKey)
+      rememberedCopyHeaders = []
+    }
+  } catch { storageFailure = true; throw new Error('无法保留迁移状态，请恢复本机存储后重试。') }
+}
+workspaceCopier = new WorkspaceCopier(workspaceStore,
+  month => request<MonthWorkspace>('loadWorkspace', { month }), readWorkspaceDraft,
+  copy => request<WorkspaceCopyResult>('copyWorkspaceTables', { copy }), rememberCopy, readPendingCopy())
 function scheduleWorkspaceSave(month: string): void {
   const key = 'month/' + month
   clearTimeout(timers.get(key))
@@ -187,6 +227,16 @@ function updateErrors(): void {
   const failed = states.filter(state => !!state.error)
   const errors = element('errors')
   errors.replaceChildren()
+  if (copyRecoveryError) errors.append(node('div', 'error-line', copyRecoveryError))
+  if (workspaceCopier?.pending) {
+    const copy = workspaceCopier.pending
+    const line = node('div', 'error-line')
+    line.append(node('span', '', `从 ${copy.sourceMonth} 到 ${copy.targetMonth} 的迁移结果尚未确认，目标月份暂时不可编辑。`))
+    const retry = button('重试确认', () => openWorkspaceMigration(copy.sourceMonth))
+    retry.disabled = migrationBusy
+    line.append(retry)
+    errors.append(line)
+  }
   if (storageFailure) errors.append(node('div', 'error-line', '本机草稿备份不可用。尚未保存的内容仍在当前页面，请在关闭前重试保存。'))
   if (loadFailure) {
     const line = node('div', 'error-line', loadFailure)
@@ -568,6 +618,11 @@ function renderWorkspace(workspace: MonthWorkspace): void {
   const reorder = button('调整表顺序', () => openWorkspaceOrder(workspace.month))
   reorder.id = 'reorder-workspace-tables'
   heading.append(title, reorder)
+  if (workspace.month !== monthKey()) {
+    const migrate = button('迁移至最新月', () => openWorkspaceMigration(workspace.month))
+    migrate.id = 'migrate-workspace-tables'
+    heading.append(migrate)
+  }
   const tables = node('div', 'workspace-tables')
   workspace.tables.forEach(table => tables.append(renderWorkspaceTable(workspace, table)))
   const add = button('＋ 添加表', () => {
@@ -585,6 +640,116 @@ function renderWorkspace(workspace: MonthWorkspace): void {
   add.id = 'add-workspace-table'
   main.replaceChildren(heading, tables, add)
 }
+
+function updateWorkspaceLock(): void {
+  element('days').inert = loading || migrationBusy || (mode === 'workspace' && workspaceCopier.pending?.targetMonth === selectedMonth)
+}
+function openWorkspaceMigration(sourceMonth: string): void {
+  if (migrationBusy || loading) return
+  if (copyRecoveryError) { workspaceNotice(copyRecoveryError); return }
+  captureAll()
+  closeWorkspaceOrder()
+  const pending = workspaceCopier.pending
+  if (pending) {
+    workspaceMigration = {
+      sourceMonth: pending.sourceMonth, targetMonth: pending.targetMonth,
+      choices: pending.tableIds.map(id => rememberedCopyHeaders.find(table => table.id === id) ?? { id, header: '' }),
+      selected: new Set(pending.tableIds),
+    }
+  } else {
+    if (sourceMonth === monthKey()) return
+    const source = workspaceStore.states.get(sourceMonth)?.workspace
+    if (!source) return
+    workspaceMigration = { sourceMonth, targetMonth: monthKey(), choices: source.tables.map(table => ({ id: table.id, header: table.header })), selected: new Set() }
+  }
+  const migration = workspaceMigration
+  element('workspace-migrate-destination').textContent = `${migration.sourceMonth} → ${migration.targetMonth}，追加到末尾，原月份保留。`
+  element('workspace-migrate-error').hidden = true
+  const list = element('workspace-migrate-list')
+  list.replaceChildren(...migration.choices.map(table => {
+    const item = node('li')
+    const label = node('label', 'workspace-migrate-item')
+    const input = node('input')
+    input.type = 'checkbox'; input.dataset.tableId = table.id
+    input.checked = migration.selected.has(table.id)
+    input.addEventListener('change', () => {
+      if (input.checked) migration.selected.add(table.id)
+      else migration.selected.delete(table.id)
+      updateMigrationControls()
+    })
+    const title = node('span', 'workspace-migrate-title', table.header.trim() || '未命名表')
+    title.title = table.header
+    label.append(input, title); item.append(label)
+    return item
+  }))
+  updateMigrationControls()
+  element<HTMLDialogElement>('workspace-migrate-dialog').showModal()
+}
+function updateMigrationControls(): void {
+  const frozen = migrationBusy || !!workspaceCopier.pending
+  element('workspace-migrate-list').querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = frozen })
+  element<HTMLButtonElement>('workspace-migrate-all').disabled = frozen
+  element<HTMLButtonElement>('workspace-migrate-none').disabled = frozen
+  const apply = element<HTMLButtonElement>('workspace-migrate-apply')
+  apply.disabled = migrationBusy || !workspaceMigration?.selected.size
+  apply.textContent = migrationBusy ? '迁移中…' : workspaceCopier.pending ? '重试确认' : `迁移所选表${workspaceMigration?.selected.size ? `（${workspaceMigration.selected.size}）` : ''}`
+  const cancel = element<HTMLButtonElement>('workspace-migrate-cancel')
+  cancel.disabled = migrationBusy
+  cancel.textContent = workspaceCopier.pending ? '稍后重试' : '取消'
+}
+function closeWorkspaceMigration(): void {
+  if (migrationBusy) return
+  element<HTMLDialogElement>('workspace-migrate-dialog').close()
+  workspaceMigration = null
+}
+function selectMigrationTables(all: boolean): void {
+  if (!workspaceMigration || migrationBusy || workspaceCopier.pending) return
+  workspaceMigration.selected = new Set(all ? workspaceMigration.choices.map(table => table.id) : [])
+  element('workspace-migrate-list').querySelectorAll<HTMLInputElement>('input').forEach(input => { input.checked = all })
+  updateMigrationControls()
+}
+async function applyWorkspaceMigration(): Promise<void> {
+  const migration = workspaceMigration
+  if (!migration || migrationBusy || !migration.selected.size) return
+  if (!workspaceCopier.pending && migration.targetMonth !== monthKey()) {
+    closeWorkspaceMigration()
+    openWorkspaceMigration(migration.sourceMonth)
+    return
+  }
+  captureAll()
+  migrationBusy = true
+  updateWorkspaceLock(); updateMigrationControls()
+  element('workspace-migrate-error').hidden = true
+  try {
+    const result = await workspaceCopier.copy(migration.sourceMonth, migration.targetMonth, [...migration.selected])
+    migrationBusy = false
+    closeWorkspaceMigration()
+    await navigate(mode, page)
+    const notice = element('notice')
+    notice.hidden = false
+    notice.replaceChildren(node('span', '', `已将 ${result.copiedTableIds.length} 张表复制到 ${result.target.month} 末尾，原月份已保留。`))
+    notice.append(button('查看本月', () => void navigate('workspace', 0, result.target.month)))
+  } catch (error) {
+    const failure = error as Error & { status?: number }
+    const text = workspaceCopier.pending ? `结果尚未确认，请重试；同一次迁移不会重复追加。${failure.message}` : `未完成迁移：${failure.message}`
+    element('workspace-migrate-error').textContent = text
+    element('workspace-migrate-error').hidden = false
+    if (failure.status === 409 && !workspaceCopier.pending) {
+      migrationBusy = false
+      closeWorkspaceMigration()
+      await navigate(mode, page)
+      workspaceNotice('月份内容已更新，请检查内容和保存提示后再迁移。')
+    }
+  } finally {
+    migrationBusy = false
+    updateMigrationControls(); updateWorkspaceLock(); updateErrors()
+  }
+}
+element('workspace-migrate-apply').addEventListener('click', () => void applyWorkspaceMigration())
+element('workspace-migrate-cancel').addEventListener('click', closeWorkspaceMigration)
+element('workspace-migrate-all').addEventListener('click', () => selectMigrationTables(true))
+element('workspace-migrate-none').addEventListener('click', () => selectMigrationTables(false))
+element('workspace-migrate-dialog').addEventListener('cancel', event => { event.preventDefault(); closeWorkspaceMigration() })
 
 function openWorkspaceOrder(month: string): void {
   captureAll()
@@ -751,6 +916,8 @@ function rangeControls(): void {
 }
 
 async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMonth): Promise<void> {
+  if (migrationBusy) return
+  closeWorkspaceMigration()
   closeWorkspaceOrder()
   captureAll()
   void flushStores().catch(() => {})
@@ -782,7 +949,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
       if (generation !== renderGeneration) return
       for (const cell of cells.values()) if (!cell.crepe) drawPreview(cell)
       loading = false
-      element('days').inert = false
+      updateWorkspaceLock()
       rangeControls(); updateErrors(); rebuildFind(false)
       window.scrollTo({ top: 0 })
       if (state.dirty && !state.conflict) scheduleWorkspaceSave(month)
@@ -806,7 +973,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
     if (generation !== renderGeneration) return
     for (const cell of cells.values()) if (!cell.crepe) drawPreview(cell)
     loading = false
-    element('days').inert = false
+    updateWorkspaceLock()
     rangeControls(); updateErrors(); rebuildFind(false)
     window.scrollTo({ top: 0 })
     for (const date of dates) {
@@ -820,7 +987,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
     // A failed range must never show the previous range under a new date heading.
     await disposeCells()
     if (generation !== renderGeneration) return
-    element('days').inert = false
+    updateWorkspaceLock()
     element('days').replaceChildren(node('p', 'empty-message', '记录尚未加载，请重试。已有修改仍保留。'))
     rangeControls(); updateErrors()
   }
@@ -901,7 +1068,7 @@ async function jumpToMatch(index: number): Promise<void> {
   })
 }
 function openFind(): void {
-  if (workspaceOrder) return
+  if (workspaceOrder || workspaceMigration) return
   element('findbar').hidden = false
   const input = element<HTMLInputElement>('find-input')
   input.focus(); input.select()
@@ -1078,6 +1245,10 @@ element<HTMLInputElement>('find-input').addEventListener('keydown', event => {
   if (event.key === 'Enter') { event.preventDefault(); void jumpToMatch(activeMatch + (event.shiftKey ? -1 : 1)) }
 })
 document.addEventListener('keydown', event => {
+  if (workspaceMigration) {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeWorkspaceMigration() }
+    return
+  }
   if (workspaceOrder) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeWorkspaceOrder() }
     return

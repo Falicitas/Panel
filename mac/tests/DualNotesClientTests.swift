@@ -83,6 +83,7 @@ struct DualNotesClientTests {
                    "Propagate connection failures for the editor's retry and draft recovery")
         }
         try await testWorkspaces(using: dualNotes)
+        try await testWorkspaceCopies(using: dualNotes)
         print("Dual-notes and monthly workspace client checks passed")
     }
 
@@ -202,6 +203,96 @@ struct DualNotesClientTests {
         } catch {
             expect((error as NSError).code == URLError.cannotConnectToHost.rawValue,
                    "Keep workspace connection failures available to draft recovery")
+        }
+    }
+
+    private static func testWorkspaceCopies(using client: DualNotesClient) async throws {
+        let operationId = "887a0324-6641-4ddb-87c5-bd094c5d8e64"
+        func copy(source: String = "2026-09", target: String = "2026-10", tableIds: [String] = ["table-b", "table-a"]) -> ShortTermWorkspaceCopyRequest {
+            ShortTermWorkspaceCopyRequest(
+                operationId: operationId, sourceMonth: source, targetMonth: target,
+                sourceRevision: 7, targetRevision: 3, tableIds: tableIds
+            )
+        }
+        let request = copy()
+        BackendStub.respond { httpRequest in
+            expect(httpRequest.httpMethod == "POST", "Copy uses POST")
+            expect(httpRequest.url?.host == "127.0.0.1" && httpRequest.url?.port == 8090,
+                   "Copy stays on the independent local service")
+            expect(httpRequest.url?.path == "/api/short-term-workspaces/2026-09/copy", "The source month belongs in the copy path")
+            expect(httpRequest.url?.query == nil, "Copy parameters do not belong in the URL query")
+            expect(httpRequest.value(forHTTPHeaderField: "Content-Type") == "application/json", "Copy sends JSON")
+            let payload = try JSONSerialization.jsonObject(with: body(of: httpRequest)) as! [String: Any]
+            expect(Set(payload.keys) == ["operationId", "targetMonth", "sourceRevision", "targetRevision", "tableIds"],
+                   "Copy encodes exactly the API body fields and omits sourceMonth")
+            expect(payload["operationId"] as? String == operationId, "Preserve the supplied idempotency key on retries")
+            expect(payload["targetMonth"] as? String == "2026-10", "Encode the destination month")
+            expect(payload["sourceRevision"] as? Int == 7 && payload["targetRevision"] as? Int == 3,
+                   "Encode both revisions for conflict detection")
+            expect(payload["tableIds"] as? [String] == ["table-b", "table-a"], "Preserve the selected table IDs and their order")
+            return (200, Data(##"{"operationId":"887a0324-6641-4ddb-87c5-bd094c5d8e64","target":{"month":"2026-10","revision":4,"tables":[{"id":"existing","header":"原有表","rows":[]},{"id":"copied-b","header":"复制标题","rows":[{"id":"new-row","content":"# 保留 Markdown\n正文"}]},{"id":"copied-a","header":"","rows":[]}]},"copiedTableIds":["copied-b","copied-a"]}"##.utf8))
+        }
+        for _ in 0..<2 {
+            let result = try await client.copyShortTermWorkspaceTables(request)
+            expect(result.operationId == operationId, "Decode the matching operation ID")
+            expect(result.target.month == "2026-10" && result.target.revision == 4, "Return the complete destination month and new revision")
+            expect(result.target.tables.map(\.id) == ["existing", "copied-b", "copied-a"], "Keep existing and copied destination tables")
+            expect(result.target.tables[1].rows[0].content == "# 保留 Markdown\n正文", "Decode copied row content without changing Markdown")
+            expect(result.copiedTableIds == ["copied-b", "copied-a"], "Return copied IDs for locating the new tables")
+        }
+        let bridgePayload = try JSONEncoder().encode(request)
+        let decodedCopy = try JSONDecoder().decode(ShortTermWorkspaceCopyRequest.self, from: bridgePayload)
+        expect(decodedCopy.sourceMonth == "2026-09" && decodedCopy.targetMonth == "2026-10",
+               "The bridge request model retains both month fields")
+
+        BackendStub.respond { _ in
+            preconditionFailure("Invalid copy month parameters must not issue an HTTP request")
+        }
+        for badMonth in ["", "2026-9", "026-09", "0000-01", "10000-01", "2026-00", "2026-13",
+                         "2026-09-01", " 2026-09", "2026-09\n", "２０２６-０９", "2026/09", "../2026", "2026-09?x=1"] {
+            for invalid in [copy(source: badMonth), copy(target: badMonth)] {
+                do {
+                    _ = try await client.copyShortTermWorkspaceTables(invalid)
+                    preconditionFailure("Invalid copy month accepted: \(badMonth)")
+                } catch let error as APIError {
+                    expect(error.localizedDescription.contains("YYYY-MM"), "Reject malformed source and destination months")
+                }
+            }
+        }
+        do {
+            _ = try await client.copyShortTermWorkspaceTables(copy(source: "2026-10", target: "2026-10"))
+            preconditionFailure("Copying into the same month must be rejected")
+        } catch let error as APIError {
+            expect(error.localizedDescription.contains("不能相同"), "Explain why the same-month copy is invalid")
+        }
+
+        for mismatch in [
+            ShortTermWorkspaceCopyResult(operationId: "another-operation", target: ShortTermWorkspace(month: "2026-10", revision: 4, tables: []), copiedTableIds: []),
+            ShortTermWorkspaceCopyResult(operationId: operationId, target: ShortTermWorkspace(month: "2026-11", revision: 4, tables: []), copiedTableIds: [])
+        ] {
+            BackendStub.respond { _ in (200, try JSONEncoder().encode(mismatch)) }
+            do {
+                _ = try await client.copyShortTermWorkspaceTables(request)
+                preconditionFailure("A copy response for another operation or month must not be accepted")
+            } catch let error as APIError {
+                expect(error.localizedDescription.contains("复制结果不匹配"), "Reject responses belonging to another copy request")
+            }
+        }
+
+        BackendStub.respond { _ in (409, Data("来源或目标月份已更新。".utf8)) }
+        do {
+            _ = try await client.copyShortTermWorkspaceTables(request)
+            preconditionFailure("Copy conflicts must fail")
+        } catch let error as APIError {
+            expect(error.status == 409, "Copy preserves the conflict status for the JavaScript bridge")
+            expect(error.localizedDescription.contains("来源或目标月份已更新"), "Keep the backend's copy conflict details")
+        }
+        BackendStub.respond { _ in (400, Data("请选择至少一张表。".utf8)) }
+        do {
+            _ = try await client.copyShortTermWorkspaceTables(copy(tableIds: []))
+            preconditionFailure("A backend validation failure must not look like copy success")
+        } catch let error as APIError {
+            expect(error.status == 400, "Preserve backend copy parameter validation failures")
         }
     }
 

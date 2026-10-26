@@ -160,6 +160,12 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
                 }
                 let saved = try await DualNotesClient.shared.putShortTermWorkspace(workspace)
                 reply(request.requestId, data: saved)
+            case "copyWorkspaceTables":
+                guard let copy = request.copy else {
+                    throw APIError(message: "缺少要复制的工作区表格参数。")
+                }
+                let result = try await DualNotesClient.shared.copyShortTermWorkspaceTables(copy)
+                reply(request.requestId, data: result)
             case "copy":
                 guard let text = request.text, !text.isEmpty else {
                     throw APIError(message: "没有可复制的内容。")
@@ -262,6 +268,7 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
         let day: DualNotesDay?
         let month: String?
         let workspace: ShortTermWorkspace?
+        let copy: ShortTermWorkspaceCopyRequest?
         let text: String?
     }
 

@@ -24,6 +24,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/dual-notes/{date}", s.handlePutDualNotes)
 	mux.HandleFunc("GET /api/short-term-workspaces/{month}", s.handleGetWorkspace)
 	mux.HandleFunc("PUT /api/short-term-workspaces/{month}", s.handlePutWorkspace)
+	mux.HandleFunc("POST /api/short-term-workspaces/{sourceMonth}/copy", s.handleCopyWorkspace)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)
 		mux.ServeHTTP(w, r)

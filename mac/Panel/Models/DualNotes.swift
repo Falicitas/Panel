@@ -32,3 +32,18 @@ struct ShortTermWorkspace: Codable, Sendable {
     let revision: Int
     let tables: [ShortTermWorkspaceTable]
 }
+
+struct ShortTermWorkspaceCopyRequest: Codable, Sendable {
+    let operationId: String
+    let sourceMonth: String
+    let targetMonth: String
+    let sourceRevision: Int
+    let targetRevision: Int
+    let tableIds: [String]
+}
+
+struct ShortTermWorkspaceCopyResult: Codable, Sendable {
+    let operationId: String
+    let target: ShortTermWorkspace
+    let copiedTableIds: [String]
+}

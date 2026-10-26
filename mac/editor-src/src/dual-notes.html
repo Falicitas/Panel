@@ -34,6 +34,14 @@
   <div id="notice" class="notice" role="status" hidden></div>
   <div id="errors" class="errors" aria-live="polite"></div>
   <main id="days" aria-label="按日期排列的双栏记录"></main>
+  <dialog id="workspace-migrate-dialog" aria-labelledby="workspace-migrate-title">
+    <h2 id="workspace-migrate-title">迁移至最新月</h2>
+    <p id="workspace-migrate-destination"></p>
+    <div class="workspace-migrate-selection"><button id="workspace-migrate-all">全选</button><button id="workspace-migrate-none">清空选择</button></div>
+    <ul id="workspace-migrate-list" aria-label="选择要迁移的表"></ul>
+    <p id="workspace-migrate-error" role="alert" hidden></p>
+    <div class="dialog-actions"><button id="workspace-migrate-cancel">取消</button><button id="workspace-migrate-apply" disabled>迁移所选表</button></div>
+  </dialog>
   <dialog id="workspace-order-dialog" aria-labelledby="workspace-order-title">
     <h2 id="workspace-order-title">调整表顺序</h2>
     <ul id="workspace-order-list" aria-label="表的顺序"></ul>

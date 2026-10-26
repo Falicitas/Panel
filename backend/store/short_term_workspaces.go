@@ -52,9 +52,17 @@ func (s *Store) GetMonthWorkspace(ctx context.Context, month string) (MonthWorks
 	if _, err := ParseWorkspaceMonth(month); err != nil {
 		return MonthWorkspace{}, err
 	}
+	return getMonthWorkspace(ctx, s.db, month)
+}
+
+type workspaceQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func getMonthWorkspace(ctx context.Context, queryer workspaceQueryer, month string) (MonthWorkspace, error) {
 	workspace := MonthWorkspace{Month: month, Tables: []WorkspaceTable{}}
 	var raw string
-	err := s.db.QueryRowContext(ctx,
+	err := queryer.QueryRowContext(ctx,
 		`SELECT revision, tables_json FROM short_term_workspace_months WHERE month = ?`, month).Scan(&workspace.Revision, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return workspace, nil
@@ -77,37 +85,9 @@ func (s *Store) SaveMonthWorkspace(ctx context.Context, month string, revision i
 	if revision < 0 || revision == math.MaxInt64 {
 		return MonthWorkspace{}, fmt.Errorf("%w：revision 无效", ErrWorkspaceInvalid)
 	}
-	if tables == nil || len(tables) > MaxWorkspaceTables {
-		return MonthWorkspace{}, fmt.Errorf("%w：tables 必须为数组且不超过 %d 张表", ErrWorkspaceInvalid, MaxWorkspaceTables)
-	}
-	tableIDs := make(map[string]bool, len(tables))
-	rowCount := 0
-	for _, table := range tables {
-		if strings.TrimSpace(table.ID) == "" || len(table.ID) > 128 || tableIDs[table.ID] {
-			return MonthWorkspace{}, fmt.Errorf("%w：表 ID 不能为空、重复或超过 128 字节", ErrWorkspaceInvalid)
-		}
-		tableIDs[table.ID] = true
-		if table.Rows == nil {
-			return MonthWorkspace{}, fmt.Errorf("%w：每张表的 rows 必须为数组", ErrWorkspaceInvalid)
-		}
-		rowCount += len(table.Rows)
-		if rowCount > MaxWorkspaceRows {
-			return MonthWorkspace{}, fmt.Errorf("%w：每月总行数不能超过 %d", ErrWorkspaceInvalid, MaxWorkspaceRows)
-		}
-		rowIDs := make(map[string]bool, len(table.Rows))
-		for _, row := range table.Rows {
-			if strings.TrimSpace(row.ID) == "" || len(row.ID) > 128 || rowIDs[row.ID] {
-				return MonthWorkspace{}, fmt.Errorf("%w：同表内的行 ID 不能为空、重复或超过 128 字节", ErrWorkspaceInvalid)
-			}
-			rowIDs[row.ID] = true
-		}
-	}
-	raw, err := json.Marshal(tables)
+	raw, err := marshalWorkspaceTables(tables)
 	if err != nil {
 		return MonthWorkspace{}, err
-	}
-	if len(raw) > MaxWorkspaceBytes {
-		return MonthWorkspace{}, fmt.Errorf("%w：每月内容超过 4 MiB", ErrWorkspaceInvalid)
 	}
 	conn, err := s.db.Conn(ctx)
 	if err != nil {
@@ -117,21 +97,66 @@ func (s *Store) SaveMonthWorkspace(ctx context.Context, month string, revision i
 	if _, err := conn.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
 		return MonthWorkspace{}, err
 	}
+	nextRevision, err := saveWorkspaceSnapshot(ctx, conn, month, revision, raw)
+	if err != nil {
+		return MonthWorkspace{}, err
+	}
+	return MonthWorkspace{Month: month, Revision: nextRevision, Tables: tables}, nil
+}
+
+func marshalWorkspaceTables(tables []WorkspaceTable) ([]byte, error) {
+	if tables == nil || len(tables) > MaxWorkspaceTables {
+		return nil, fmt.Errorf("%w：tables 必须为数组且不超过 %d 张表", ErrWorkspaceInvalid, MaxWorkspaceTables)
+	}
+	tableIDs := make(map[string]bool, len(tables))
+	rowCount := 0
+	for _, table := range tables {
+		if strings.TrimSpace(table.ID) == "" || len(table.ID) > 128 || tableIDs[table.ID] {
+			return nil, fmt.Errorf("%w：表 ID 不能为空、重复或超过 128 字节", ErrWorkspaceInvalid)
+		}
+		tableIDs[table.ID] = true
+		if table.Rows == nil {
+			return nil, fmt.Errorf("%w：每张表的 rows 必须为数组", ErrWorkspaceInvalid)
+		}
+		rowCount += len(table.Rows)
+		if rowCount > MaxWorkspaceRows {
+			return nil, fmt.Errorf("%w：每月总行数不能超过 %d", ErrWorkspaceInvalid, MaxWorkspaceRows)
+		}
+		rowIDs := make(map[string]bool, len(table.Rows))
+		for _, row := range table.Rows {
+			if strings.TrimSpace(row.ID) == "" || len(row.ID) > 128 || rowIDs[row.ID] {
+				return nil, fmt.Errorf("%w：同表内的行 ID 不能为空、重复或超过 128 字节", ErrWorkspaceInvalid)
+			}
+			rowIDs[row.ID] = true
+		}
+	}
+	raw, err := json.Marshal(tables)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > MaxWorkspaceBytes {
+		return nil, fmt.Errorf("%w：每月内容超过 4 MiB", ErrWorkspaceInvalid)
+	}
+	return raw, nil
+}
+
+func saveWorkspaceSnapshot(ctx context.Context, queryer workspaceQueryer, month string, revision int64, raw []byte) (int64, error) {
 	var nextRevision int64
+	var err error
 	if revision == 0 {
-		err = conn.QueryRowContext(ctx,
+		err = queryer.QueryRowContext(ctx,
 			`INSERT INTO short_term_workspace_months (month, revision, tables_json) VALUES (?, 1, ?)
 			 ON CONFLICT(month) DO NOTHING RETURNING revision`, month, string(raw)).Scan(&nextRevision)
 	} else {
-		err = conn.QueryRowContext(ctx,
+		err = queryer.QueryRowContext(ctx,
 			`UPDATE short_term_workspace_months SET revision = revision + 1, tables_json = ?
 			 WHERE month = ? AND revision = ? RETURNING revision`, string(raw), month, revision).Scan(&nextRevision)
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		return MonthWorkspace{}, ErrWorkspaceConflict
+		return 0, ErrWorkspaceConflict
 	}
 	if err != nil {
-		return MonthWorkspace{}, fmt.Errorf("save short-term workspace: %w", err)
+		return 0, fmt.Errorf("save short-term workspace: %w", err)
 	}
-	return MonthWorkspace{Month: month, Revision: nextRevision, Tables: tables}, nil
+	return nextRevision, nil
 }

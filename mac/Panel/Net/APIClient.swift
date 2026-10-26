@@ -589,6 +589,34 @@ actor DualNotesClient {
         return saved
     }
 
+    func copyShortTermWorkspaceTables(_ copy: ShortTermWorkspaceCopyRequest) async throws -> ShortTermWorkspaceCopyResult {
+        let url = try workspaceURL(month: copy.sourceMonth).appendingPathComponent("copy")
+        _ = try workspaceURL(month: copy.targetMonth)
+        guard copy.sourceMonth != copy.targetMonth else {
+            throw APIError(message: "来源月份和目标月份不能相同。")
+        }
+        struct Payload: Encodable {
+            let operationId: String
+            let targetMonth: String
+            let sourceRevision: Int
+            let targetRevision: Int
+            let tableIds: [String]
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Payload(
+            operationId: copy.operationId, targetMonth: copy.targetMonth,
+            sourceRevision: copy.sourceRevision, targetRevision: copy.targetRevision,
+            tableIds: copy.tableIds
+        ))
+        let result: ShortTermWorkspaceCopyResult = try await send(request)
+        guard result.operationId == copy.operationId, result.target.month == copy.targetMonth else {
+            throw APIError(message: "短期工作区返回的复制结果不匹配。")
+        }
+        return result
+    }
+
     private func workspaceURL(month: String) throws -> URL {
         guard month.utf8.count == 7,
               month.range(of: "^[0-9]{4}-(0[1-9]|1[0-2])$", options: .regularExpression) != nil,

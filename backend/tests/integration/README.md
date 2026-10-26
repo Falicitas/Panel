@@ -19,6 +19,7 @@ go test ./tests/integration/ -run TestSupplement_SnoozeBodySync -v
 
 | 文件 | 覆盖 |
 |---|---|
+| `short_term_workspace_copy_test.go` | issue-72：迁入已提交但响应丢失，独立服务重启后重试仅追加一次，源月保持原样 |
 | `short_term_workspaces_test.go` | issue-72：主后端关闭后的月度工作区保存、冲突保护、每日双栏隔离与重启持久化 |
 | `dual_notes_test.go` | issue-66：主后端关闭后，独立双栏服务继续读取历史笔记、保存并保留 revision 冲突保护 |
 | `helpers.go` | 测试基础设施: `newTestEnv` / `do/post/put/get` / `notifByRef` / `assertNotifBody` / `hmFromNow` 等 |
