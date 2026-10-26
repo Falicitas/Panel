@@ -148,6 +148,18 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
                 }
                 let saved = try await DualNotesClient.shared.putDualNotes(day)
                 reply(request.requestId, data: saved)
+            case "loadWorkspace":
+                guard let month = request.month else {
+                    throw APIError(message: "缺少要读取的工作区月份。")
+                }
+                let workspace = try await DualNotesClient.shared.getShortTermWorkspace(month: month)
+                reply(request.requestId, data: workspace)
+            case "saveWorkspace":
+                guard let workspace = request.workspace else {
+                    throw APIError(message: "缺少要保存的短期工作区内容。")
+                }
+                let saved = try await DualNotesClient.shared.putShortTermWorkspace(workspace)
+                reply(request.requestId, data: saved)
             case "copy":
                 guard let text = request.text, !text.isEmpty else {
                     throw APIError(message: "没有可复制的内容。")
@@ -248,6 +260,8 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
         let end: String?
         let days: Int?
         let day: DualNotesDay?
+        let month: String?
+        let workspace: ShortTermWorkspace?
         let text: String?
     }
 

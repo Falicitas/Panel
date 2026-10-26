@@ -19,6 +19,7 @@ go test ./tests/integration/ -run TestSupplement_SnoozeBodySync -v
 
 | 文件 | 覆盖 |
 |---|---|
+| `short_term_workspaces_test.go` | issue-72：主后端关闭后的月度工作区保存、冲突保护、每日双栏隔离与重启持久化 |
 | `dual_notes_test.go` | issue-66：主后端关闭后，独立双栏服务继续读取历史笔记、保存并保留 revision 冲突保护 |
 | `helpers.go` | 测试基础设施: `newTestEnv` / `do/post/put/get` / `notifByRef` / `assertNotifBody` / `hmFromNow` 等 |
 | `notifications_supplement_test.go` | supplement panel 通知 lifecycle |

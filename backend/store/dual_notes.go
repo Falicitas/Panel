@@ -30,6 +30,11 @@ func (s *Store) migrateDualNotes() error {
 		date      TEXT PRIMARY KEY,
 		revision  INTEGER NOT NULL CHECK (revision > 0),
 		rows_json TEXT NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS short_term_workspace_months (
+		month       TEXT PRIMARY KEY,
+		revision    INTEGER NOT NULL CHECK (revision > 0),
+		tables_json TEXT NOT NULL
 	)`)
 	return err
 }

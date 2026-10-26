@@ -9,7 +9,7 @@
 <body>
   <header class="topbar">
     <div class="heading"><h1>双栏</h1></div>
-    <nav class="mode-switch" aria-label="显示范围"><button id="focus-mode" aria-pressed="true">专注</button><button id="overview-mode" aria-pressed="false">总览</button></nav>
+    <nav class="mode-switch" aria-label="显示范围"><button id="focus-mode" aria-pressed="true">专注</button><button id="overview-mode" aria-pressed="false">总览</button><button id="workspace-mode" aria-pressed="false">短期工作区</button></nav>
     <button id="find-toggle" title="查找当前范围（⌘F）">查找 <kbd>⌘F</kbd></button>
   </header>
   <section id="findbar" class="findbar" hidden aria-label="查找">
@@ -19,6 +19,12 @@
     <div id="find-location"></div>
   </section>
   <div id="rangebar" class="rangebar"><button id="older-page">← 前 10 天</button><span id="range-label"></span><button id="newer-page">后 10 天 →</button><button id="today-page">回到今天</button></div>
+  <div id="workspace-range" class="rangebar workspace-range" hidden>
+    <button id="workspace-prev">← 上个月</button>
+    <input id="workspace-month" type="month" min="0001-01" max="9999-12" aria-label="工作区月份">
+    <button id="workspace-next">下个月 →</button>
+    <button id="workspace-current">回到本月</button>
+  </div>
   <div id="column-ratio-controls" class="column-ratio-controls" role="group" aria-label="专注模式栏宽比例">
     <label class="ratio-left" for="focus-left-ratio">左栏 <input id="focus-left-ratio" type="number" min="20" max="80" step="1" value="50" inputmode="numeric" aria-label="左栏宽度百分比">％</label>
     <input id="focus-ratio-slider" type="range" min="20" max="80" step="1" value="50" aria-label="调节左栏宽度">

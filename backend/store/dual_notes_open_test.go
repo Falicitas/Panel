@@ -29,7 +29,7 @@ func TestOpenDualNotesOnlyCreatesNotesSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows.Close()
-	if !reflect.DeepEqual(tables, []string{"dual_notes_days"}) {
+	if !reflect.DeepEqual(tables, []string{"dual_notes_days", "short_term_workspace_months"}) {
 		t.Fatalf("unrelated schema was initialized: %v", tables)
 	}
 	if _, err := st.SaveDualNoteDay(context.Background(), "2026-10-21", 0, []DualNoteRow{}); err != nil {

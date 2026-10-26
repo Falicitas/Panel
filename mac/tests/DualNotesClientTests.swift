@@ -82,7 +82,127 @@ struct DualNotesClientTests {
             expect((error as NSError).code == URLError.cannotConnectToHost.rawValue,
                    "Propagate connection failures for the editor's retry and draft recovery")
         }
-        print("Dual-notes service isolation, persistence payload, and conflict checks passed")
+        try await testWorkspaces(using: dualNotes)
+        print("Dual-notes and monthly workspace client checks passed")
+    }
+
+    private static func testWorkspaces(using client: DualNotesClient) async throws {
+        let workspace = ShortTermWorkspace(
+            month: "2026-10", revision: 4,
+            tables: [
+                ShortTermWorkspaceTable(id: "table-a", header: "十月事项", rows: [
+                    ShortTermWorkspaceRow(id: "row-a", content: "# 中文\n**内容**"),
+                    ShortTermWorkspaceRow(id: "row-b", content: "")
+                ]),
+                ShortTermWorkspaceTable(id: "table-b", header: "随手记录", rows: [
+                    ShortTermWorkspaceRow(id: "row-c", content: "```swift\nlet value = 1\n```")
+                ])
+            ]
+        )
+        BackendStub.respond { request in
+            expect(request.httpMethod == "GET", "Workspace load uses GET")
+            expect(request.url?.host == "127.0.0.1" && request.url?.port == 8090,
+                   "Workspaces use the independent local service")
+            expect(request.url?.path == "/api/short-term-workspaces/2026-10",
+                   "Workspace load selects the month endpoint")
+            expect(request.url?.query == nil, "Workspace month belongs in the path")
+            return (200, Data(##"{"month":"2026-10","revision":4,"tables":[{"id":"table-a","header":"十月事项","rows":[{"id":"row-a","content":"# 中文\n**内容**"},{"id":"row-b","content":""}]},{"id":"table-b","header":"随手记录","rows":[{"id":"row-c","content":"```swift\nlet value = 1\n```"}]}]}"##.utf8))
+        }
+        let loaded = try await client.getShortTermWorkspace(month: workspace.month)
+        expect(loaded.month == workspace.month && loaded.revision == 4, "Decode the requested month and revision")
+        expect(loaded.tables.map(\.id) == ["table-a", "table-b"], "Preserve multiple tables and their order")
+        expect(loaded.tables[0].header == "十月事项", "Decode editable column headers")
+        expect(loaded.tables[0].rows[0].content == "# 中文\n**内容**", "Decode Unicode Markdown without changes")
+        expect(loaded.tables[0].rows[1].content.isEmpty, "Preserve intentionally empty rows")
+
+        BackendStub.respond { request in
+            expect(request.httpMethod == "PUT", "Workspace save uses PUT")
+            expect(request.url?.host == "127.0.0.1" && request.url?.port == 8090,
+                   "Workspace save stays on the independent service")
+            expect(request.url?.path == "/api/short-term-workspaces/2026-10", "Workspace save selects the month")
+            expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json", "Workspace save sends JSON")
+            let payload = try JSONSerialization.jsonObject(with: body(of: request)) as! [String: Any]
+            expect(Set(payload.keys) == ["revision", "tables"], "Workspace PUT only sends revision and tables")
+            expect(payload["revision"] as? Int == 4, "Send the loaded month revision")
+            let tables = payload["tables"] as! [[String: Any]]
+            expect(tables.count == 2 && tables.map { $0["id"] as! String } == ["table-a", "table-b"],
+                   "Preserve table identities and order when saving")
+            expect(tables[0]["header"] as? String == "十月事项" && tables[1]["header"] as? String == "随手记录",
+                   "Persist each editable column title")
+            let rows = tables[0]["rows"] as! [[String: String]]
+            expect(rows == [["id": "row-a", "content": "# 中文\n**内容**"], ["id": "row-b", "content": ""]],
+                   "Persist ordered rows, Markdown, and empty cells")
+            let saved = ShortTermWorkspace(month: workspace.month, revision: 5, tables: workspace.tables)
+            return (200, try JSONEncoder().encode(saved))
+        }
+        let saved = try await client.putShortTermWorkspace(loaded)
+        expect(saved.revision == 5 && saved.tables.count == 2, "Return the new revision and all tables")
+
+        // Empty months are valid, including the supported year boundaries.
+        for month in ["0001-01", "2024-02", "9999-12"] {
+            BackendStub.respond { request in
+                expect(request.url?.path == "/api/short-term-workspaces/\(month)", "Keep a valid month verbatim")
+                return (200, try JSONEncoder().encode(ShortTermWorkspace(month: month, revision: 0, tables: [])))
+            }
+            let empty = try await client.getShortTermWorkspace(month: month)
+            expect(empty.tables.isEmpty && empty.revision == 0, "Empty months do not fabricate a table")
+        }
+
+        BackendStub.respond { _ in
+            preconditionFailure("Invalid months must be rejected before any HTTP request")
+        }
+        for month in ["", "2026-1", "026-01", "0000-01", "10000-01", "2026-00", "2026-13",
+                      "2026-01-01", " 2026-01", "2026-01\n", "２０２６-０１", "2026/01", "../2026", "2026-01?x=1"] {
+            do {
+                _ = try await client.getShortTermWorkspace(month: month)
+                preconditionFailure("Invalid GET month accepted: \(month)")
+            } catch let error as APIError {
+                expect(error.localizedDescription.contains("YYYY-MM"), "Invalid GET month has a useful error")
+            }
+            do {
+                _ = try await client.putShortTermWorkspace(ShortTermWorkspace(month: month, revision: 0, tables: []))
+                preconditionFailure("Invalid PUT month accepted: \(month)")
+            } catch let error as APIError {
+                expect(error.localizedDescription.contains("YYYY-MM"), "Invalid PUT month has a useful error")
+            }
+        }
+
+        BackendStub.respond { _ in (409, Data("本月工作区已更新。".utf8)) }
+        do {
+            _ = try await client.putShortTermWorkspace(workspace)
+            preconditionFailure("A stale workspace revision must fail")
+        } catch let error as APIError {
+            expect(error.status == 409, "Workspace conflicts retain their status for the JavaScript bridge")
+            expect(error.localizedDescription.contains("本月工作区已更新"), "Keep workspace conflict details")
+        }
+
+        BackendStub.respond { _ in
+            (200, try JSONEncoder().encode(ShortTermWorkspace(month: "2026-11", revision: 1, tables: [])))
+        }
+        do {
+            _ = try await client.getShortTermWorkspace(month: workspace.month)
+            preconditionFailure("A response for a different month must not replace the requested month")
+        } catch let error as APIError {
+            expect(error.localizedDescription.contains("月份不匹配"), "Reject mismatched loaded months")
+        }
+        do {
+            _ = try await client.putShortTermWorkspace(workspace)
+            preconditionFailure("A response for a different month must not acknowledge a save")
+        } catch let error as APIError {
+            expect(error.localizedDescription.contains("月份不匹配"), "Reject mismatched saved months")
+        }
+
+        BackendStub.respond { request in
+            expect(request.url?.port == 8090, "Workspaces never fall back to panel-backend")
+            throw URLError(.cannotConnectToHost)
+        }
+        do {
+            _ = try await client.getShortTermWorkspace(month: workspace.month)
+            preconditionFailure("An unavailable workspace service must surface a failure")
+        } catch {
+            expect((error as NSError).code == URLError.cannotConnectToHost.rawValue,
+                   "Keep workspace connection failures available to draft recovery")
+        }
     }
 
     private static func body(of request: URLRequest) throws -> Data {
