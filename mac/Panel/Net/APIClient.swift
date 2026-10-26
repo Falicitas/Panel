@@ -564,6 +564,69 @@ actor DualNotesClient {
         return try await send(request)
     }
 
+    func getShortTermWorkspace(month: String) async throws -> ShortTermWorkspace {
+        let request = URLRequest(url: try workspaceURL(month: month))
+        let workspace: ShortTermWorkspace = try await send(request)
+        guard workspace.month == month else {
+            throw APIError(message: "短期工作区返回的月份不匹配。")
+        }
+        return workspace
+    }
+
+    func putShortTermWorkspace(_ workspace: ShortTermWorkspace) async throws -> ShortTermWorkspace {
+        struct Payload: Encodable {
+            let revision: Int
+            let tables: [ShortTermWorkspaceTable]
+        }
+        var request = URLRequest(url: try workspaceURL(month: workspace.month))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Payload(revision: workspace.revision, tables: workspace.tables))
+        let saved: ShortTermWorkspace = try await send(request)
+        guard saved.month == workspace.month else {
+            throw APIError(message: "短期工作区返回的月份不匹配。")
+        }
+        return saved
+    }
+
+    func copyShortTermWorkspaceTables(_ copy: ShortTermWorkspaceCopyRequest) async throws -> ShortTermWorkspaceCopyResult {
+        let url = try workspaceURL(month: copy.sourceMonth).appendingPathComponent("copy")
+        _ = try workspaceURL(month: copy.targetMonth)
+        guard copy.sourceMonth != copy.targetMonth else {
+            throw APIError(message: "来源月份和目标月份不能相同。")
+        }
+        struct Payload: Encodable {
+            let operationId: String
+            let targetMonth: String
+            let sourceRevision: Int
+            let targetRevision: Int
+            let tableIds: [String]
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Payload(
+            operationId: copy.operationId, targetMonth: copy.targetMonth,
+            sourceRevision: copy.sourceRevision, targetRevision: copy.targetRevision,
+            tableIds: copy.tableIds
+        ))
+        let result: ShortTermWorkspaceCopyResult = try await send(request)
+        guard result.operationId == copy.operationId, result.target.month == copy.targetMonth else {
+            throw APIError(message: "短期工作区返回的复制结果不匹配。")
+        }
+        return result
+    }
+
+    private func workspaceURL(month: String) throws -> URL {
+        guard month.utf8.count == 7,
+              month.range(of: "^[0-9]{4}-(0[1-9]|1[0-2])$", options: .regularExpression) != nil,
+              !month.hasPrefix("0000") else {
+            throw APIError(message: "月份必须为有效的 YYYY-MM。")
+        }
+        return Self.baseURL.appendingPathComponent("api/short-term-workspaces")
+            .appendingPathComponent(month)
+    }
+
     private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {

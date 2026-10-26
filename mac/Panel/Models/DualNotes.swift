@@ -15,3 +15,35 @@ struct DualNotesDay: Codable, Sendable {
 struct DualNotesPage: Codable, Sendable {
     let days: [DualNotesDay]
 }
+
+struct ShortTermWorkspaceRow: Codable, Sendable {
+    let id: String
+    let content: String
+}
+
+struct ShortTermWorkspaceTable: Codable, Sendable {
+    let id: String
+    let header: String
+    let rows: [ShortTermWorkspaceRow]
+}
+
+struct ShortTermWorkspace: Codable, Sendable {
+    let month: String
+    let revision: Int
+    let tables: [ShortTermWorkspaceTable]
+}
+
+struct ShortTermWorkspaceCopyRequest: Codable, Sendable {
+    let operationId: String
+    let sourceMonth: String
+    let targetMonth: String
+    let sourceRevision: Int
+    let targetRevision: Int
+    let tableIds: [String]
+}
+
+struct ShortTermWorkspaceCopyResult: Codable, Sendable {
+    let operationId: String
+    let target: ShortTermWorkspace
+    let copiedTableIds: [String]
+}

@@ -8,7 +8,8 @@
     "watch": "node build.mjs --watch",
     "test:dual-notes": "node src/dual-notes-test.mjs",
     "test:math": "bash test-math.sh",
-    "test:layout": "bash test-layout.sh"
+    "test:layout": "bash test-layout.sh",
+    "test:workspace": "bash test-workspace.sh"
   },
   "dependencies": {
     "@codemirror/language-data": "^6.5.2",
