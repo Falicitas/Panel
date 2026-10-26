@@ -35,6 +35,7 @@ private struct DualNotesPane: View {
                 .frame(width: 0, height: 0)
                 .hidden()
         }
+        .onAppear { controller.reveal() }
         .onDisappear { controller.flush() }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.willResignActiveNotification
@@ -105,6 +106,10 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
             return
         }
         retainedWebView?.evaluateJavaScript("window.panelDualNotes?.openFind()")
+    }
+
+    func reveal() {
+        retainedWebView?.evaluateJavaScript("window.panelDualNotes?.reveal()")
     }
 
     func flush() {

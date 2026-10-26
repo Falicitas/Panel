@@ -89,6 +89,10 @@ main { padding: 8px 32px 60px; max-width: 1600px; margin: auto; }
 .workspace-column-header:hover { border-color: var(--line); }
 #workspace-month { max-width: 180px; }
 #add-workspace-table { color: var(--accent); background: transparent; }
+.workspace-table-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.add-rows .delete-tail-row, #delete-workspace-table { margin-left: auto; color: var(--muted); }
+#tail-delete-dialog { width: min(420px, 90vw); }
+#tail-delete-confirm { color: var(--warn); }
 .note-cell:focus-within { background: color-mix(in srgb, var(--tint) 25%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
 /* Let each row measure the editor content again when the window width changes. */
 .note-cell .milkdown { background: transparent !important; height: auto; --crepe-font-default: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; --crepe-font-title: var(--crepe-font-default); }

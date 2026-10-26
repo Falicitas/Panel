@@ -20,7 +20,7 @@ type BridgeResponse = { requestId: string; ok: boolean; data?: unknown; error?: 
 const native = window as unknown as { webkit?: { messageHandlers?: { dualNotes?: { postMessage(payload: unknown): void } } } }
 declare global {
   interface Window {
-    panelDualNotes: { receive(message: BridgeResponse): void; openFind(): void; flush(): Promise<void> }
+    panelDualNotes: { receive(message: BridgeResponse): void; openFind(): void; reveal(): void; flush(): Promise<void> }
   }
 }
 
@@ -68,6 +68,7 @@ function button(text: string, action: () => void): HTMLButtonElement {
   result.addEventListener('click', action)
   return result
 }
+function lastItem<T>(values: readonly T[] | undefined): T | undefined { return values && values[values.length - 1] }
 function newRow() { return { id: crypto.randomUUID(), left: '', right: '' } }
 const draftPrefix = 'panel.dual-notes.draft.'
 const recoveryPrefix = 'panel.dual-notes.recovery.'
@@ -92,6 +93,10 @@ let draggedWorkspaceTable: string | null = null
 type MigrationChoice = { id: string; header: string }
 let workspaceMigration: { sourceMonth: string; targetMonth: string; choices: MigrationChoice[]; selected: Set<string> } | null = null
 let migrationBusy = false
+type TailDeletion = { kind: 'day-row'; date: string; rowId: string }
+  | { kind: 'workspace-row'; month: string; tableId: string; rowId: string }
+  | { kind: 'workspace-table'; month: string; tableId: string }
+let tailDeletion: TailDeletion | null = null
 const pendingCopyKey = 'panel.short-term-workspace.pending-copy'
 let rememberedCopyHeaders: MigrationChoice[] = []
 let copyRecoveryError: string | null = null
@@ -526,6 +531,7 @@ function renderDay(day: NoteDay): HTMLElement {
     const start = day.rows.length
     store.edit(day.date, value => { for (let i = 0; i < amount; i++) value.rows.push(newRow()) })
     day.rows.slice(start).forEach((row, index) => rows.append(makeRow(day, row, start + index)))
+    updateTailControls()
     scheduleSave(day.date)
     if (query) rebuildFind(false)
     const first = cells.get(cellKey(day.date, day.rows[start].id, 'left'))
@@ -533,6 +539,13 @@ function renderDay(day: NoteDay): HTMLElement {
   }
   count.addEventListener('input', () => count.setCustomValidity(''))
   controls.append(button('＋ 添加一行', () => append(1)), node('span', 'add-divider'), count, button('添加多行', () => append(Number(count.value))))
+  const remove = button('删除尾行', () => {
+    const row = lastItem(store.states.get(day.date)?.day.rows)
+    if (row) requestTailDeletion({ kind: 'day-row', date: day.date, rowId: row.id })
+  })
+  remove.classList.add('delete-tail-row')
+  remove.disabled = !day.rows.length
+  controls.append(remove)
   section.append(controls)
   return section
 }
@@ -600,12 +613,20 @@ function renderWorkspaceTable(workspace: MonthWorkspace, table: WorkspaceTable):
       for (let i = 0; i < amount; i++) table.rows.push({ id: crypto.randomUUID(), content: '' })
     })
     table.rows.slice(start).forEach((row, index) => rows.append(makeWorkspaceRow(workspace.month, table.id, row, start + index)))
+    updateTailControls()
     scheduleWorkspaceSave(workspace.month)
     if (query) rebuildFind(false)
     const first = cells.get(workspaceCellKey(workspace.month, table.id, table.rows[start].id))
     if (first) { first.root.scrollIntoView({ block: 'nearest' }); void mountCell(first, true) }
   }
   controls.append(button('＋ 添加一行', () => append(1)), node('span', 'add-divider'), count, button('添加多行', () => append(Number(count.value))))
+  const remove = button('删除尾行', () => {
+    const row = lastItem(table.rows)
+    if (row) requestTailDeletion({ kind: 'workspace-row', month: workspace.month, tableId: table.id, rowId: row.id })
+  })
+  remove.classList.add('delete-tail-row')
+  remove.disabled = !table.rows.length
+  controls.append(remove)
   section.append(grid, controls)
   return section
 }
@@ -633,13 +654,117 @@ function renderWorkspace(workspace: MonthWorkspace): void {
     workspaceStore.edit(workspace.month, value => value.tables.push(table))
     const section = renderWorkspaceTable(workspace, table)
     tables.append(section)
+    updateTailControls()
     scheduleWorkspaceSave(workspace.month)
     section.scrollIntoView({ block: 'nearest' })
     section.querySelector<HTMLInputElement>('.workspace-column-header')!.focus()
   })
   add.id = 'add-workspace-table'
-  main.replaceChildren(heading, tables, add)
+  const remove = button('删除尾表', () => {
+    const table = lastItem(workspace.tables)
+    if (table) requestTailDeletion({ kind: 'workspace-table', month: workspace.month, tableId: table.id })
+  })
+  remove.id = 'delete-workspace-table'
+  remove.disabled = !workspace.tables.length
+  const actions = node('div', 'workspace-table-actions')
+  actions.append(add, remove)
+  main.replaceChildren(heading, tables, actions)
 }
+
+function updateTailControls(): void {
+  document.querySelectorAll<HTMLElement>('.day-section').forEach(section => {
+    const control = section.querySelector<HTMLButtonElement>('.delete-tail-row')
+    if (control) control.disabled = !store.states.get(section.dataset.date!)?.day.rows.length
+  })
+  const workspace = workspaceStore.states.get(selectedMonth)?.workspace
+  document.querySelectorAll<HTMLElement>('.workspace-table').forEach(section => {
+    const control = section.querySelector<HTMLButtonElement>('.delete-tail-row')
+    if (control) control.disabled = !workspace?.tables.find(table => table.id === section.dataset.tableId)?.rows.length
+  })
+  const remove = document.getElementById('delete-workspace-table') as HTMLButtonElement | null
+  if (remove) remove.disabled = !workspace?.tables.length
+  const reorder = document.getElementById('reorder-workspace-tables') as HTMLButtonElement | null
+  if (reorder) reorder.disabled = (workspace?.tables.length ?? 0) < 2
+}
+function tailDeletionContent(target: TailDeletion): { hasContent: boolean; message: string } | null {
+  if (target.kind === 'day-row') {
+    if (mode === 'workspace' || !visibleDates.includes(target.date)) return null
+    const row = lastItem(store.states.get(target.date)?.day.rows)
+    if (!row || row.id !== target.rowId) return null
+    return { hasContent: !!(row.left.trim() || row.right.trim()), message: `${target.date} 的最后一行包含内容，确认删除这一行及左右两栏的内容？` }
+  }
+  if (mode !== 'workspace' || selectedMonth !== target.month) return null
+  const workspace = workspaceStore.states.get(target.month)?.workspace
+  const table = workspace?.tables.find(table => table.id === target.tableId)
+  if (!table) return null
+  if (target.kind === 'workspace-table') {
+    if (lastItem(workspace!.tables)?.id !== target.tableId) return null
+    return { hasContent: !!table.header.trim() || table.rows.some(row => !!row.content.trim()), message: `最后一张表「${table.header.trim() || '未命名表'}」包含标题或正文，确认删除整张表？` }
+  }
+  const row = lastItem(table.rows)
+  if (!row || row.id !== target.rowId) return null
+  return { hasContent: !!row.content.trim(), message: `「${table.header.trim() || '未命名表'}」的最后一行包含内容，确认删除？` }
+}
+function closeTailDeletion(): void {
+  element<HTMLDialogElement>('tail-delete-dialog').close()
+  tailDeletion = null
+}
+function requestTailDeletion(target: TailDeletion): void {
+  if (loading || migrationBusy || element('days').inert) return
+  captureAll()
+  const content = tailDeletionContent(target)
+  if (!content) return
+  if (!content.hasContent) { deleteTail(target); return }
+  tailDeletion = target
+  element('tail-delete-message').textContent = content.message
+  element<HTMLDialogElement>('tail-delete-dialog').showModal()
+}
+function retireCells(predicate: (cell: Cell) => boolean): void {
+  for (const cell of [...cells.values()].filter(predicate)) {
+    cell.alive = false
+    observer.unobserve(cell.root)
+    cells.delete(cell.key)
+    documents.delete(cell.key)
+    void (async () => {
+      if (cell.mounting) await cell.mounting
+      if (cell.crepe && cell.root.classList.contains('mounted')) await cell.crepe.destroy()
+    })().catch(() => {})
+  }
+  // Preview schemas retain the editor context; never reuse one after its editor is removed.
+  const survivor = [...cells.values()].find(cell => cell.crepe && cell.root.classList.contains('mounted'))
+  parser = survivor?.crepe?.editor.action(ctx => ctx.get(parserCtx))
+  documents.clear()
+}
+function deleteTail(target: TailDeletion): void {
+  captureAll()
+  if (!tailDeletionContent(target)) return
+  if (target.kind === 'day-row') {
+    const section = [...document.querySelectorAll<HTMLElement>('.day-section')].find(section => section.dataset.date === target.date)!
+    retireCells(cell => !cell.workspace && cell.date === target.date && cell.rowId === target.rowId)
+    store.edit(target.date, day => { day.rows.pop() })
+    section.querySelector('.rows')?.lastElementChild?.remove()
+    scheduleSave(target.date)
+  } else {
+    const section = [...document.querySelectorAll<HTMLElement>('.workspace-table')].find(section => section.dataset.tableId === target.tableId)!
+    retireCells(cell => cell.workspace?.month === target.month && cell.workspace.tableId === target.tableId && (target.kind === 'workspace-table' || cell.rowId === target.rowId))
+    workspaceStore.edit(target.month, workspace => {
+      if (target.kind === 'workspace-table') workspace.tables.pop()
+      else workspace.tables.find(table => table.id === target.tableId)!.rows.pop()
+    })
+    if (target.kind === 'workspace-table') section.remove()
+    else section.querySelector('.rows')?.lastElementChild?.remove()
+    scheduleWorkspaceSave(target.month)
+  }
+  updateTailControls()
+  if (query) rebuildFind(false)
+}
+element('tail-delete-cancel').addEventListener('click', closeTailDeletion)
+element('tail-delete-confirm').addEventListener('click', () => {
+  const target = tailDeletion
+  closeTailDeletion()
+  if (target) deleteTail(target)
+})
+element('tail-delete-dialog').addEventListener('cancel', event => { event.preventDefault(); closeTailDeletion() })
 
 function updateWorkspaceLock(): void {
   element('days').inert = loading || migrationBusy || (mode === 'workspace' && workspaceCopier.pending?.targetMonth === selectedMonth)
@@ -874,6 +999,7 @@ function captureAll(): void {
   for (const cell of cells.values()) if (cell.crepe && cell.root.classList.contains('mounted')) changedCell(cell, cell.crepe.getMarkdown())
 }
 async function flush(): Promise<void> {
+  stopFocusScroll()
   captureAll()
   for (const timer of timers.values()) clearTimeout(timer)
   timers.clear()
@@ -894,6 +1020,7 @@ async function disposeCells(): Promise<void> {
 }
 
 function rangeControls(): void {
+  updateTailControls()
   const monthly = mode === 'workspace'
   element('workspace-mode').setAttribute('aria-pressed', String(monthly))
   element('rangebar').hidden = monthly
@@ -915,8 +1042,42 @@ function rangeControls(): void {
   element<HTMLInputElement>('find-input').placeholder = monthly ? '查找当前月份' : mode === 'focus' ? '查找今天的双栏' : '查找当前 10 天'
 }
 
+let stopFocusScroll = () => {}
+function reveal(): void {
+  stopFocusScroll()
+  if (mode !== 'focus' || loading || loadFailure) return
+  let active = true
+  let lastTop = 0
+  const scrollToEnd = () => {
+    if (!active) return
+    window.scrollTo({ top: document.documentElement.scrollHeight })
+    lastTop = window.scrollY
+  }
+  // Lazy editor mounting and images can change the height after the first scroll.
+  const observer = new ResizeObserver(scrollToEnd)
+  const interactions = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'click']
+  const stop = () => {
+    active = false
+    observer.disconnect()
+    for (const event of interactions) window.removeEventListener(event, stop, true)
+    window.removeEventListener('scroll', onScroll)
+    stopFocusScroll = () => {}
+  }
+  const onScroll = () => {
+    const bottom = document.documentElement.scrollHeight - window.innerHeight
+    if (window.scrollY < Math.min(lastTop, bottom) - 1) stop()
+  }
+  stopFocusScroll = stop
+  for (const event of interactions) window.addEventListener(event, stop, { capture: true, passive: true })
+  window.addEventListener('scroll', onScroll, { passive: true })
+  observer.observe(document.body)
+  scrollToEnd()
+}
+
 async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMonth): Promise<void> {
   if (migrationBusy) return
+  stopFocusScroll()
+  closeTailDeletion()
   closeWorkspaceMigration()
   closeWorkspaceOrder()
   captureAll()
@@ -940,7 +1101,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
       if (generation !== renderGeneration) return
       if (!validWorkspace(remote, month)) throw new Error('本地服务返回了无效的月份数据')
       const state = workspaceStore.register(remote, readWorkspaceDraft(month))
-      if (!state.workspace.tables.length) state.workspace.tables = [newWorkspaceTable()]
+      if (!state.workspace.tables.length && state.workspace.revision === 0 && !state.dirty) state.workspace.tables = [newWorkspaceTable()]
       await disposeCells()
       if (generation !== renderGeneration) return
       renderWorkspace(state.workspace)
@@ -961,7 +1122,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
     const records = dates.map(date => {
       const remote = result.days.find(day => day.date === date) ?? { date, revision: 0, rows: [] }
       const state = store.register(remote, readDraft(date))
-      if (!state.day.rows.length) state.day.rows = [newRow()]
+      if (!state.day.rows.length && state.day.revision === 0 && !state.dirty) state.day.rows = [newRow()]
       return state.day
     })
     await disposeCells()
@@ -975,7 +1136,8 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
     loading = false
     updateWorkspaceLock()
     rangeControls(); updateErrors(); rebuildFind(false)
-    window.scrollTo({ top: 0 })
+    if (mode === 'focus') reveal()
+    else window.scrollTo({ top: 0 })
     for (const date of dates) {
       const state = store.states.get(date)!
       if (state.dirty && !state.conflict) scheduleSave(date)
@@ -1068,7 +1230,8 @@ async function jumpToMatch(index: number): Promise<void> {
   })
 }
 function openFind(): void {
-  if (workspaceOrder || workspaceMigration) return
+  if (workspaceOrder || workspaceMigration || tailDeletion) return
+  stopFocusScroll()
   element('findbar').hidden = false
   const input = element<HTMLInputElement>('find-input')
   input.focus(); input.select()
@@ -1245,6 +1408,10 @@ element<HTMLInputElement>('find-input').addEventListener('keydown', event => {
   if (event.key === 'Enter') { event.preventDefault(); void jumpToMatch(activeMatch + (event.shiftKey ? -1 : 1)) }
 })
 document.addEventListener('keydown', event => {
+  if (tailDeletion) {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeTailDeletion() }
+    return
+  }
   if (workspaceMigration) {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeWorkspaceMigration() }
     return
@@ -1281,5 +1448,5 @@ document.addEventListener('visibilitychange', () => {
   else checkToday()
 })
 window.addEventListener('pagehide', () => { captureAll(); void flushStores().catch(() => {}) })
-window.panelDualNotes = { receive, openFind, flush }
+window.panelDualNotes = { receive, openFind, reveal, flush }
 void navigate('focus', 0)
