@@ -20,7 +20,7 @@ type BridgeResponse = { requestId: string; ok: boolean; data?: unknown; error?: 
 const native = window as unknown as { webkit?: { messageHandlers?: { dualNotes?: { postMessage(payload: unknown): void } } } }
 declare global {
   interface Window {
-    panelDualNotes: { receive(message: BridgeResponse): void; openFind(): void; flush(): Promise<void> }
+    panelDualNotes: { receive(message: BridgeResponse): void; openFind(): void; reveal(): void; flush(): Promise<void> }
   }
 }
 
@@ -999,6 +999,7 @@ function captureAll(): void {
   for (const cell of cells.values()) if (cell.crepe && cell.root.classList.contains('mounted')) changedCell(cell, cell.crepe.getMarkdown())
 }
 async function flush(): Promise<void> {
+  stopFocusScroll()
   captureAll()
   for (const timer of timers.values()) clearTimeout(timer)
   timers.clear()
@@ -1041,8 +1042,41 @@ function rangeControls(): void {
   element<HTMLInputElement>('find-input').placeholder = monthly ? '查找当前月份' : mode === 'focus' ? '查找今天的双栏' : '查找当前 10 天'
 }
 
+let stopFocusScroll = () => {}
+function reveal(): void {
+  stopFocusScroll()
+  if (mode !== 'focus' || loading || loadFailure) return
+  let active = true
+  let lastTop = 0
+  const scrollToEnd = () => {
+    if (!active) return
+    window.scrollTo({ top: document.documentElement.scrollHeight })
+    lastTop = window.scrollY
+  }
+  // Lazy editor mounting and images can change the height after the first scroll.
+  const observer = new ResizeObserver(scrollToEnd)
+  const interactions = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'click']
+  const stop = () => {
+    active = false
+    observer.disconnect()
+    for (const event of interactions) window.removeEventListener(event, stop, true)
+    window.removeEventListener('scroll', onScroll)
+    stopFocusScroll = () => {}
+  }
+  const onScroll = () => {
+    const bottom = document.documentElement.scrollHeight - window.innerHeight
+    if (window.scrollY < Math.min(lastTop, bottom) - 1) stop()
+  }
+  stopFocusScroll = stop
+  for (const event of interactions) window.addEventListener(event, stop, { capture: true, passive: true })
+  window.addEventListener('scroll', onScroll, { passive: true })
+  observer.observe(document.body)
+  scrollToEnd()
+}
+
 async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMonth): Promise<void> {
   if (migrationBusy) return
+  stopFocusScroll()
   closeTailDeletion()
   closeWorkspaceMigration()
   closeWorkspaceOrder()
@@ -1102,7 +1136,8 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
     loading = false
     updateWorkspaceLock()
     rangeControls(); updateErrors(); rebuildFind(false)
-    window.scrollTo({ top: 0 })
+    if (mode === 'focus') reveal()
+    else window.scrollTo({ top: 0 })
     for (const date of dates) {
       const state = store.states.get(date)!
       if (state.dirty && !state.conflict) scheduleSave(date)
@@ -1196,6 +1231,7 @@ async function jumpToMatch(index: number): Promise<void> {
 }
 function openFind(): void {
   if (workspaceOrder || workspaceMigration || tailDeletion) return
+  stopFocusScroll()
   element('findbar').hidden = false
   const input = element<HTMLInputElement>('find-input')
   input.focus(); input.select()
@@ -1412,5 +1448,5 @@ document.addEventListener('visibilitychange', () => {
   else checkToday()
 })
 window.addEventListener('pagehide', () => { captureAll(); void flushStores().catch(() => {}) })
-window.panelDualNotes = { receive, openFind, flush }
+window.panelDualNotes = { receive, openFind, reveal, flush }
 void navigate('focus', 0)
