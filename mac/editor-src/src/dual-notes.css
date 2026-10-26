@@ -57,6 +57,18 @@ main { padding: 8px 32px 60px; max-width: 1600px; margin: auto; }
 .note-cell.right { flex-basis: var(--dual-right-share, 50%); border-left: 1px solid var(--line); }
 .note-cell.single { flex-basis: 100%; }
 .workspace-heading { margin-top: 25px; margin-bottom: 18px; }
+#reorder-workspace-tables { margin-left: auto; font-size: 12px; color: var(--accent); background: transparent; }
+#workspace-order-dialog { width: min(420px, 90vw); }
+#workspace-order-dialog h2 { font-size: 16px; margin-bottom: 16px; }
+#workspace-order-list { list-style: none; padding: 0; margin: 0; max-height: min(340px, 50vh); overflow-y: auto; }
+.workspace-order-item { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: grab; }
+.workspace-order-item + .workspace-order-item { margin-top: 6px; }
+.workspace-order-item.dragging { opacity: .45; }
+.workspace-order-item.drop-before { border-top-color: var(--accent); box-shadow: 0 -2px var(--accent); }
+.workspace-order-item.drop-after { border-bottom-color: var(--accent); box-shadow: 0 2px var(--accent); }
+.workspace-order-grip { color: var(--muted); user-select: none; }
+.workspace-order-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-order-item button { flex: 0 0 auto; padding: 2px 8px; }
 .workspace-table { margin-bottom: 28px; }
 .single-column { display: block; padding: 6px 12px; }
 .workspace-column-header { width: 100%; border-color: transparent; background: transparent; font-weight: 600; color: var(--ink); }

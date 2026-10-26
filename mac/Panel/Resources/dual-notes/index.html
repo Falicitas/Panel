@@ -34,6 +34,11 @@
   <div id="notice" class="notice" role="status" hidden></div>
   <div id="errors" class="errors" aria-live="polite"></div>
   <main id="days" aria-label="按日期排列的双栏记录"></main>
+  <dialog id="workspace-order-dialog" aria-labelledby="workspace-order-title">
+    <h2 id="workspace-order-title">调整表顺序</h2>
+    <ul id="workspace-order-list" aria-label="表的顺序"></ul>
+    <div class="dialog-actions"><button id="workspace-order-cancel">取消</button><button id="workspace-order-apply">完成</button></div>
+  </dialog>
   <dialog id="conflict-dialog">
     <h2>保留草稿并重新加载</h2><p>已保存版本有更新。重新加载前，将把你当前的草稿保留在本机恢复区；不会用草稿覆盖已保存版本。</p>
     <p>重新加载后可打开“保留的草稿”，逐格复制需要的内容。</p>

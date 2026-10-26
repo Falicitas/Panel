@@ -77,7 +77,7 @@ final class WorkspaceRunner: NSObject, WKScriptMessageHandler {
         if message.name == "fixture", let id = request["id"] as? String {
             let result: [String: Any] = ["id": id, "months": months, "workspaceSaves": workspaceSaves, "days": days]
             if let name = request["snapshot"] as? String,
-               ["desktop", "narrow"].contains(name),
+               ["desktop", "narrow", "order-dialog"].contains(name),
                let directory = ProcessInfo.processInfo.environment["PANEL_WORKSPACE_SCREENSHOTS"] {
                 view.takeSnapshot(with: nil) { image, error in
                     guard let image, let tiff = image.tiffRepresentation,

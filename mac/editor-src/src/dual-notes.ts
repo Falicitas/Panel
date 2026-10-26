@@ -86,6 +86,8 @@ let parser: ((markdown: string) => ProseNode) | undefined
 let conflictDate: string | null = null
 let conflictMonth: string | null = null
 let conflictBusy = false
+let workspaceOrder: { month: string; ids: string[] } | null = null
+let draggedWorkspaceTable: string | null = null
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
 const focusRatioKey = 'panel.dual-notes.focus-left-ratio'
@@ -563,7 +565,9 @@ function renderWorkspace(workspace: MonthWorkspace): void {
   const [year, month] = workspace.month.split('-').map(Number)
   const title = node('h2', '', `${year} 年 ${month} 月`)
   if (workspace.month === monthKey()) title.append(node('span', 'today-tag', '本月'))
-  heading.append(title)
+  const reorder = button('调整表顺序', () => openWorkspaceOrder(workspace.month))
+  reorder.id = 'reorder-workspace-tables'
+  heading.append(title, reorder)
   const tables = node('div', 'workspace-tables')
   workspace.tables.forEach(table => tables.append(renderWorkspaceTable(workspace, table)))
   const add = button('＋ 添加表', () => {
@@ -581,6 +585,125 @@ function renderWorkspace(workspace: MonthWorkspace): void {
   add.id = 'add-workspace-table'
   main.replaceChildren(heading, tables, add)
 }
+
+function openWorkspaceOrder(month: string): void {
+  captureAll()
+  const workspace = workspaceStore.states.get(month)?.workspace
+  if (!workspace || loading || mode !== 'workspace') return
+  workspaceOrder = { month, ids: workspace.tables.map(table => table.id) }
+  renderWorkspaceOrder()
+  element<HTMLDialogElement>('workspace-order-dialog').showModal()
+}
+function closeWorkspaceOrder(): void {
+  element<HTMLDialogElement>('workspace-order-dialog').close()
+  workspaceOrder = null
+  draggedWorkspaceTable = null
+}
+function moveWorkspaceTable(id: string, target: number, direction?: 'up' | 'down'): void {
+  if (!workspaceOrder) return
+  const from = workspaceOrder.ids.indexOf(id)
+  if (from < 0 || target < 0 || target >= workspaceOrder.ids.length || from === target) return
+  workspaceOrder.ids.splice(from, 1)
+  workspaceOrder.ids.splice(target, 0, id)
+  renderWorkspaceOrder()
+  const item = [...element('workspace-order-list').children].find(row => (row as HTMLElement).dataset.tableId === id) as HTMLElement | undefined
+  if (direction) {
+    const preferred = item?.querySelector<HTMLButtonElement>(`button[data-direction="${direction}"]`)
+    const fallback = item?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+    ;(preferred?.disabled ? fallback : preferred)?.focus({ preventScroll: true })
+  }
+  item?.scrollIntoView({ block: 'nearest' })
+}
+function clearWorkspaceDropTargets(): void {
+  element('workspace-order-list').querySelectorAll('.drop-before, .drop-after').forEach(item => item.classList.remove('drop-before', 'drop-after'))
+}
+function renderWorkspaceOrder(): void {
+  if (!workspaceOrder) return
+  const tables = workspaceStore.states.get(workspaceOrder.month)?.workspace.tables ?? []
+  const list = element('workspace-order-list')
+  list.replaceChildren(...workspaceOrder.ids.map((id, index) => {
+    const table = tables.find(table => table.id === id)!
+    const label = table.header.trim() || '未命名表'
+    const item = node('li', 'workspace-order-item')
+    item.dataset.tableId = id
+    item.draggable = true
+    const grip = node('span', 'workspace-order-grip', '⠿')
+    grip.setAttribute('aria-hidden', 'true')
+    const title = node('span', 'workspace-order-title', label)
+    title.title = label
+    const up = button('↑', () => moveWorkspaceTable(id, index - 1, 'up'))
+    const down = button('↓', () => moveWorkspaceTable(id, index + 1, 'down'))
+    up.dataset.direction = 'up'; down.dataset.direction = 'down'
+    up.disabled = index === 0; down.disabled = index === workspaceOrder!.ids.length - 1
+    up.title = '上移'; down.title = '下移'
+    up.setAttribute('aria-label', `上移 ${label}`); down.setAttribute('aria-label', `下移 ${label}`)
+    item.append(grip, title, up, down)
+    item.addEventListener('dragstart', event => {
+      draggedWorkspaceTable = id
+      if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', id) }
+      item.classList.add('dragging')
+    })
+    item.addEventListener('dragover', event => {
+      if (!draggedWorkspaceTable || draggedWorkspaceTable === id) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+      clearWorkspaceDropTargets()
+      const bounds = item.getBoundingClientRect()
+      item.classList.add(event.clientY < bounds.top + bounds.height / 2 ? 'drop-before' : 'drop-after')
+    })
+    item.addEventListener('drop', event => {
+      event.preventDefault()
+      if (!workspaceOrder || !draggedWorkspaceTable || draggedWorkspaceTable === id) return
+      const from = workspaceOrder.ids.indexOf(draggedWorkspaceTable)
+      const bounds = item.getBoundingClientRect()
+      const after = event.clientY >= bounds.top + bounds.height / 2
+      const target = index + Number(after) - Number(from < index)
+      moveWorkspaceTable(draggedWorkspaceTable, target)
+      draggedWorkspaceTable = null
+      clearWorkspaceDropTargets()
+    })
+    item.addEventListener('dragend', () => {
+      draggedWorkspaceTable = null
+      item.classList.remove('dragging')
+      clearWorkspaceDropTargets()
+    })
+    return item
+  }))
+}
+function applyWorkspaceOrder(): void {
+  const order = workspaceOrder
+  if (!order || mode !== 'workspace' || selectedMonth !== order.month) { closeWorkspaceOrder(); return }
+  captureAll()
+  const workspace = workspaceStore.states.get(order.month)?.workspace
+  if (!workspace) { closeWorkspaceOrder(); return }
+  const byId = new Map(workspace.tables.map(table => [table.id, table]))
+  const container = document.querySelector<HTMLElement>('.workspace-tables')!
+  const sections = new Map([...container.children].map(section => [(section as HTMLElement).dataset.tableId!, section]))
+  if (order.ids.length !== byId.size || new Set(order.ids).size !== byId.size || order.ids.some(id => !byId.has(id) || !sections.has(id))) {
+    closeWorkspaceOrder()
+    workspaceNotice('表格列表已变化，请重新打开调整顺序。')
+    return
+  }
+  if (order.ids.some((id, index) => workspace.tables[index].id !== id)) {
+    workspaceStore.edit(order.month, value => { value.tables = order.ids.map(id => byId.get(id)!) })
+    // Move the existing sections so long tables retain their mounted editors and input.
+    for (const [index, table] of workspace.tables.entries()) {
+      const section = sections.get(table.id)!
+      container.append(section)
+      section.querySelector('.workspace-column-header')?.setAttribute('aria-label', `${order.month} 第 ${index + 1} 张表的列标题`)
+      section.querySelector('.add-rows input')?.setAttribute('aria-label', `${order.month} 第 ${index + 1} 张表要添加的行数`)
+    }
+    const orderedCells = workspace.tables.flatMap(table => table.rows.map(row => cells.get(workspaceCellKey(order.month, table.id, row.id))!))
+    cells.clear()
+    for (const cell of orderedCells) cells.set(cell.key, cell)
+    scheduleWorkspaceSave(order.month)
+    if (query) rebuildFind(false)
+  }
+  closeWorkspaceOrder()
+}
+element('workspace-order-apply').addEventListener('click', applyWorkspaceOrder)
+element('workspace-order-cancel').addEventListener('click', closeWorkspaceOrder)
+element('workspace-order-dialog').addEventListener('cancel', event => { event.preventDefault(); closeWorkspaceOrder() })
 
 function captureAll(): void {
   for (const cell of cells.values()) if (cell.crepe && cell.root.classList.contains('mounted')) changedCell(cell, cell.crepe.getMarkdown())
@@ -628,6 +751,7 @@ function rangeControls(): void {
 }
 
 async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMonth): Promise<void> {
+  closeWorkspaceOrder()
   captureAll()
   void flushStores().catch(() => {})
   const generation = ++renderGeneration
@@ -777,6 +901,7 @@ async function jumpToMatch(index: number): Promise<void> {
   })
 }
 function openFind(): void {
+  if (workspaceOrder) return
   element('findbar').hidden = false
   const input = element<HTMLInputElement>('find-input')
   input.focus(); input.select()
@@ -953,6 +1078,10 @@ element<HTMLInputElement>('find-input').addEventListener('keydown', event => {
   if (event.key === 'Enter') { event.preventDefault(); void jumpToMatch(activeMatch + (event.shiftKey ? -1 : 1)) }
 })
 document.addEventListener('keydown', event => {
+  if (workspaceOrder) {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeWorkspaceOrder() }
+    return
+  }
   if (event.metaKey && !event.altKey && event.key.toLowerCase() === 'f') { event.preventDefault(); event.stopPropagation(); openFind() }
   if (event.key === 'Escape' && !element('findbar').hidden) { event.preventDefault(); closeFind() }
 }, true)

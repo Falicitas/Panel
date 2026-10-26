@@ -74,6 +74,36 @@
     await window.panelDualNotes.flush()
     return fixture()
   }
+  const tableIDs = () => tables().map(table => table.dataset.tableId)
+  const orderItems = () => $$('#workspace-order-list > li[data-table-id]')
+  const pendingOrder = () => orderItems().map(item => item.dataset.tableId)
+  const sameOrder = (actual, expected) => JSON.stringify(actual) === JSON.stringify(expected)
+  async function openOrder() {
+    $('#reorder-workspace-tables').click()
+    await waitFor(() => $('#workspace-order-dialog').open && orderItems().length === tables().length, 'table order dialog')
+  }
+  function moveOrder(id, direction) {
+    const item = orderItems().find(item => item.dataset.tableId === id)
+    const control = item?.querySelector(`button[data-direction="${direction}"]`)
+    assert(control && !control.disabled, `missing enabled ${direction} control`)
+    control.click()
+  }
+  async function closeOrder(control) {
+    $(control).click()
+    await waitFor(() => !$('#workspace-order-dialog').open, 'table order dialog close')
+  }
+  function dragBefore(sourceID, targetID) {
+    const source = orderItems().find(item => item.dataset.tableId === sourceID)
+    const target = orderItems().find(item => item.dataset.tableId === targetID)
+    assert(source?.draggable && target?.draggable, 'order rows are not draggable')
+    const dataTransfer = new DataTransfer()
+    source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer }))
+    const bounds = target.getBoundingClientRect()
+    const options = { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + 10, clientY: bounds.top + 1 }
+    target.dispatchEvent(new DragEvent('dragover', options))
+    target.dispatchEvent(new DragEvent('drop', options))
+    source.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer }))
+  }
   function checkLayout(label) {
     const table = tables()[0]
     for (const row of rowElements(table)) {
@@ -128,6 +158,91 @@
     assert(original.tables[0].rows[1].content.includes('第二行'), 'second row content not saved')
     assert(original.tables[1].rows[0].content.includes('第二张表'), 'new table content not saved')
     assert(new Set(original.tables.map(table => table.id)).size === 2, 'table IDs are not unique')
+
+    const originalIDs = original.tables.map(table => table.id)
+    const reversedIDs = [...originalIDs].reverse()
+    const mountedBeforeOrder = $$('.workspace-table .ProseMirror')
+    const tableNodesBeforeOrder = [...tables()]
+    const savedBeforeCancel = snapshot.workspaceSaves
+    await openOrder()
+    assert(sameOrder(pendingOrder(), originalIDs), 'dialog did not start in current table order')
+    assert(orderItems().every(item => item.querySelector('.workspace-order-title')?.textContent.trim()), 'dialog is missing a table header')
+    assert($('#workspace-order-list').textContent.includes('日常放松') && $('#workspace-order-list').textContent.includes('晨间安排'), 'dialog does not show table headers')
+    assert(!$('#workspace-order-list').textContent.includes('月度检索词') && !$('#workspace-order-list').textContent.includes('第二张表的单栏正文'), 'order dialog includes long table content')
+    assert(!$('#workspace-order-list').querySelector('.ProseMirror, textarea'), 'order dialog contains a full editor')
+    assert(orderItems()[0].querySelector('[data-direction="up"]').disabled, 'first table can move above first position')
+    assert(orderItems()[1].querySelector('[data-direction="down"]').disabled, 'last table can move below last position')
+    moveOrder(originalIDs[0], 'down')
+    assert(sameOrder(pendingOrder(), reversedIDs), 'down button did not reorder the dialog')
+    assert(sameOrder(tableIDs(), originalIDs), 'temporary order changed main tables before completion')
+    await closeOrder('#workspace-order-cancel')
+    await pause(800)
+    snapshot = await fixture()
+    assert(sameOrder(tableIDs(), originalIDs) && sameOrder(snapshot.months[currentMonth].tables.map(table => table.id), originalIDs), 'cancel applied table order')
+    assert(snapshot.workspaceSaves === savedBeforeCancel, 'cancel unnecessarily saved the temporary order')
+
+    $('#find-toggle').click()
+    assert(!$('#findbar').hidden, 'find bar did not open before modal keyboard check')
+    await openOrder()
+    moveOrder(originalIDs[1], 'up')
+    assert(sameOrder(pendingOrder(), reversedIDs), 'up button did not reorder the dialog')
+    const dialog = $('#workspace-order-dialog')
+    const modalFocus = document.activeElement
+    window.panelDualNotes.openFind()
+    assert(document.activeElement === modalFocus, 'native find command stole focus from the order dialog')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await waitFor(() => !dialog.open, 'ESC cancel path')
+    assert(!$('#findbar').hidden, 'Escape closed the find bar instead of only the modal')
+    $('#find-close').click()
+    await pause(800)
+    snapshot = await fixture()
+    assert(sameOrder(tableIDs(), originalIDs) && snapshot.workspaceSaves === savedBeforeCancel, 'ESC applied or saved a temporary order')
+
+    setTitle(tables()[1], '')
+    snapshot = await save()
+    const unnamed = snapshot.months[currentMonth].tables[1]
+    await openOrder()
+    const unnamedItem = orderItems().find(item => item.dataset.tableId === unnamed.id)
+    assert(unnamedItem.querySelector('.workspace-order-title').textContent.trim(), 'unnamed table has no usable label')
+    dragBefore(unnamed.id, originalIDs[0])
+    await waitFor(() => sameOrder(pendingOrder(), reversedIDs), 'dragging table header before another header')
+    assert(sameOrder(tableIDs(), originalIDs), 'dragging changed the tables before completion')
+    await fixture({ snapshot: 'order-dialog' })
+    await closeOrder('#workspace-order-apply')
+    await waitFor(() => sameOrder(tableIDs(), reversedIDs), 'applying table order')
+    assert(mountedBeforeOrder.every(editor => editor.isConnected), 'applying order recreated a mounted editor')
+    assert(tableNodesBeforeOrder.every(table => table.isConnected), 'applying order replaced table DOM nodes')
+    snapshot = await save()
+    assert(sameOrder(snapshot.months[currentMonth].tables.map(table => table.id), reversedIDs), 'table order was not saved')
+    for (const table of snapshot.months[currentMonth].tables) {
+      const before = original.tables.find(item => item.id === table.id)
+      assert(table.rows.length === before.rows.length && table.rows.every((row, index) => row.id === before.rows[index].id && row.content === before.rows[index].content), 'reordering changed row IDs, row order, or content')
+    }
+    assert(snapshot.months[currentMonth].tables[0].header === '', 'moving unnamed table changed its header')
+    const movedRow = rowElements(tables()[0])[0]
+    const movedEditorBeforeInput = movedRow.querySelector('.ProseMirror')
+    const movedEditorAfterInput = await edit(movedRow, '第二张表的单栏正文。排序后继续编辑验证。')
+    assert(movedEditorAfterInput === movedEditorBeforeInput, 'editing after reorder replaced the mounted editor')
+    snapshot = await save()
+    const editedMovedTable = snapshot.months[currentMonth].tables.find(table => table.id === originalIDs[1])
+    assert(editedMovedTable.rows[0].id === unnamed.rows[0].id && editedMovedTable.rows[0].content.includes('排序后继续编辑验证'), 'typing after reorder did not save to the original row ID')
+    const untouchedTable = snapshot.months[currentMonth].tables.find(table => table.id === originalIDs[0])
+    assert(untouchedTable.rows[0].content === original.tables[0].rows[0].content, 'typing into reordered table changed another table')
+    await edit(movedRow, '第二张表的单栏正文。')
+    snapshot = await save()
+    assert(snapshot.months[currentMonth].tables[0].rows[0].content === unnamed.rows[0].content, 'could not restore moved row content after editing')
+    $('#workspace-prev').click()
+    await waitFor(() => $('#workspace-month').value === previousMonth && tables().length === 1 && !$('#days').inert, 'leave reordered month')
+    $('#workspace-next').click()
+    await waitFor(() => $('#workspace-month').value === currentMonth && tables().length === 2 && !$('#days').inert, 'restore reordered month')
+    assert(sameOrder(tableIDs(), reversedIDs), 'switching month lost saved table order')
+    assert(rowElements(tables()[0])[0].textContent.includes('第二张表的单栏正文'), 'saved reordered table has wrong content')
+    await openOrder()
+    moveOrder(originalIDs[0], 'up')
+    await closeOrder('#workspace-order-apply')
+    assert(sameOrder(tableIDs(), originalIDs), 'could not restore original table order')
+    setTitle(tables()[1], '晨间安排')
+    await save()
 
     $('#workspace-prev').click()
     await waitFor(() => $('#workspace-month').value === previousMonth && tables().length === 1 && !$('#days').inert, 'previous month')
@@ -184,7 +299,7 @@
     snapshot = await fixture()
     assert(snapshot.months[previousMonth].tables[0].rows[0].content.includes('上个月独有正文'), 'previous month save changed')
     assert(Object.keys(snapshot.days).length === 0, 'workspace editing unexpectedly saved day data')
-    window.webkit.messageHandlers.result.postMessage(`PASS: workspace month isolation, multi-table editing, row append, save/restore, find, focus/overview, and ${resizeCount} native resizes`)
+    window.webkit.messageHandlers.result.postMessage(`PASS: workspace month isolation, multi-table editing, header-only reorder with cancel/drag/save, row append, save/restore, find, focus/overview, and ${resizeCount} native resizes`)
   } catch (error) {
     window.webkit.messageHandlers.result.postMessage(`FAIL: ${error.message}`)
   }
