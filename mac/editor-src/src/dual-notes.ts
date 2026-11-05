@@ -312,6 +312,11 @@ let activeMatch = -1
 let query = ''
 let findTimer: ReturnType<typeof setTimeout> | undefined
 let findJumpGeneration = 0
+let stopFindScroll = () => {}
+function cancelFindJump(): void {
+  findJumpGeneration++
+  stopFindScroll()
+}
 function cellKey(date: string, rowId: string, side: Side): string { return `${date}/${rowId}/${side}` }
 function workspaceTableFor(cell: Cell): WorkspaceTable | undefined {
   return cell.workspace && workspaceStore.states.get(cell.workspace.month)?.workspace.tables.find(table => table.id === cell.workspace!.tableId)
@@ -1001,6 +1006,7 @@ function captureAll(): void {
 }
 async function flush(): Promise<void> {
   stopFocusScroll()
+  cancelFindJump()
   captureAll()
   for (const timer of timers.values()) clearTimeout(timer)
   timers.clear()
@@ -1093,7 +1099,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
   element('days').inert = true
   loadFailure = null
   matches = []; activeMatch = -1
-  findJumpGeneration++
+  cancelFindJump()
   rangeControls(); updateErrors(); updateFindUI()
   try {
     if (mode === 'workspace') {
@@ -1194,7 +1200,7 @@ function updateFindUI(): void {
   element('find-location').textContent = current ? `${current.label}　${current.excerpt}` : mode === 'workspace' ? `范围：${selectedMonth}` : mode === 'focus' ? '范围：今天' : `范围：当前页的 ${visibleDates.length} 天`
 }
 function rebuildFind(jump = true): void {
-  findJumpGeneration++
+  cancelFindJump()
   captureAll()
   const previous = matches[activeMatch]
   query = element<HTMLInputElement>('find-input').value
@@ -1213,26 +1219,64 @@ function rebuildFind(jump = true): void {
 }
 async function jumpToMatch(index: number): Promise<void> {
   if (!matches.length) return
-  const generation = ++findJumpGeneration
+  cancelFindJump()
+  const generation = findJumpGeneration
   activeMatch = (index + matches.length) % matches.length
   const match = matches[activeMatch]
   const cell = cells.get(match.cellKey)
   updateFindUI(); refreshDecorations()
   if (!cell) return
+  let positioned = false
+  let lastTop = window.scrollY
+  let lastHeight = document.documentElement.scrollHeight
+  const align = () => {
+    if (generation !== findJumpGeneration || !cell.alive || !positioned) return
+    const hit = cell.root.querySelector<HTMLElement>('.find-hit-active')
+    const bounds = hit?.getClientRects()[0]
+    if (!bounds) return
+    const toolbarBottom = Math.max(topbar.getBoundingClientRect().bottom, element('findbar').getBoundingClientRect().bottom)
+    const center = (Math.min(toolbarBottom, window.innerHeight) + window.innerHeight) / 2
+    const delta = bounds.top + bounds.height / 2 - center
+    // Do not animate through unloaded cells: their mounting changes the destination.
+    if (Math.abs(delta) > 1) window.scrollTo({ top: window.scrollY + delta, behavior: 'instant' })
+    lastTop = window.scrollY
+    lastHeight = document.documentElement.scrollHeight
+  }
+  const layoutObserver = new ResizeObserver(align)
+  const interactions = ['wheel', 'touchstart', 'pointerdown', 'keydown']
+  const cancel = () => { if (generation === findJumpGeneration) cancelFindJump() }
+  const onScroll = () => {
+    // Scrollbar dragging also cancels; layout-induced scrolling is corrected by the observer.
+    if (positioned && document.documentElement.scrollHeight === lastHeight && Math.abs(window.scrollY - lastTop) > 1) cancel()
+  }
+  stopFindScroll = () => {
+    layoutObserver.disconnect()
+    for (const event of interactions) window.removeEventListener(event, cancel, true)
+    window.removeEventListener('scroll', onScroll)
+    stopFindScroll = () => {}
+  }
+  for (const event of interactions) window.addEventListener(event, cancel, { capture: true, passive: true })
+  window.addEventListener('scroll', onScroll, { passive: true })
   await mountCell(cell)
-  if (generation !== findJumpGeneration || !cell.alive || !cell.root.classList.contains('mounted')) return
+  if (generation !== findJumpGeneration) return
+  if (!cell.alive || !cell.root.classList.contains('mounted')) { cancel(); return }
   refreshDecorations()
   cell.crepe!.editor.action(ctx => {
     const view = ctx.get(editorViewCtx)
-    if (match.to > view.state.doc.content.size) return
+    if (match.to > view.state.doc.content.size) { cancel(); return }
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to)))
-    const hit = cell.root.querySelector('.find-hit-active')
-    ;(hit ?? cell.root).scrollIntoView({ block: 'center', behavior: 'smooth' })
+    positioned = true
+    align()
+    // Re-measure after neighbouring lazy editors, images, or fonts change the layout.
+    layoutObserver.observe(document.body)
+    layoutObserver.observe(cell.root)
+    layoutObserver.observe(view.dom)
   })
 }
 function openFind(): void {
   if (workspaceOrder || workspaceMigration || tailDeletion) return
   stopFocusScroll()
+  cancelFindJump()
   element('findbar').hidden = false
   const input = element<HTMLInputElement>('find-input')
   input.focus(); input.select()
@@ -1242,7 +1286,7 @@ function closeFind(): void {
   element('findbar').hidden = true
   query = ''
   matches = []; activeMatch = -1
-  findJumpGeneration++
+  cancelFindJump()
   refreshDecorations()
 }
 

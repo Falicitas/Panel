@@ -9,7 +9,7 @@ final class Runner: NSObject, WKScriptMessageHandler {
     func start() throws {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()
-        for name in ["result", "dualNotes", "layout"] {
+        for name in ["result", "dualNotes", "layout", "testWait"] {
             config.userContentController.add(self, name: name)
         }
         let script = try String(contentsOfFile: CommandLine.arguments[2], encoding: .utf8)
@@ -38,6 +38,16 @@ final class Runner: NSObject, WKScriptMessageHandler {
             return
         }
         guard let request = message.body as? [String: Any] else { return }
+        if message.name == "testWait",
+           let milliseconds = request["milliseconds"] as? Double,
+           let token = request["token"] as? Int {
+            // Hidden WebKit pages throttle JavaScript timers. The native clock
+            // lets the tests observe layout settling without changing layout.
+            DispatchQueue.main.asyncAfter(deadline: .now() + milliseconds / 1000) {
+                self.view.evaluateJavaScript("window.layoutTestResume(\(token))")
+            }
+            return
+        }
         if message.name == "layout",
            let width = request["width"] as? Double,
            let zoom = request["zoom"] as? Double {
@@ -63,8 +73,11 @@ final class Runner: NSObject, WKScriptMessageHandler {
             "```shell\nblock 0 1 2 3 4 5 6 7 8 9\n\(paragraph)\n```",
             String(repeating: paragraph, count: 4),
         ].joined(separator: "\n\n")
+        // Sparse find matches cross two unmounted long rows. Their editor
+        // heights differ from the previews while the page is scrolling.
         let rows: [[String: Any]] = (0..<4).map {
-            ["id": "row-\($0)", "left": markdown, "right": $0 % 2 == 0 ? "" : paragraph]
+            let left = ($0 == 1 || $0 == 2) ? markdown.replacingOccurrences(of: "block ", with: "code ") : markdown
+            return ["id": "row-\($0)", "left": left, "right": $0 % 2 == 0 ? "" : paragraph]
         }
         let response: [String: Any] = ["requestId": id, "ok": true, "data": ["days": [
             ["date": date, "revision": 1, "rows": rows]
