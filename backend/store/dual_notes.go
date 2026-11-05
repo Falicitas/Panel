@@ -84,8 +84,8 @@ func (s *Store) ListDualNoteDays(ctx context.Context, end string, count int) ([]
 	if err != nil {
 		return nil, err
 	}
-	if count != 1 && count != 10 {
-		return nil, fmt.Errorf("%w：days 只能是 1 或 10", ErrDualNotesInvalid)
+	if count != 1 && count != 10 && count != 11 {
+		return nil, fmt.Errorf("%w：days 只能是 1、10 或 11", ErrDualNotesInvalid)
 	}
 	start := endDate.AddDate(0, 0, 1-count)
 	if start.Year() < 1 {

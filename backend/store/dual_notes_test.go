@@ -162,7 +162,7 @@ func TestDualNotesRejectInvalidInputs(t *testing.T) {
 			t.Errorf("date %q: %v", date, err)
 		}
 	}
-	for _, count := range []int{-1, 0, 2, 11} {
+	for _, count := range []int{-1, 0, 2, 12} {
 		if _, err := s.ListDualNoteDays(ctx, "2026-10-05", count); !errors.Is(err, ErrDualNotesInvalid) {
 			t.Errorf("days %d: %v", count, err)
 		}

@@ -80,6 +80,38 @@ func TestDualNotesHTTPRoundTripAndConflict(t *testing.T) {
 	}
 }
 
+func TestDualNotesHTTPFutureDayMatchesOverviewAndFocus(t *testing.T) {
+	h := dualNotesHandler(t)
+	const date = "2027-01-01"
+	rows := []store.DualNoteRow{{ID: "tomorrow", Left: "## 明天\n\n跨年安排", Right: "保留提前记录的内容。"}}
+	body, err := json.Marshal(map[string]any{"revision": 0, "rows": rows})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := dualNotesRequest(t, h, "PUT", "/api/dual-notes/"+date, string(body), http.StatusOK)
+	var saved store.DualNoteDay
+	if err := json.Unmarshal(w.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Date != date || saved.Revision != 1 || !reflect.DeepEqual(saved.Rows, rows) {
+		t.Fatalf("future day save failed: %+v", saved)
+	}
+	var page struct {
+		Days []store.DualNoteDay `json:"days"`
+	}
+	w = dualNotesRequest(t, h, "GET", "/api/dual-notes?end="+date+"&days=11", "", http.StatusOK)
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Days) != 11 || page.Days[0].Date != "2026-12-22" || page.Days[9].Date != "2026-12-31" || !reflect.DeepEqual(page.Days[10], saved) {
+		t.Fatalf("overview did not preserve its ten days and the future day: %+v", page)
+	}
+	w = dualNotesRequest(t, h, "GET", "/api/dual-notes?end="+date+"&days=1", "", http.StatusOK)
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || len(page.Days) != 1 || !reflect.DeepEqual(page.Days[0], saved) {
+		t.Fatalf("focus did not return the saved future day: %+v, err=%v", page, err)
+	}
+}
+
 func TestDualNotesHTTPBadInputDoesNotOverwrite(t *testing.T) {
 	h := dualNotesHandler(t)
 	path := "/api/dual-notes/2026-10-05"
@@ -103,6 +135,7 @@ func TestDualNotesHTTPBadInputDoesNotOverwrite(t *testing.T) {
 	for _, query := range []string{
 		"", "?end=2026-10-05", "?days=1", "?end=2026-02-30&days=1",
 		"?end=2026-2-03&days=1", "?end=2026-10-05&days=2", "?end=2026-10-05&days=01",
+		"?end=2026-10-05&days=12",
 		"?end=2026-10-05&days=1&days=10", "?end=2026-10-05&end=2026-10-04&days=1",
 	} {
 		dualNotesRequest(t, h, "GET", "/api/dual-notes"+query, "", http.StatusBadRequest)

@@ -35,7 +35,7 @@
     assert(distanceToEnd() > 200 && window.scrollY < 50, 'layout change pulled the user back down after upward scrolling')
 
     $('#overview-mode').click()
-    await waitFor(() => $('#overview-mode').getAttribute('aria-pressed') === 'true' && !$('#days').inert && $$('.day-section').length === 10, 'overview load')
+    await waitFor(() => $('#overview-mode').getAttribute('aria-pressed') === 'true' && !$('#days').inert && $$('.day-section').length === 11, 'overview load')
     await pause(100)
     assert(window.scrollY <= 2, 'overview did not open at page top')
     $('#focus-mode').click()
