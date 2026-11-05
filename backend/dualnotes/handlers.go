@@ -22,8 +22,10 @@ func (s *Server) handleGetDualNotes(w http.ResponseWriter, r *http.Request) {
 		count = 1
 	case "10":
 		count = 10
+	case "11":
+		count = 11
 	default:
-		writeError(w, http.StatusBadRequest, fmt.Errorf("days 只能是 1 或 10"))
+		writeError(w, http.StatusBadRequest, fmt.Errorf("days 只能是 1、10 或 11"))
 		return
 	}
 	days, err := s.store.ListDualNoteDays(r.Context(), query.Get("end"), count)

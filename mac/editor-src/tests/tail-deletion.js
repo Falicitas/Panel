@@ -95,10 +95,10 @@
     assert(snapshot.days[today].rows.length === 0, 'empty day was not saved')
 
     $('#overview-mode').click()
-    await waitFor(() => daySections().length === 10 && !$('#days').inert, 'overview mode')
+    await waitFor(() => daySections().length === 11 && !$('#days').inert, 'overview mode')
     assert(rows(daySections().find(section => section.dataset.date === today)).length === 0, 'saved empty day regained a row')
-    const target = daySections()[1]
-    const neighbor = daySections()[2]
+    const target = daySections()[2]
+    const neighbor = daySections()[3]
     const targetDate = target.dataset.date
     const neighborDate = neighbor.dataset.date
     const neighborRows = rows(neighbor).map(row => row.dataset.rowId)

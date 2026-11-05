@@ -292,7 +292,7 @@
     assert($('#days').textContent.includes('独立的每日记录'), 'daily content changed')
     assert(tables().length === 0, 'workspace tables remained in focus mode')
     $('#overview-mode').click()
-    await waitFor(() => $('#overview-mode').getAttribute('aria-pressed') === 'true' && $$('.day-section').length === 10 && !$('#days').inert, 'overview')
+    await waitFor(() => $('#overview-mode').getAttribute('aria-pressed') === 'true' && $$('.day-section').length === 11 && !$('#days').inert, 'overview')
     $('#workspace-mode').click()
     await waitFor(() => tables().length === 2 && !$('#days').inert, 'return workspace')
     assert(titleInput(tables()[1]).value === '晨间安排', 'mode switching lost table title')

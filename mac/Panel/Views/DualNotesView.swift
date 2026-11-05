@@ -142,7 +142,7 @@ final class DualNotesController: NSObject, ObservableObject, WKScriptMessageHand
             switch request.method {
             case "load":
                 guard let end = request.end, let days = request.days,
-                      days == 1 || days == 10 else {
+                      days == 1 || days == 10 || days == 11 else {
                     throw APIError(message: "无效的日期范围。")
                 }
                 let page = try await DualNotesClient.shared.getDualNotes(end: end, days: days)

@@ -8,7 +8,7 @@ import { DOMSerializer, type Node as ProseNode } from '@milkdown/kit/prose/model
 import { Plugin, PluginKey, TextSelection } from '@milkdown/kit/prose/state'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
 import { $prose } from '@milkdown/kit/utils'
-import { dateKey, dateWindow, DayStore, recoverDay, searchBlocks, type NoteDay, type DayState, type Side, type SearchMatch, type TextBlock } from './dual-notes-core'
+import { dateKey, dateWindow, shiftDate, DayStore, recoverDay, searchBlocks, type NoteDay, type DayState, type Side, type SearchMatch, type TextBlock } from './dual-notes-core'
 import '@milkdown/crepe/theme/common/style.css'
 import { monthKey, shiftMonth, validMonth, validWorkspace, WorkspaceStore, recoverWorkspace, type MonthWorkspace, type WorkspaceTable, type WorkspaceState } from './short-term-workspace-core'
 import { WorkspaceCopier, validWorkspaceCopy, type WorkspaceCopyRequest, type WorkspaceCopyResult } from './short-term-workspace-copy'
@@ -509,6 +509,7 @@ function renderDay(day: NoteDay): HTMLElement {
   const header = node('div', 'day-heading')
   const title = node('h2', '', readableDate(day.date))
   if (day.date === today) title.append(node('span', 'today-tag', '今天'))
+  else if (day.date === shiftDate(today, 1)) title.append(node('span', 'today-tag', '明天'))
   header.append(title, node('span', 'date-year', day.date))
   const copy = dayCopyControl(day.date)
   header.append(copy.control)
@@ -1039,7 +1040,7 @@ function rangeControls(): void {
   element<HTMLButtonElement>('newer-page').disabled = page === 0 || loading
   element<HTMLButtonElement>('today-page').disabled = page === 0 || loading
   element<HTMLButtonElement>('older-page').disabled = loading
-  element<HTMLInputElement>('find-input').placeholder = monthly ? '查找当前月份' : mode === 'focus' ? '查找今天的双栏' : '查找当前 10 天'
+  element<HTMLInputElement>('find-input').placeholder = monthly ? '查找当前月份' : mode === 'focus' ? '查找今天的双栏' : `查找当前 ${visibleDates.length} 天`
 }
 
 let stopFocusScroll = () => {}
@@ -1145,7 +1146,7 @@ async function navigate(nextMode: Mode, nextPage: number, nextMonth = selectedMo
   } catch (error) {
     if (generation !== renderGeneration) return
     loading = false
-    loadFailure = `未能加载${mode === 'workspace' ? selectedMonth : mode === 'focus' ? '今天' : '这 10 天'}的记录：${(error as Error).message}。`
+    loadFailure = `未能加载${mode === 'workspace' ? selectedMonth : mode === 'focus' ? '今天' : `这 ${dates.length} 天`}的记录：${(error as Error).message}。`
     // A failed range must never show the previous range under a new date heading.
     await disposeCells()
     if (generation !== renderGeneration) return
@@ -1190,7 +1191,7 @@ function updateFindUI(): void {
   element<HTMLButtonElement>('find-prev').disabled = matches.length === 0
   element<HTMLButtonElement>('find-next').disabled = matches.length === 0
   const current = matches[activeMatch]
-  element('find-location').textContent = current ? `${current.label}　${current.excerpt}` : mode === 'workspace' ? `范围：${selectedMonth}` : mode === 'focus' ? '范围：今天' : '范围：当前页的 10 天'
+  element('find-location').textContent = current ? `${current.label}　${current.excerpt}` : mode === 'workspace' ? `范围：${selectedMonth}` : mode === 'focus' ? '范围：今天' : `范围：当前页的 ${visibleDates.length} 天`
 }
 function rebuildFind(jump = true): void {
   findJumpGeneration++
