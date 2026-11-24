@@ -6,6 +6,28 @@ Daily ops surface for todolists, supplements, finance, and English shadowing pra
 
 See `PRD.md` for product detail and `CLAUDE.md` for build / dev conventions.
 
+## 新机器
+
+装好 Xcode 与 Go 1.26.1，整段执行。路径必须是 `~/panel`，后端和 launchd 都写死它：
+
+```bash
+git clone https://github.com/Falicitas/Panel.git ~/panel
+cd ~/panel
+./scripts/install.sh                # 后端 → 127.0.0.1:8089，launchd 常驻
+./backend/rebuild-dual-notes.sh     # 双栏 → 127.0.0.1:8090
+cd mac && ./rebuild.sh              # 构建并启动 Panel.app
+```
+
+首次构建从 GitHub 拉 MarkdownUI、NetworkImage、swift-cmark。
+
+`mac/rebuild.sh` 先查钥匙串里有没有 `Developer ID Application: Tingzhang Cai
+(9MA3NPTKD4)`：有就用它签名，TCC 授权（输入监控、辅助功能、麦克风）只问一次；没有就
+用 ad-hoc，每次 rebuild 的 CDHash 都变，macOS 把 app 当新的，前两项可能重问一次。把
+开发机的这张证书导出成 `.p12` 导入新机，就固定在第一种。
+
+`data/` 不入库，首次启动自动建空库 `~/panel/data/panel.db`；旧数据在停掉 8089 与 8090
+后直接覆盖该文件。转写与语音的 key 存在 UserDefaults，在新机设置里重填。
+
 双栏使用独立的 `panel-dual-notes` 服务（`127.0.0.1:8090`），由 launchd 的
 `com.kinesis.panel.dual-notes` 启动。其他功能仍连接 `panel-backend`（8089）。
 
